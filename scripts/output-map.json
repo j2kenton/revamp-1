@@ -1,0 +1,6 @@
+{
+  "dev-resources/architecture/prompt.md": "dev-resources/architecture/output.md",
+  "dev-resources/architecture/review/prompt.md": "dev-resources/architecture/review/output.md",
+  "dev-resources/implementation/prompt.md": "dev-resources/implementation/output.md",
+  "dev-resources/implementation/review/prompt.md": "dev-resources/implementation/review/output.md"
+}
