@@ -57,8 +57,14 @@ Notes:
   - [ ] Establish `app/`, `lib/`, `components/`, `types/`, `hooks/`, `server/` structure per architecture plan.
   - [ ] Create `lib/http/` for fetch helpers with typed interfaces.
   - [ ] Create `lib/validation/` for input validation/sanitization adapters.
+  - [ ] Create `lib/sanitizer.ts` for DOMPurify integration.
+  - [ ] Create `lib/rate-limiter.ts` for rate limiting logic.
+  - [ ] Create `utils/error-handler.ts`, `utils/logger.ts`, `utils/performance.ts`.
+  - [ ] Create `types/api.ts` for API-specific types.
   - [ ] Centralize env typing in `types/env.d.ts`; validate on boot.
   - [ ] Add `utils/assert.ts`, `utils/error.ts` for typed errors and guards.
+  - [ ] Set up `__tests__/unit/`, `__tests__/integration/`, `__tests__/fixtures/` directories.
+  - [ ] Set up `e2e/` directory with Playwright config.
   - [ ] Ensure import order linting matches guidelines.
   - [ ] Update path aliases in `tsconfig.json` and fix imports.
   - [ ] Migrate files without behavioral changes (mechanical move only).
@@ -66,6 +72,7 @@ Notes:
   - [ ] Code compiles with no TS errors; strict mode enabled.
   - [ ] No relative path regressions; all imports resolve via aliases.
   - [ ] App boots and renders current routes unchanged.
+  - [ ] Test directories structured and ready for test implementation.
 - Risks & Mitigations:
   - Risk: Silent broken imports. Mitigation: `tsc --noEmit` + CI check.
   - Risk: Circular deps after moves. Mitigation: keep layering rules and lint.
@@ -75,6 +82,10 @@ Notes:
 - Dependencies: J
 - Objectives:
   - [ ] Extend schema: roles, titles, timestamps, message status, rate-limit counters.
+  - [ ] Add `archived` field to Chat model.
+  - [ ] Add `metadata` field to Message model (model, tokensUsed, processingTime).
+  - [ ] Add `optimisticUpdates` Map to ChatState.
+  - [ ] Create `ApiError` and `ApiResponse<T>` types.
   - [ ] Generate typed models and DTOs aligned with schema.
   - [ ] Migrations created and idempotent; rollback path defined.
   - [ ] Update `types/` to mirror DB columns and public API shapes.
@@ -91,13 +102,17 @@ Notes:
 - Dependencies: H
 - Objectives:
   - [ ] Define `ApiResponse<T>` interface with `data`, `error`, `meta`.
+  - [ ] Include `requestId` and `timestamp` in meta.
   - [ ] Server utilities: `ok<T>(data, meta?)`, `fail(code, message, details?)`.
   - [ ] Uniform error mapping (validation, auth, rate-limit, server).
   - [ ] Apply wrapper across all route handlers and actions.
+  - [ ] Add proper HTTP status codes for each error type.
+  - [ ] Add Cache-Control headers as specified in API contracts.
 - Acceptance Criteria:
   - [ ] All endpoints return typed `ApiResponse<T>` with correct status codes.
   - [ ] Errors include stable `code` strings; no stack traces leaked.
   - [ ] Client fetching layers parse and narrow types without `any`.
+  - [ ] Response headers include proper cache directives.
 - Risks & Mitigations:
   - Risk: Inconsistent legacy responses. Mitigation: compatibility layer, deprecations.
 
@@ -105,10 +120,12 @@ Notes:
 
 - Dependencies: H, J
 - Objectives:
+  - [ ] Create `lib/redis/client.ts` with connection management.
   - [ ] Provision Redis client with safe defaults (TLS if remote, timeouts, retries).
   - [ ] Store sessions server-side; rotate session IDs; set TTL.
   - [ ] Secure cookie flags: `HttpOnly`, `Secure`, `SameSite=Lax/Strict`.
   - [ ] Central session middleware for route handlers and server actions.
+  - [ ] Implement session cleanup on signout.
   - [ ] Env validation; no secrets committed; local `.env.local` only.
 - Acceptance Criteria:
   - [ ] Sessions persist, revoke, and rotate successfully; TTL enforced.
@@ -123,7 +140,9 @@ Notes:
 - Dependencies: E
 - Objectives:
   - [ ] CSRF tokens: per-session, double-submit or synchronizer pattern.
+  - [ ] Generate and return `csrfToken` in auth responses.
   - [ ] Validate tokens on all state-changing requests (POST/PUT/PATCH/DELETE).
+  - [ ] Add `X-CSRF-Token` header validation.
   - [ ] Ensure CORS policy least-privileged; preflight configured correctly.
   - [ ] Document exemptions (purely idempotent GETs only).
 - Acceptance Criteria:
@@ -137,10 +156,13 @@ Notes:
 
 - Dependencies: I
 - Objectives:
-  - [ ] Introduce central validation via zod/yup in server handlers.
-  - [ ] HTML sanitization for user content (e.g., DOMPurify on server or trusted lib).
+  - [ ] Introduce central validation via zod in server handlers.
+  - [ ] Implement `chatMessageSchema` with UUID and length validation.
+  - [ ] Add message trimming and transformation in schemas.
+  - [ ] HTML sanitization for user content using DOMPurify.
   - [ ] Escape output where needed; default denylist for dangerous tags/attrs.
   - [ ] File uploads: validate type/size; virus scan hook if applicable.
+  - [ ] Implement 100KB request size limit for chat messages.
 - Acceptance Criteria:
   - [ ] All entry points validate payloads; invalid input returns structured errors.
   - [ ] Stored content is sanitized; reflected output is escaped.
@@ -153,8 +175,9 @@ Notes:
 - Dependencies: I
 - Objectives:
   - [ ] Implement per-IP and per-user sliding window counters in Redis.
-  - [ ] Define policy per endpoint (burst + sustained limits; stricter on auth).
+  - [ ] Define policy per endpoint (10 req/min for chat as per spec).
   - [ ] Standard 429 response with `Retry-After` and typed `ApiResponse` error.
+  - [ ] Add `X-Request-Id` header for request tracking.
   - [ ] Include server-side logging + alerting on abuse patterns.
 - Acceptance Criteria:
   - [ ] Limits enforced and configurable per environment.
@@ -167,9 +190,13 @@ Notes:
 
 - Dependencies: J
 - Objectives:
-  - [ ] Create `providers/` RSC wrapper with QueryClient and Redux store.
+  - [ ] Create `lib/tanstack-query/provider.tsx` with QueryClient.
+  - [ ] Create `lib/tanstack-query/hooks.ts` with typed hooks.
+  - [ ] Update Redux store with chat feature (actions, reducer, types).
+  - [ ] Add optimistic updates support in chat reducer.
   - [ ] Persist only non-sensitive state; avoid storing tokens client-side.
   - [ ] Configure Query defaults: retries, staleTime, GC, error boundaries.
+  - [ ] Create custom hooks: `useChatHistory`, `useSendMessage`, `useUserSession`.
   - [ ] Add typed hooks: `useAppDispatch`, `useAppSelector`.
 - Acceptance Criteria:
   - [ ] App renders with providers in `app/layout.tsx` (RSC-compatible boundaries).
@@ -208,7 +235,7 @@ Notes:
 - Risks & Mitigations:
   - Risk: Over-notification. Mitigation: debounce announcements; group updates.
 
-## Task K — WCAG A Compliance Baseline
+## Task K — WCAG A Compliance
 
 - Dependencies: none (scheduled after UX to test real flows)
 - Objectives:
@@ -237,12 +264,18 @@ Notes:
 - Unit
   - [ ] Utils (validation, http, error mappers): happy path + edge cases.
   - [ ] Rate limiter logic with window math.
+  - [ ] Redux reducers and actions.
+  - [ ] Zod schemas validation.
 - Integration
   - [ ] API routes return `ApiResponse<T>` and correct status codes.
   - [ ] Sessions + CSRF round trip.
+  - [ ] Error boundaries catch and recover.
+  - [ ] TanStack Query cache invalidation.
 - E2E
   - [ ] Chat: optimistic send, failure rollback, retry dedupe.
   - [ ] A11y: keyboard journeys; axe-core snapshots in CI.
+  - [ ] Rate limiting: verify 429 responses.
+  - [ ] Session management: login/logout flow.
 
 ## Implementation Notes
 
@@ -250,3 +283,12 @@ Notes:
 - Client data fetching: useSWR or TanStack Query for dynamic client needs.
 - TypeScript: interfaces for objects, standard enums, avoid `any`.
 - Import order: React/Next → third-party → `@/` absolute → relative.
+
+## Additional Considerations from Architecture
+
+- **Performance Monitoring**: Set up Vercel Analytics or similar for tracking Core Web Vitals.
+- **Error Tracking**: Configure Sentry integration for production error monitoring.
+- **API Timeouts**: Implement 30-second timeout for chat API calls as specified.
+- **Chat Features**: Support for chat history retrieval via GET `/api/chat/[chatId]`.
+- **Character Limits**: Enforce 2000 character limit with real-time validation.
+- **Message Threading**: Support for `parentMessageId` for future threading feature.
