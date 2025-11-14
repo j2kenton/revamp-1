@@ -11,16 +11,21 @@ app/
 │   │   └── [...nextauth]/
 │   │       └── route.ts
 │   └── chat/
-│       └── route.ts
+│       ├── route.ts
+│       └── [chatId]/
+│           └── route.ts
 ├── chat/
 │   └── page.tsx
 ├── layout.tsx
-└── page.tsx
+├── page.tsx
+└── global-error.tsx     // Added: Global error handler
 components/
 ├── chat/
 │   ├── chat-input.tsx
 │   ├── chat-messages.tsx
 │   └── chat-sidebar.tsx
+├── error-boundary/           // Added: Error handling
+│   └── ErrorBoundary.tsx
 ├── layout/
 │   ├── navbar.tsx
 │   └── theme-toggle.tsx
@@ -31,11 +36,15 @@ components/
 lib/
 ├── auth.ts
 ├── chat.ts
+├── rate-limiter.ts         // Added: Rate limiting
+├── sanitizer.ts            // Added: Input sanitization
+├── redis/                  // Added: Session management
+│   └── client.ts
 ├── redux/
 │   ├── features/
 │   │   ├── auth/
 │   │   ├── counter/
-│   │   └── chat/         // New Chat Feature
+│   │   └── chat/
 │   │       ├── actions.ts
 │   │       ├── reducer.ts
 │   │       └── types.ts
@@ -43,23 +52,50 @@ lib/
 │   ├── ReduxProvider.tsx
 │   ├── rootReducer.ts
 │   └── store.ts
-├── schemas.ts        // Zod validation schemas
+├── schemas.ts
+└── tanstack-query/         // Added: TanStack Query setup
+    ├── provider.tsx
+    └── hooks.ts
+middleware.ts               // Added: NextJS middleware
 types/
-└── index.ts
+├── index.ts
+└── api.ts                  // Added: API-specific types
+utils/                      // Added: Utility functions
+├── error-handler.ts
+├── logger.ts
+└── performance.ts
+__tests__/                  // Added: Test organization
+├── unit/
+├── integration/
+└── fixtures/
+e2e/                       // Added: E2E tests
+└── chat.spec.ts
 ```
 
 ## 2. Core Component Hierarchy
 
 <!-- Note: This plan uses the standard Next.js App Router for navigation. This deviates from the spec's recommendation of TanStack Router to follow framework best practices and ensure deeper integration with Next.js features. -->
+
 * `RootLayout` (Server)
-  * `Navbar` (Client)
-    * `ThemeToggle` (Client)
-    * `UserAvatar` (Client)
-  * `HomePage` (Server Component at `app/page.tsx`)
-  * `ChatPage` (Client Component at `app/chat/page.tsx`)
-    * `ChatSidebar` (Client)
-    * `ChatMessages` (Client)
-    * `ChatInput` (Client)
+  * `ErrorBoundary` (Client) <!-- Added: Top-level error boundary -->
+    * `ReduxProvider` (Client)
+      * `TanStackQueryProvider` (Client) <!-- Added: Query provider -->
+        * `Navbar` (Client)
+          * `ThemeToggle` (Client)
+          * `UserAvatar` (Client)
+          * `SkipToContent` (Client) <!-- Added: A11y navigation -->
+        * `HomePage` (Server Component at `app/page.tsx`)
+        * `ChatPage` (Client Component at `app/chat/page.tsx`)
+          * `ChatErrorBoundary` (Client) <!-- Added: Feature-specific error boundary -->
+            * `ChatSidebar` (Client)
+              * `ChatList` (Client)
+              * `NewChatButton` (Client)
+            * `ChatMessages` (Client)
+              * `MessageList` (Client)
+            * `ChatInput` (Client)
+              * `InputField` (Client)
+              * `SendButton` (Client)
+              * `CharacterCounter` (Client) <!-- Added: UX improvement -->
 
 ## 3. TypeScript Data Schemas
 
@@ -71,6 +107,9 @@ interface User {
   name?: string | null;
   email?: string | null;
   image?: string | null;
+  role?: 'user' | 'admin';  // Added: Role-based access
+  createdAt: string;         // Added: Timestamps
+  updatedAt: string;
 }
 
 interface Message {
@@ -78,11 +117,40 @@ interface Message {
   text: string;
   sender: 'user' | 'ai';
   timestamp: number;
+  status: 'sending' | 'sent' | 'error';  // Added: Message status
+  metadata?: {                           // Added: Metadata
+    model?: string;
+    tokensUsed?: number;
+    processingTime?: number;
+  };
 }
 
 interface Chat {
-  id:string;
+  id: string;
+  userId: string;            // Added: User association
+  title: string;             // Added: Chat title
   messages: Message[];
+  createdAt: string;         // Added: Timestamps
+  updatedAt: string;
+  archived?: boolean;        // Added: Archive status
+}
+
+// Added: Error types
+interface ApiError {
+  code: string;
+  message: string;
+  statusCode: number;
+  details?: unknown;
+}
+
+// Added: API response wrapper
+interface ApiResponse<T> {
+  data?: T;
+  error?: ApiError;
+  meta?: {
+    requestId: string;
+    timestamp: number;
+  };
 }
 ```
 
@@ -91,11 +159,14 @@ interface Chat {
 export interface ChatState {
   chats: Chat[];
   activeChatId: string | null;
+  optimisticUpdates: Map<string, Message>;  // Added: Optimistic UI
 }
 
 // Action types
 export const ADD_MESSAGE = 'chat/addMessage';
 export const SET_ACTIVE_CHAT = 'chat/setActiveChat';
+export const ADD_OPTIMISTIC = 'chat/addOptimistic';  // Added
+export const REMOVE_OPTIMISTIC = 'chat/removeOptimistic';  // Added
 
 interface AddMessageAction {
   type: typeof ADD_MESSAGE;
@@ -107,20 +178,35 @@ interface SetActiveChatAction {
   payload: { chatId: string };
 }
 
-export type ChatActionTypes = AddMessageAction | SetActiveChatAction;
+export type ChatActionTypes = 
+  | AddMessageAction 
+  | SetActiveChatAction;
 ```
 
 ```typescript
 // lib/schemas.ts
 import { z } from 'zod';
 
+// Enhanced validation with security considerations
 export const msalSigninSchema = z.object({
-  token: z.string(),
+  token: z.string().min(1).max(5000),  // Added: Length constraints
+  nonce: z.string().optional(),        // Added: CSRF protection
 });
 
 export const chatMessageSchema = z.object({
-  chatId: z.string(),
-  message: z.string().min(1).max(2000),
+  chatId: z.string().uuid(),           // Added: UUID validation
+  message: z.string()
+    .min(1, 'Message cannot be empty')
+    .max(2000, 'Message too long')
+    .transform(val => val.trim()),     // Added: Sanitization
+  parentMessageId: z.string().uuid().optional(),  // Added: Threading
+});
+
+// Added: Rate limiting schema
+export const rateLimitSchema = z.object({
+  userId: z.string(),
+  endpoint: z.string(),
+  timestamp: z.number(),
 });
 ```
 
@@ -129,51 +215,141 @@ export const chatMessageSchema = z.object({
 * **POST** `/api/auth/signin/msal`
   * **Purpose**: Authenticates a user with MSAL.
   * **Request Body**: `msalSigninSchema`
-  * **Response**: `{ session: Session }`
+  * **Response**: `ApiResponse<{ session: Session, csrfToken: string }>`
+  * **Error Responses**:
+    * `400`: Invalid token format
+    * `401`: Authentication failed
+    * `429`: Rate limit exceeded
+  * **Headers**: `X-CSRF-Token`, `X-Request-Id`
+
 * **POST** `/api/auth/signout`
   * **Purpose**: Signs out the currently authenticated user.
   * **Response**: `200 OK`
+  * **Side Effects**: Clears session from Redis, invalidates tokens
+
 * **GET** `/api/auth/session`
   * **Purpose**: Retrieves the current user session.
-  * **Response**: `{ session: Session }`
+  * **Response**: `ApiResponse<{ session: Session }>`
+  * **Cache**: `Cache-Control: private, max-age=0`
+
 * **POST** `/api/chat`
   * **Purpose**: Sends a message to the AI LLM and gets a response.
   * **Request Body**: `chatMessageSchema`
-  * **Response**: `{ message: Message }`
+  * **Response**: `ApiResponse<{ message: Message }>`
+  * **Error Responses**:
+    * `400`: Invalid message format
+    * `401`: Unauthorized
+    * `429`: Rate limit exceeded
+    * `500`: LLM service error
+  * **Rate Limit**: 10 requests per minute per user
+  * **Timeout**: 30 seconds
+
+* **GET** `/api/chat/[chatId]`
+  * **Purpose**: Retrieves a specific chat history
+  * **Response**: `ApiResponse<{ chat: Chat }>`
+  * **Cache**: `Cache-Control: private, max-age=300`
 
 ## 5. Validation Strategy
 
-* **Client-Side**: `zod` will be used with a form library (like `react-hook-form`) to provide real-time validation on user inputs, such as the chat input field.
-* **Server-Side**: All API route handlers will use `zod` schemas (from `lib/schemas.ts`) to parse and validate incoming request bodies. This ensures that the data is in the correct format before any processing occurs, preventing invalid data from entering the system.
+* **Client-Side**:
+  * Use `zod` with `react-hook-form` for form validation
+  * Real-time validation with debouncing (300ms) for performance
+  * HTML5 input constraints as first defense
+  * Custom hooks for common validation patterns
+  * Accessibility: Error messages announced via `aria-live` regions
+
+* **Server-Side**:
+  * All API routes use `zod` schemas with strict parsing
+  * Middleware layer for common validations (auth, rate limiting)
+  * Input sanitization using DOMPurify for XSS prevention
+  * CSRF token validation for state-changing operations
+  * Request size limits (100KB for chat messages)
 
 ## 6. State Management Strategy
 
 <!-- Note: This plan deviates from the spec doc in two areas to align with the existing codebase and framework best practices.
 1. State Management: Uses Redux (existing in codebase) instead of Zustand.
 2. The choice of TanStack Query deviates from the existing codebase convention (SWR) to strictly adhere to the project requirements outlined in the specification document. -->
-* **Global State (Complex):** For managing complex, app-wide state like chat history, the existing plain Redux setup will be used.
-  * A new `chat` feature will be added following the established pattern in `lib/redux/features/`.
-  * This involves creating a `chat` directory with `actions.ts`, `reducer.ts`, and `types.ts`.
-  * The new `chatReducer` will be added to the `combineReducers` call in `lib/redux/rootReducer.ts`.
-  * Components will interact with the chat state using the existing typed hooks from `lib/redux/hooks.ts` (`useAppSelector` and `useAppDispatch`).
-* **Component State:** For simple UI state like input fields or loading states, use React's built-in `useState` hook.
-* **Server Cache State:** For managing the cache of server-side data, use `TanStack Query`.
-  * Custom hooks will be created to wrap `useQuery` and `useMutation` for specific data types (e.g., `useChatHistory`, `useSendMessage`).
+
+* **Global State (Complex):** Redux with performance optimizations
+  * Chat state managed in `lib/redux/features/chat/`
+  * Normalized state shape for efficient updates
+  * Redux DevTools integration in development
+  * Middleware for logging and error handling
+
+* **Component State:** React hooks hierarchy
+  * `useState`: Simple UI state (modals, toggles)
+  * `useReducer`: Complex form state with multiple fields
+  * `useContext`: Theme preferences, user preferences
+
+* **Server Cache State:** TanStack Query
+  * Custom hooks: `useChatHistory`, `useSendMessage`, `useUserSession`
+  * Optimistic updates for better UX
+  * Background refetching with stale-while-revalidate
+  * Query invalidation on mutations
+  * Offline support with persistence
 
 ## 7. Testing Strategy
 
-* **Unit Tests**:
-  * **Target**: Individual functions, Redux actions and reducers, components (`ChatInput`), and validation schemas (`chatMessageSchema`).
-  * **Framework**: Jest, React Testing Library.
-  * **Location**: `__tests__` directory alongside the file being tested.
-  * **Goal**: Verify that the unit of code works as expected, covering edge cases.
-* **Integration Tests**:
-  * **Target**: Multiple components working together to simulate user interactions.
-  * **Framework**: Jest, React Testing Library.
-  * **Location**: `__tests__` directory.
-  * **Goal**: Verify that a user can navigate to the chat page, send a message, and see the state update in the Redux store.
-* **End-to-End (E2E) Tests**:
-  * **Target**: Full application flows, from UI interactions to backend API calls.
-  * **Framework**: Playwright.
-  * **Location**: `e2e/` directory.
-  * **Goal**: Verify that critical user paths work in a production-like environment.
+* **Unit Tests** (Target: 80% coverage):
+  * **Target**: Functions, hooks, reducers, components, validation schemas
+  * **Framework**: Jest, React Testing Library
+  * **Location**: `__tests__/unit/`
+  * **Goal**: Verify individual units work correctly with edge cases
+
+* **Integration Tests** (Target: 60% coverage):
+  * **Target**: Feature workflows, state synchronization
+  * **Framework**: Jest, React Testing Library, MSW
+  * **Location**: `__tests__/integration/`
+  * **Goal**: Verify components work together correctly
+
+* **End-to-End (E2E) Tests** (Critical paths):
+  * **Target**: Full user journeys from UI to API
+  * **Framework**: Playwright
+  * **Location**: `e2e/`
+  * **Goal**: Verify critical paths in production-like environment
+  * **Additional**: Accessibility testing with axe-core, performance monitoring
+
+<!-- Added sections below to enhance production readiness -->
+
+## 8. Security Considerations
+
+* **Authentication & Authorization:**
+  * MSAL integration with proper token validation
+  * Session management via Redis with TTL
+  * Role-based access control (RBAC)
+  * Secure cookie configuration
+
+* **Data Protection:**
+  * HTTPS enforcement via middleware
+  * Content Security Policy headers
+  * Input sanitization at all entry points
+  * Rate limiting per user and IP
+
+* **Monitoring:**
+  * Security event logging
+  * Error tracking with Sentry
+  * Performance monitoring
+
+## 9. Performance Optimization
+
+* **Bundle Optimization:**
+  * Code splitting at route level
+  * Dynamic imports for heavy components
+  * Tree shaking and compression
+
+* **Runtime Performance:**
+  * React.memo for expensive components
+  * Lazy loading for non-critical components
+  * Image optimization with next/image
+
+## 10. Accessibility Requirements
+
+* **WCAG A Compliance:**
+  * Semantic HTML structure
+  * ARIA labels and roles
+  * Keyboard navigation support
+  * Screen reader compatibility
+  * Focus management
+  * Color contrast requirements
+  * Skip navigation links
