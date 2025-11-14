@@ -1,36 +1,39 @@
 # [Project Name] - Technical Plan
 
+**Deviation Note:** If the generated plan deviates from the structure defined in this document, an HTML-style comment (`<!-- ... -->`) must be added to explain the reason for the deviation.
+
+**Specification Note:** If the generated plan must deviate from the recommendations in the spec doc, a comment (`<!-- ... -->`) must be added to note and explain why.
+
 **Note:** The examples provided in this document (file structures, component hierarchies, data schemas, and API contracts) are illustrative. They serve as a starting point and should be adapted to meet the specific requirements of the project.
 
 ## 1. File & Folder Structure
 
-(An example tree view of the `src/` directory. This should be adapted for the actual project.)
+(An example tree view of the root project directory. This should be adapted for the actual project.)
 
 ```plaintext
-src/
-├── app/
-│   ├── api/
-│   │   └── auth/
-│   │       └── [...nextauth]/
-│   │           └── route.ts
-│   ├── dashboard/
-│   │   └── page.tsx
-│   ├── login/
-│   │   └── page.tsx
-│   ├── layout.tsx
+app/
+├── api/
+│   └── auth/
+│       └── [...nextauth]/
+│           └── route.ts
+├── dashboard/
 │   └── page.tsx
-├── components/
-│   ├── auth/
-│   │   └── login-form.tsx
-│   ├── layout/
-│   │   └── navbar.tsx
-│   └── ui/
-│       ├── button.tsx
-│       └── input.tsx
-├── lib/
-│   └── auth.ts
-└── types/
-    └── index.ts
+├── login/
+│   └── page.tsx
+├── layout.tsx
+└── page.tsx
+components/
+├── auth/
+│   └── login-form.tsx
+├── layout/
+│   └── navbar.tsx
+└── ui/
+    ├── button.tsx
+    └── input.tsx
+lib/
+└── auth.ts
+types/
+└── index.ts
 ```
 
 ## 2. Core Component Hierarchy
@@ -77,7 +80,14 @@ interface Session {
   * **Purpose**: Retrieves the current user session.
   * **Response**: `{ session: Session }`
 
-## 5. State Management Strategy
+## 5. Validation Strategy
+
+(A description of the validation approach for both client-side and server-side.)
+
+* **Client-Side**: Describe the strategy for validating user input in the browser.
+* **Server-Side**: Describe the strategy for validating data received at API endpoints.
+
+## 6. State Management Strategy
 
 (A description of the state management approach. This should be adapted for the actual project, considering the existing use of Redux.)
 
@@ -90,7 +100,7 @@ interface Session {
 * **Component State**: For state that is local to a single component or a small group of related components, use React's built-in `useState` or `useReducer` hooks.
 * **Server Cache State**: For managing the cache of server-side data, `useSWR` or React Query should be considered.
 
-## 6. Testing Strategy
+## 7. Testing Strategy
 
 (A description of the testing approach for different levels of testing. This should be adapted for the actual project.)
 
