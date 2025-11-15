@@ -1,0 +1,16 @@
+# Unit Tests Directory
+
+This directory contains unit tests for utility functions, helpers, and isolated component logic.
+
+## Structure
+
+- Test files should be named `*.test.ts` or `*.test.tsx`
+- Group tests by module/feature
+- Focus on testing behavior, not implementation details
+
+## Running Tests
+
+```bash
+pnpm test:unit
+pnpm test:unit:watch
+pnpm test:unit:coverage

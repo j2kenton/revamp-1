@@ -4,14 +4,17 @@
  * Example API endpoint for updating and deleting individual todos
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { requireCsrfToken } from '@/server/middleware/csrf';
+import { requireRateLimit } from '@/server/middleware/rate-limit';
+import { RATE_LIMITS } from '@/lib/rate-limiter';
 
 // Import the shared mock data (in production, use a database)
 // Note: This is a simplified example; in production, use a proper data layer
 
 // PATCH - Update a todo
-export async function PATCH(
-  request: Request,
+async function handlePatch(
+  request: NextRequest,
   { params }: { params: Promise<{ todoId: string }> },
 ) {
   try {
@@ -39,7 +42,7 @@ export async function PATCH(
 }
 
 // DELETE - Delete a todo
-export async function DELETE() {
+async function handleDelete(_: NextRequest) {
   try {
     // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -58,3 +61,13 @@ export async function DELETE() {
     );
   }
 }
+
+export const PATCH = requireRateLimit(
+  RATE_LIMITS.API_DEFAULT,
+  requireCsrfToken(handlePatch),
+);
+
+export const DELETE = requireRateLimit(
+  RATE_LIMITS.API_DEFAULT,
+  requireCsrfToken(handleDelete),
+);

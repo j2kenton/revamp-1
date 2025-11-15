@@ -1,0 +1,15 @@
+# Integration Tests Directory
+
+This directory contains integration tests for API routes, server actions, and cross-component interactions.
+
+## Structure
+
+- Test files should be named `*.test.ts` or `*.test.tsx`
+- Test complete user flows and API contracts
+- Mock external dependencies (databases, APIs)
+
+## Running Tests
+
+```bash
+pnpm test:unit
+pnpm test:unit:watch

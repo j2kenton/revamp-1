@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { ReduxProvider } from '@/lib/redux/ReduxProvider';
 import { SessionProvider } from '@/lib/auth/SessionProvider';
+import { TanStackQueryProvider } from '@/lib/tanstack-query/provider';
 import './globals.css';
 
 const geistSans = Geist({
@@ -30,7 +31,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SessionProvider>
-          <ReduxProvider>{children}</ReduxProvider>
+          <TanStackQueryProvider>
+            <ReduxProvider>{children}</ReduxProvider>
+          </TanStackQueryProvider>
         </SessionProvider>
       </body>
     </html>

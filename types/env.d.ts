@@ -18,10 +18,26 @@ declare namespace NodeJS {
     // Database (Optional)
     DATABASE_URL?: string;
 
+    // Redis
+    REDIS_URL?: string;
+    REDIS_HOST?: string;
+    REDIS_PORT?: string;
+    REDIS_PASSWORD?: string;
+    REDIS_TLS?: string;
+
     // Node Environment
     NODE_ENV: 'development' | 'production' | 'test';
 
-    // Other optional API keys
-    // Add your additional environment variables here
+    // API Configuration
+    API_TIMEOUT?: string;
+    MAX_REQUEST_SIZE?: string;
+
+    // Feature Flags
+    ENABLE_RATE_LIMITING?: string;
+    ENABLE_CSRF_PROTECTION?: string;
+
+    // External Services
+    SENTRY_DSN?: string;
+    VERCEL_ANALYTICS_ID?: string;
   }
 }

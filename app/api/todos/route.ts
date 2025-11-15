@@ -5,9 +5,12 @@
  * Supports GET (list), POST (create), PATCH (update), DELETE operations
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 import type { Todo } from '@/lib/swr/types';
+import { requireCsrfToken } from '@/server/middleware/csrf';
+import { requireRateLimit } from '@/server/middleware/rate-limit';
+import { RATE_LIMITS } from '@/lib/rate-limiter';
 
 // In-memory store (in production, use a real database)
 const mockTodos: Todo[] = [
@@ -35,7 +38,7 @@ const mockTodos: Todo[] = [
 ];
 
 // GET - List all todos or filter by user
-export async function GET(request: Request) {
+async function handleGet(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
@@ -59,7 +62,7 @@ export async function GET(request: Request) {
 }
 
 // POST - Create a new todo
-export async function POST(request: Request) {
+async function handlePost(request: NextRequest) {
   try {
     const body = await request.json();
 
@@ -93,3 +96,10 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = requireRateLimit(RATE_LIMITS.API_DEFAULT, handleGet);
+
+export const POST = requireRateLimit(
+  RATE_LIMITS.API_DEFAULT,
+  requireCsrfToken(handlePost),
+);

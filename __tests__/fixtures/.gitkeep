@@ -1,0 +1,15 @@
+# Test Fixtures Directory
+
+This directory contains test fixtures, mock data, and test utilities.
+
+## Structure
+
+- Mock data for API responses
+- Test user accounts and sessions
+- Shared test utilities and helpers
+- Fixture factories for generating test data
+
+## Usage
+
+```typescript
+import { mockUser, mockChat, mockMessage } from '@/__tests__/fixtures/data';
