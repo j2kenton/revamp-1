@@ -1,294 +1,232 @@
-# Architecture Review Tasks — Prioritized Roadmap
+# Project Roadmap (Validated)
 
-This roadmap orders work by the Priority Stack (Security → UX → Reliability → A11Y → Performance → DX) while honoring declared dependencies.
-
-Start here (topological + priority order):
-
-1) J → 2) H → 3) I → 4) E → 5) F → 6) D → 7) C → 8) G → 9) A → 10) B → 11) K
-
-## Phase 0 — Foundations (DX/Contracts)
-
-- J. Reorganize files and create new utility modules as per the architecture plan. (Enabler; no deps)
-- H. Update database schemas and TypeScript types to include richer data models (roles, titles, timestamps, etc.). (Depends on J)
-- I. Implement a standardized API response wrapper for all API endpoints. (Depends on H)
-
-## Phase 1 — Security Hardening
-
-- E. Set up Redis for secure, server-side session management. (Depends on H, J)
-- F. Implement CSRF protection for all authenticated state-changing requests. (Depends on E)
-- D. Implement input sanitization for all user-provided content. (Depends on I)
-- C. Implement server-side rate limiting for API endpoints. (Depends on I)
-
-## Phase 2 — State/UX Infrastructure
-
-- G. Configure and wrap the application in dedicated providers for Redux and TanStack Query. (Depends on J)
-
-## Phase 3 — UX Enhancements
-
-- A. Implement Optimistic UI for sending chat messages. (Depends on G, I)
-- B. Add richer UI feedback (e.g., message status indicators, character counter). (Depends on G, I)
-
-## Phase 4 — A11Y Compliance
-
-- K. Ensure the application meets WCAG A compliance standards. (No deps; schedule after core UX to validate real flows)
+This roadmap has been updated based on a review of the current codebase. It reflects the remaining work required to complete the AI Chat Application.
 
 ---
 
-Dependency map (for quick reference):
+## Phase 0: Align Authentication with Spec (Backend + Frontend)
 
-- J → G, H, E
-- H → I, E
-- I → A, B, C, D
-- E → F
-- G → A, B
+**Status:** Not Started
 
-Notes:
+**Objective:** Replace the current credentials-based auth flow with MSAL to meet the assignment spec and ensure downstream chat routes receive the correct identity context.
 
-- We moved J earlier as an enabler even though DX ranks lower, because it unblocks higher‑priority Security and UX work.
-- Phases 1–3 can overlap once direct dependencies are satisfied (e.g., start G after J while I/E progress).
-- If constraints change, re-score tasks but keep dependencies intact.
-
----
-
-## Task J — Repo Reorg and Utilities
-
-- Dependencies: none
-- Objectives:
-  - [ ] Establish `app/`, `lib/`, `components/`, `types/`, `hooks/`, `server/` structure per architecture plan.
-  - [ ] Create `lib/http/` for fetch helpers with typed interfaces.
-  - [ ] Create `lib/validation/` for input validation/sanitization adapters.
-  - [ ] Create `lib/sanitizer.ts` for DOMPurify integration.
-  - [ ] Create `lib/rate-limiter.ts` for rate limiting logic.
-  - [ ] Create `utils/error-handler.ts`, `utils/logger.ts`, `utils/performance.ts`.
-  - [ ] Create `types/api.ts` for API-specific types.
-  - [ ] Centralize env typing in `types/env.d.ts`; validate on boot.
-  - [ ] Add `utils/assert.ts`, `utils/error.ts` for typed errors and guards.
-  - [ ] Set up `__tests__/unit/`, `__tests__/integration/`, `__tests__/fixtures/` directories.
-  - [ ] Set up `e2e/` directory with Playwright config.
-  - [ ] Ensure import order linting matches guidelines.
-  - [ ] Update path aliases in `tsconfig.json` and fix imports.
-  - [ ] Migrate files without behavioral changes (mechanical move only).
-- Acceptance Criteria:
-  - [ ] Code compiles with no TS errors; strict mode enabled.
-  - [ ] No relative path regressions; all imports resolve via aliases.
-  - [ ] App boots and renders current routes unchanged.
-  - [ ] Test directories structured and ready for test implementation.
-- Risks & Mitigations:
-  - Risk: Silent broken imports. Mitigation: `tsc --noEmit` + CI check.
-  - Risk: Circular deps after moves. Mitigation: keep layering rules and lint.
-
-## Task H — DB Schemas and Types
-
-- Dependencies: J
-- Objectives:
-  - [ ] Extend schema: roles, titles, timestamps, message status, rate-limit counters.
-  - [ ] Add `archived` field to Chat model.
-  - [ ] Add `metadata` field to Message model (model, tokensUsed, processingTime).
-  - [ ] Add `optimisticUpdates` Map to ChatState.
-  - [ ] Create `ApiError` and `ApiResponse<T>` types.
-  - [ ] Generate typed models and DTOs aligned with schema.
-  - [ ] Migrations created and idempotent; rollback path defined.
-  - [ ] Update `types/` to mirror DB columns and public API shapes.
-- Acceptance Criteria:
-  - [ ] Migrations apply cleanly on empty and existing DB.
-  - [ ] Type-safe accessors; no `any` in domain types.
-  - [ ] Backfill strategy documented for new non-null columns.
-- Risks & Mitigations:
-  - Risk: Data loss on migration. Mitigation: backups + dry-run.
-  - Risk: Drift between DB and TS types. Mitigation: single source (codegen or zod schemas).
-
-## Task I — Standardized API Response Wrapper
-
-- Dependencies: H
-- Objectives:
-  - [ ] Define `ApiResponse<T>` interface with `data`, `error`, `meta`.
-  - [ ] Include `requestId` and `timestamp` in meta.
-  - [ ] Server utilities: `ok<T>(data, meta?)`, `fail(code, message, details?)`.
-  - [ ] Uniform error mapping (validation, auth, rate-limit, server).
-  - [ ] Apply wrapper across all route handlers and actions.
-  - [ ] Add proper HTTP status codes for each error type.
-  - [ ] Add Cache-Control headers as specified in API contracts.
-- Acceptance Criteria:
-  - [ ] All endpoints return typed `ApiResponse<T>` with correct status codes.
-  - [ ] Errors include stable `code` strings; no stack traces leaked.
-  - [ ] Client fetching layers parse and narrow types without `any`.
-  - [ ] Response headers include proper cache directives.
-- Risks & Mitigations:
-  - Risk: Inconsistent legacy responses. Mitigation: compatibility layer, deprecations.
-
-## Task E — Redis Session Management
-
-- Dependencies: H, J
-- Objectives:
-  - [ ] Create `lib/redis/client.ts` with connection management.
-  - [ ] Provision Redis client with safe defaults (TLS if remote, timeouts, retries).
-  - [ ] Store sessions server-side; rotate session IDs; set TTL.
-  - [ ] Secure cookie flags: `HttpOnly`, `Secure`, `SameSite=Lax/Strict`.
-  - [ ] Central session middleware for route handlers and server actions.
-  - [ ] Implement session cleanup on signout.
-  - [ ] Env validation; no secrets committed; local `.env.local` only.
-- Acceptance Criteria:
-  - [ ] Sessions persist, revoke, and rotate successfully; TTL enforced.
-  - [ ] Cookie and cache headers verified; no PII in client storage.
-  - [ ] Production Redis config documented (auth, network, persistence).
-- Risks & Mitigations:
-  - Risk: Session fixation. Mitigation: rotate on privilege changes.
-  - Risk: Data leakage. Mitigation: limit stored data; encrypt if needed.
-
-## Task F — CSRF Protection
-
-- Dependencies: E
-- Objectives:
-  - [ ] CSRF tokens: per-session, double-submit or synchronizer pattern.
-  - [ ] Generate and return `csrfToken` in auth responses.
-  - [ ] Validate tokens on all state-changing requests (POST/PUT/PATCH/DELETE).
-  - [ ] Add `X-CSRF-Token` header validation.
-  - [ ] Ensure CORS policy least-privileged; preflight configured correctly.
-  - [ ] Document exemptions (purely idempotent GETs only).
-- Acceptance Criteria:
-  - [ ] Requests without/with invalid token are rejected (4xx) with typed error.
-  - [ ] Tokens rotate on login and periodic intervals.
-  - [ ] E2E tests cover typical forms and server actions.
-- Risks & Mitigations:
-  - Risk: Token leakage. Mitigation: `HttpOnly` cookie; no logs; short TTL.
-
-## Task D — Input Sanitization
-
-- Dependencies: I
-- Objectives:
-  - [ ] Introduce central validation via zod in server handlers.
-  - [ ] Implement `chatMessageSchema` with UUID and length validation.
-  - [ ] Add message trimming and transformation in schemas.
-  - [ ] HTML sanitization for user content using DOMPurify.
-  - [ ] Escape output where needed; default denylist for dangerous tags/attrs.
-  - [ ] File uploads: validate type/size; virus scan hook if applicable.
-  - [ ] Implement 100KB request size limit for chat messages.
-- Acceptance Criteria:
-  - [ ] All entry points validate payloads; invalid input returns structured errors.
-  - [ ] Stored content is sanitized; reflected output is escaped.
-  - [ ] Security gates checklist met for XSS/Injection.
-- Risks & Mitigations:
-  - Risk: Over-sanitization harming UX. Mitigation: allowlist with tests.
-
-## Task C — Rate Limiting
-
-- Dependencies: I
-- Objectives:
-  - [ ] Implement per-IP and per-user sliding window counters in Redis.
-  - [ ] Define policy per endpoint (10 req/min for chat as per spec).
-  - [ ] Standard 429 response with `Retry-After` and typed `ApiResponse` error.
-  - [ ] Add `X-Request-Id` header for request tracking.
-  - [ ] Include server-side logging + alerting on abuse patterns.
-- Acceptance Criteria:
-  - [ ] Limits enforced and configurable per environment.
-  - [ ] Legitimate usage unaffected under normal conditions.
-  - [ ] Abuse attempts recorded with minimal PII.
-- Risks & Mitigations:
-  - Risk: Shared-IP false positives. Mitigation: combine with user ID when auth.
-
-## Task G — Providers (Redux + TanStack Query)
-
-- Dependencies: J
-- Objectives:
-  - [ ] Create `lib/tanstack-query/provider.tsx` with QueryClient.
-  - [ ] Create `lib/tanstack-query/hooks.ts` with typed hooks.
-  - [ ] Update Redux store with chat feature (actions, reducer, types).
-  - [ ] Add optimistic updates support in chat reducer.
-  - [ ] Persist only non-sensitive state; avoid storing tokens client-side.
-  - [ ] Configure Query defaults: retries, staleTime, GC, error boundaries.
-  - [ ] Create custom hooks: `useChatHistory`, `useSendMessage`, `useUserSession`.
-  - [ ] Add typed hooks: `useAppDispatch`, `useAppSelector`.
-- Acceptance Criteria:
-  - [ ] App renders with providers in `app/layout.tsx` (RSC-compatible boundaries).
-  - [ ] No hydration warnings; client components only where needed.
-  - [ ] Query + Redux types inferred across app without `any`.
-- Risks & Mitigations:
-  - Risk: Over-global state. Mitigation: prefer component state; keep store lean.
-
-## Task A — Optimistic UI (Chat Send)
-
-- Dependencies: G, I
-- Objectives:
-  - [ ] Use TanStack Query mutation with optimistic update and rollback on error.
-  - [ ] Temporary message IDs; reconcile with server response.
-  - [ ] Disable send while exceeding character limits; handle retries.
-  - [ ] Server action ensures idempotency via client-generated IDs.
-- Acceptance Criteria:
-  - [ ] UI shows sent state immediately; correct order preserved.
-  - [ ] On failure, message visually reverts with actionable error.
-  - [ ] No duplicate messages after retry/refresh.
-- Risks & Mitigations:
-  - Risk: Race conditions. Mitigation: idempotency keys + reconciliation.
-
-## Task B — Richer UI Feedback
-
-- Dependencies: G, I
-- Objectives:
-  - [ ] Message status indicators: sending/sent/failed/read.
-  - [ ] Character counter with soft and hard thresholds.
-  - [ ] Accessible live region for async status updates.
-  - [ ] Non-blocking toasts for transient errors; inline errors for blocking.
-- Acceptance Criteria:
-  - [ ] Status changes are perceivable via text and icons.
-  - [ ] Screen reader announces status changes (aria-live polite).
-  - [ ] Counters adhere to limits and color contrast.
-- Risks & Mitigations:
-  - Risk: Over-notification. Mitigation: debounce announcements; group updates.
-
-## Task K — WCAG A Compliance
-
-- Dependencies: none (scheduled after UX to test real flows)
-- Objectives:
-  - [ ] Keyboard: tab order, focus outlines, skip links, traps eliminated.
-  - [ ] Semantics: correct roles, labels, names; form error associations.
-  - [ ] Color contrast checks; prefers-reduced-motion support.
-  - [ ] Dynamic updates announced via aria-live where meaningful.
-- Acceptance Criteria:
-  - [ ] Axe-core scan: 0 critical/serious issues across key pages.
-  - [ ] Keyboard-only journey succeeds for chat flow.
-  - [ ] Minimum WCAG 2.1 A met; document AA gaps.
-- Risks & Mitigations:
-  - Risk: Regressions post-merge. Mitigation: add automated a11y checks in CI.
+- [ ] **Integrate MSAL authentication:**
+  - [ ] Configure MSAL in the frontend login flow and ensure silent refresh works.
+  - [ ] Update server-side auth/session logic to trust MSAL tokens and populate the Redux `SessionState`, including `csrfToken`.
+  - [ ] **CRITICAL ADD**: Implement MSAL token refresh logic with automatic retry (tokens expire ~1hr)
+  - [ ] **CRITICAL ADD**: Store refresh tokens securely (encrypted httpOnly cookies or secure storage)
+  - [ ] **ADD**: Implement token expiry monitoring with proactive refresh before expiration
+- [ ] **Update documentation and guards:**
+  - [ ] Describe the new MSAL-based login in `docs/` and any architecture diagrams.
+  - [ ] Ensure existing middleware (session, CSRF, rate limit) reads the MSAL-issued identity so chat ownership checks succeed.
 
 ---
 
-## Security Gates Checklist (Global)
+## Phase 1: Implement Chat API Endpoints (Backend)
 
-- [ ] Input sanitization for all user fields (D)
-- [ ] No hardcoded secrets or API keys (E)
-- [ ] try/catch on unpredictable operations; typed errors (I, E, G)
-- [ ] Edge case handling: timeouts, nulls, network errors, race conditions (A, B, C)
+**Status:** Not Started
 
-## Testing Plan (Global)
+**Objective:** Create the backend API routes necessary for chat functionality, integrating existing security and infrastructure.
 
-- Unit
-  - [ ] Utils (validation, http, error mappers): happy path + edge cases.
-  - [ ] Rate limiter logic with window math.
-  - [ ] Redux reducers and actions.
-  - [ ] Zod schemas validation.
-- Integration
-  - [ ] API routes return `ApiResponse<T>` and correct status codes.
-  - [ ] Sessions + CSRF round trip.
-  - [ ] Error boundaries catch and recover.
-  - [ ] TanStack Query cache invalidation.
-- E2E
-  - [ ] Chat: optimistic send, failure rollback, retry dedupe.
-  - [ ] A11y: keyboard journeys; axe-core snapshots in CI.
-  - [ ] Rate limiting: verify 429 responses.
-  - [ ] Session management: login/logout flow.
+- [ ] **CRITICAL PREREQUISITE: Implement Database Transaction Support**
+  - [ ] Set up transaction wrapper utilities for atomic operations
+  - [ ] Create rollback strategies for partial failures
+  - [ ] Implement optimistic locking for concurrent edit protection
 
-## Implementation Notes
+- [ ] **Create `POST /api/chat` route:**
+  - [ ] **CRITICAL ADD**: Validate CSRF token BEFORE rate limiting to prevent CSRF attacks
+  - [ ] Validate payloads with `chatMessageSchema` via `server/middleware/validation` and sanitize using `sanitizeChatMessage`.
+  - [ ] **CRITICAL ADD**: Implement idempotency with client-generated message IDs to prevent duplicates
+  - [ ] **CRITICAL ADD**: Use database transaction pattern:
+    - [ ] Begin transaction
+    - [ ] Save user message with "pending" status
+    - [ ] Save AI response or mark message as "failed"
+    - [ ] Commit or rollback based on success
+  - [ ] **ADD**: Calculate and validate token count before sending to LLM
+  - [ ] Ensure the authenticated user owns the chat (or create if new) before persistence.
+  - [ ] Persist the message along with LLM metadata (model, tokens, latency) and mark initial status.
+  - [ ] Invoke the LLM service with a 30s timeout, wrapping unpredictable calls in `try/catch` and logging via `utils/logger`.
+  - [ ] Return the created message inside the standardized `ApiResponse<T>` and propagate meaningful error codes through `server/api-response`.
+- [ ] **Create `GET /api/chat/[chatId]` route:**
+  - [ ] Require an authenticated session and verify the chat belongs to the current user.
+  - [ ] Fetch ordered history plus metadata (status, tokens) so the UI can render status indicators.
+  - [ ] Return data via `ApiResponse<T>` and attach cache headers (`private, max-age=300`) where appropriate.
 
-- Next.js App Router defaults: prefer RSC; fetch server-side; use Server Actions for mutations.
-- Client data fetching: useSWR or TanStack Query for dynamic client needs.
-- TypeScript: interfaces for objects, standard enums, avoid `any`.
-- Import order: React/Next → third-party → `@/` absolute → relative.
+- [ ] **ADD: Create WebSocket/SSE endpoint for streaming responses**
+  - [ ] Implement connection management with heartbeat
+  - [ ] Add reconnection logic with exponential backoff
+  - [ ] Handle connection drops gracefully with state recovery
 
-## Additional Considerations from Architecture
+- [ ] **Integrate Middleware & Security Gates:**
+  - [ ] Wrap both endpoints with `withChatRateLimit` for per-user throttling.
+  - [ ] Apply `withCsrfProtection` + `requireSession` so only authenticated sessions with valid CSRF headers can mutate state.
+  - [ ] **ADD**: Implement request deduplication middleware
+  - [ ] Add structured logging for validation failures, rate-limit hits, and LLM errors.
+  - [ ] Guarantee every exit path returns via the API response helpers for consistent metadata and retry headers.
 
-- **Performance Monitoring**: Set up Vercel Analytics or similar for tracking Core Web Vitals.
-- **Error Tracking**: Configure Sentry integration for production error monitoring.
-- **API Timeouts**: Implement 30-second timeout for chat API calls as specified.
-- **Chat Features**: Support for chat history retrieval via GET `/api/chat/[chatId]`.
-- **Character Limits**: Enforce 2000 character limit with real-time validation.
-- **Message Threading**: Support for `parentMessageId` for future threading feature.
+---
+
+## Phase 2: Build Foundational Chat UI (Frontend)
+
+**Status:** Not Started
+
+**Objective:** Construct the core visual components of the chat interface.
+
+- [ ] **Scaffold Directories:**
+  - [ ] Create the `app/chat/` directory.
+  - [ ] Create the `app/chat/components/` subdirectory.
+  - [ ] **ADD**: Create `app/chat/loading.tsx` for loading states
+  - [ ] **ADD**: Create `app/chat/error.tsx` for error boundary
+
+- [ ] **Build Static Components:**
+  - [ ] **`ChatPage` (`app/chat/page.tsx`):** Create the main layout for the chat window (header, message area, input footer).
+  - [ ] **`MessageList.tsx`:** Build the component to display a list of messages, using mock data initially.
+  - [ ] **`ChatMessage.tsx`:** Build the component to render a single message bubble, with styles for user vs. AI.
+    - [ ] **ADD**: Add status indicators (sending, sent, error)
+  - [ ] **`ChatInput.tsx`:** Build the user input form with a text field and send button.
+    - [ ] **ADD**: Implement debounced validation (300ms)
+    - [ ] **ADD**: Add character counter with visual feedback
+    - [ ] **ADD**: Implement keyboard shortcuts (Enter to send, Shift+Enter for newline)
+
+- [ ] **ADD: Build Loading and Error Components:**
+  - [ ] **`MessageSkeleton.tsx`:** Create skeleton loader for messages
+  - [ ] **`ChatErrorBoundary.tsx`:** Create error boundary with recovery options
+  - [ ] **`ConnectionStatus.tsx`:** Show WebSocket/SSE connection state
+
+---
+
+## Phase 3: Connect UI to API and Add Features (Frontend)
+
+**Status:** Not Started
+
+**Objective:** Make the chat UI dynamic, connect it to the backend, and implement core interactive features.
+
+- [ ] **Create Data Hooks:**
+  - [ ] **`useSendMessage`:** Create a TanStack Query mutation hook that calls the `POST /api/chat` endpoint, automatically attaching the stored `csrfToken` in the `X-CSRF-Token` header.
+    - [ ] **CRITICAL ADD**: Implement optimistic updates with rollback on failure
+    - [ ] **ADD**: Include retry logic with exponential backoff
+    - [ ] **ADD**: Handle idempotency key generation
+  - [ ] **`useFetchChatHistory`:** Create a TanStack Query query hook that calls the `GET /api/chat/[chatId]` endpoint.
+    - [ ] **ADD**: Configure stale-while-revalidate strategy
+  - [ ] **ADD: `useStreamingResponse`:** Create hook for WebSocket/SSE streaming
+    - [ ] Implement connection management
+    - [ ] Handle reconnection with state recovery
+    - [ ] Progressive message updates
+
+- [ ] **Connect Components to Hooks & Existing Redux Flow:**
+  - [ ] In `MessageList.tsx`, replace mock data with live data from `useFetchChatHistory` and reconcile it with Redux-stored optimistic updates.
+    - [ ] **ADD**: Implement proper message reconciliation (temp ID to server ID)
+    - [ ] **ADD**: Handle duplicate detection and merging
+  - [ ] In `ChatInput.tsx`, wire submissions to `useSendMessage`, dispatching `chatActions.addOptimisticUpdate` / `removeOptimisticUpdate` so TanStack and Redux stay in sync.
+    - [ ] **ADD**: Implement send button debouncing to prevent double-clicks
+
+- [ ] **Implement Core UX Features (Roadmap Task A & B):**
+  - [ ] **Optimistic UI:** Use TanStack Query's `onMutate` plus the Redux chat slice to insert optimistic messages, rolling them back on `onError`.
+  - [ ] **Rich Feedback:**
+    - [ ] Display visual indicators for message status (Sending, Sent, Failed) in `ChatMessage.tsx`.
+    - [ ] Add a character counter to `ChatInput.tsx`.
+
+---
+
+## Phase 3.5: Critical Security & Reliability Enhancements
+
+**Status:** Not Started  
+**Objective:** Address the most critical security and reliability issues identified in the architecture review.
+
+- [ ] **Redis Failover & Circuit Breaker:**
+  - [ ] Implement Redis connection pooling with health checks
+  - [ ] Add fallback to JWT validation when Redis is unavailable
+  - [ ] Create circuit breaker pattern with graceful degradation
+
+- [ ] **Enhanced Rate Limiting:**
+  - [ ] Implement progressive delays after failed attempts
+  - [ ] Add account lockout mechanism after X failures
+  - [ ] Create user-friendly countdown timers in UI
+
+---
+
+## Phase 4: Polish and Finalize
+
+**Status:** Not Started
+
+**Objective:** Address cross-cutting concerns like theming, accessibility, testing, and documentation.
+
+- [ ] **Theming:**
+  - [ ] Implement dark and light mode support.
+  - [ ] Add a UI control for the user to toggle the theme.
+  - [ ] **ADD**: Persist theme preference in localStorage
+  - [ ] **ADD**: Respect system theme preference by default
+
+- [ ] **Accessibility (Roadmap Task K):**
+  - [ ] Audit all new chat components for keyboard accessibility (tab order, focus management).
+  - [ ] Ensure correct ARIA roles and attributes are used for screen readers.
+  - [ ] Verify color contrast ratios meet WCAG AA standards in both themes.
+  - [ ] **ADD**: Implement skip navigation links
+  - [ ] **ADD**: Add aria-live regions for dynamic updates
+
+- [ ] **Testing:**
+  - [ ] Write unit tests for new hooks and utility functions.
+    - [ ] **ADD**: Test idempotency logic
+    - [ ] **ADD**: Test token refresh flows
+    - [ ] **ADD**: Test transaction rollback scenarios
+  - [ ] Write integration tests for the `ChatPage` to ensure all components work together.
+    - [ ] **ADD**: Test optimistic update reconciliation
+    - [ ] **ADD**: Test streaming message updates
+  - [ ] Write an E2E test for the complete chat flow (login, send message, verify message appears).
+    - [ ] **ADD**: Test rate limiting behavior
+    - [ ] **ADD**: Test session timeout and recovery
+    - [ ] **ADD**: Test multi-tab synchronization
+  - [ ] **ADD: Security Testing:**
+    - [ ] Test CSRF protection
+    - [ ] Test XSS prevention in message rendering
+    - [ ] Test rate limiting effectiveness
+
+- [ ] **Performance Optimization:**
+  - [ ] **ADD**: Add performance monitoring (Web Vitals)
+  - [ ] **ADD**: Optimize bundle size (tree shaking, dynamic imports)
+
+- [ ] **Documentation:**
+  - [ ] Create a `WALKTHROUGH.md` document explaining the project architecture and setup.
+    - [ ] **ADD**: Document authentication flow with token lifecycle
+    - [ ] **ADD**: Document deployment considerations
+  - [ ] Record a short video demonstrating the final application.
+    - [ ] **ADD**: Show accessibility features in action
+
+- [ ] **ADD: Monitoring & Observability:**
+  - [ ] Create health check endpoints
+
+---
+
+## Completed Infrastructure Tasks
+
+The following foundational tasks were found to be already implemented during the code review:
+
+- **Backend:**
+  - ✔️ Standardized API Response (`ApiResponse<T>`)
+  - ✔️ Redis Client and Session Management
+  - ✔️ CSRF Protection Middleware
+  - ✔️ Zod Validation Schemas
+  - ✔️ Rate Limiting Middleware
+- **Frontend:**
+  - ☐ MSAL Authentication (pending per Phase 0; legacy credentials flow exists today)
+  - ✔️ TanStack Query and Redux Providers
+  - ✔️ Login Page UI foundation (to be updated for MSAL)
+
+---
+
+## Risk Mitigation
+
+**High-Risk Items Requiring Immediate Attention:**
+
+1. **CSRF Token Validation**: Must be implemented before any state-changing endpoints go live
+2. **Token Refresh Logic**: Critical for preventing hourly session breaks
+3. **Database Transactions**: Essential for data consistency in chat flow
+4. **Redis Failover**: Single point of failure without proper fallback
+5. **WebSocket/SSE Recovery**: Poor UX without proper connection management
+
+**Recommended Parallel Work Streams:**
+
+- Security team: Focus on Phase 0 (MSAL) + Phase 3.5 (Security)
+- Backend team: Phase 1 (API) with emphasis on transactions
+- Frontend team: Phase 2 (UI) + Phase 3 (Integration)
+- DevOps team: Redis failover, monitoring, deployment pipeline
