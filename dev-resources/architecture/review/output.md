@@ -47,7 +47,11 @@ lib/
 ├── rate-limiter.ts         // Added: Rate limiting
 ├── sanitizer.ts            // Added: Input sanitization
 ├── redis/                  // Added: Session management
-│   └── client.ts
+│   ├── client.ts
+│   ├── keys.ts            // Added: Redis key helpers
+│   └── session.ts
+├── session/                // Added: Session utilities
+│   └── hydrator.ts
 ├── redux/
 │   ├── features/
 │   │   ├── auth/
@@ -68,10 +72,13 @@ lib/
 middleware.ts               // Added: NextJS middleware
 types/
 ├── index.ts
-└── api.ts                  // Added: API-specific types
+├── api.ts                  // Added: API-specific types
+└── models.ts               // Added: Domain models
 utils/                      // Added: Utility functions
 ├── error-handler.ts
 ├── logger.ts
+├── assert.ts              // Added: Type guards
+├── error.ts               // Added: Error utilities
 └── performance.ts
 __tests__/                  // Added: Test organization
 ├── unit/
@@ -109,7 +116,7 @@ e2e/                       // Added: E2E tests
 
 ## 3. TypeScript Data Schemas
 
-<!-- CRITICAL ISSUE FIXED: Added missing error types, API response types, and proper null safety -->
+<!-- CRITICAL ISSUE FIXED: Added missing error types, API response types, session models, and proper null safety -->
 
 ```typescript
 // types/index.ts
@@ -167,6 +174,26 @@ interface ApiResponse<T> {
 ```
 
 ```typescript
+// types/models.ts
+
+// Added: Session models for Redis storage
+interface SessionData {
+  lastActivityAt?: Date;
+  [key: string]: unknown;
+}
+
+interface SessionModel {
+  id: string;
+  userId: string;
+  csrfToken: string;
+  data: SessionData;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+```typescript
 // lib/redux/features/chat/types.ts
 export interface ChatState {
   chats: Chat[];
@@ -184,7 +211,19 @@ export const SET_ERROR = 'chat/setError';            // Added
 export const ADD_OPTIMISTIC = 'chat/addOptimistic';  // Added
 export const REMOVE_OPTIMISTIC = 'chat/removeOptimistic';  // Added
 
-// ... additional action interfaces
+interface AddMessageAction {
+  type: typeof ADD_MESSAGE;
+  payload: { chatId: string; message: Message };
+}
+
+interface SetActiveChatAction {
+  type: typeof SET_ACTIVE_CHAT;
+  payload: { chatId: string };
+}
+
+export type ChatActionTypes = 
+  | AddMessageAction 
+  | SetActiveChatAction;
 ```
 
 ```typescript
@@ -273,11 +312,7 @@ export const rateLimitSchema = z.object({
   * SQL injection prevention via parameterized queries
   * File upload validation (type, size, virus scan)
   * CSRF token validation for state-changing operations
-
-* **Edge Runtime**: <!-- Added: Edge validation -->
   * Request size limits (100KB for chat messages)
-  * Header validation and sanitization
-  * IP-based rate limiting
 
 ## 6. State Management Strategy
 
@@ -302,12 +337,6 @@ export const rateLimitSchema = z.object({
   * Query invalidation on mutations
   * Offline support with persistence
 
-* **Performance Optimizations:** <!-- Added: Performance strategy -->
-  * Virtual scrolling for long message lists
-  * Message pagination (50 messages per page)
-  * Lazy loading for chat sidebar
-  * Image optimization with next/image
-
 ## 7. Testing Strategy
 
 <!-- IMPROVEMENT: Added comprehensive testing coverage including security and performance tests -->
@@ -320,7 +349,7 @@ export const rateLimitSchema = z.object({
     * Input sanitization functions
     * Redux reducers and selectors
     * Validation schemas
-    * Utility functions
+    * Session hydration utilities
     * Component rendering and props
 
 * **Integration Tests** (Target: 60% coverage):
@@ -329,7 +358,8 @@ export const rateLimitSchema = z.object({
   * **Location**: `__tests__/integration/`
   * **Key Tests**:
     * Chat message flow (send, receive, display)
-    * Authentication flow
+    * Authentication flow with MSAL
+    * Session management with Redis
     * Error handling workflows
     * State synchronization
 
@@ -342,44 +372,50 @@ export const rateLimitSchema = z.object({
     * Chat history persistence
     * Error recovery scenarios
     * Accessibility navigation
+    * Rate limiting behavior
 
 * **Security Tests:** <!-- Added: Security testing -->
   * XSS injection attempts
   * CSRF token validation
   * Rate limiting verification
   * Authentication bypass attempts
+  * Session fixation prevention
 
 * **Performance Tests:** <!-- Added: Performance testing -->
   * Lighthouse CI for Core Web Vitals
   * Bundle size monitoring
   * API response time benchmarks
   * Memory leak detection
+  * Redis query optimization
 
 * **Accessibility Tests:** <!-- Added: A11y testing -->
   * axe-core integration
   * Keyboard navigation tests
   * Screen reader compatibility
-  * WCAG AA compliance checks
+  * WCAG A compliance checks
+
+<!-- Added sections below to enhance production readiness -->
 
 ## 8. Security Considerations
 
-<!-- Added section: Critical for production readiness -->
-
 * **Authentication & Authorization:**
   * MSAL integration with proper token validation
-  * Session management via Redis with TTL
+  * Session management via Redis with TTL and per-user indexing
   * Role-based access control (RBAC)
   * Secure cookie configuration (httpOnly, secure, sameSite)
+  * Session rotation on privilege escalation
 
 * **Data Protection:**
   * HTTPS enforcement via middleware
   * Content Security Policy headers
   * Input sanitization at all entry points
   * Output encoding for XSS prevention
+  * Efficient Redis operations (avoiding KEYS command)
 
 * **Rate Limiting & DDoS Protection:**
   * API rate limiting per user and IP
   * Request size limits
+  * Sliding window counters in Redis
   * Cloudflare or similar CDN integration
 
 * **Monitoring & Logging:**
@@ -388,9 +424,7 @@ export const rateLimitSchema = z.object({
   * Error tracking with Sentry
   * Performance monitoring with Vercel Analytics
 
-## 9. Performance Optimization Strategy
-
-<!-- Added section: Performance considerations -->
+## 9. Performance Optimization
 
 * **Bundle Optimization:**
   * Code splitting at route level
@@ -410,24 +444,14 @@ export const rateLimitSchema = z.object({
   * Service Worker for offline support
   * CDN for static assets
 
-## 10. Deployment & DevOps
+## 10. Accessibility Requirements
 
-<!-- Added section: Deployment considerations -->
-
-* **CI/CD Pipeline:**
-  * GitHub Actions for automation
-  * Pre-commit hooks with Husky
-  * Automated testing on PR
-  * Semantic versioning
-
-* **Environment Management:**
-  * Development, staging, production environments
-  * Environment-specific configuration
-  * Feature flags for gradual rollout
-  * Rollback strategy
-
-* **Monitoring:**
-  * Uptime monitoring
-  * Error tracking
-  * Performance metrics
-  * User analytics (privacy-compliant)
+* **WCAG A Compliance:**
+  * Semantic HTML structure
+  * ARIA labels and roles
+  * Keyboard navigation support
+  * Screen reader compatibility
+  * Focus management
+  * Color contrast requirements (4.5:1 normal, 3:1 large text)
+  * Skip navigation links
+  * aria-live regions for dynamic updates
