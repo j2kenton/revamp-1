@@ -120,8 +120,8 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
           {isStreaming && (
             <span className="flex items-center gap-1">
               <span className="h-1 w-1 animate-bounce rounded-full bg-current"></span>
-              <span className="h-1 w-1 animate-bounce rounded-full bg-current" style={{ animationDelay: '0.1s' }}></span>
-              <span className="h-1 w-1 animate-bounce rounded-full bg-current" style={{ animationDelay: '0.2s' }}></span>
+              <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:100ms]"></span>
+              <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:200ms]"></span>
               <span className="ml-1">Streaming</span>
             </span>
           )}
