@@ -11,7 +11,7 @@ This roadmap outlines the final set of enhancements required to complete the AI 
 **Objective:** Enhance the user experience for long-running AI responses and lengthy chat histories by implementing streaming and performance optimizations.
 
 - [ ] **Implement Streaming API Responses (SSE):**
-  - [ ] Create a new `GET /api/chat/stream` Server-Sent Events (SSE) endpoint.
+  - [ ] Create a new `POST /api/chat/stream` Server-Sent Events (SSE) endpoint.
   - [ ] Modify the LLM service to support streaming tokens as they are generated.
   - [ ] Implement connection management on the server, including heartbeat messages to prevent timeouts.
   - [ ] Add robust error handling and reconnection logic on the client.

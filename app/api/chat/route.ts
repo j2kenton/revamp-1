@@ -13,8 +13,8 @@ import { withRequestDedup } from '@/server/middleware/request-dedup';
 import { success, badRequest, unauthorized, serverError } from '@/server/api-response';
 import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
 import { withTransaction, txSet } from '@/lib/redis/transactions';
-import { callLLMWithRetry, formatMessagesForLLM, validateTokenCount } from '@/lib/llm/service';
-import { logError, logInfo } from '@/utils/logger';
+import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
+import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 import { messageToDTO } from '@/types/models';
 
@@ -76,14 +76,25 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
     // Get chat history for context
     const chatHistory = await getChatMessages(chat.id);
 
-    // Validate token count
+    // Build chat history payload with smart truncation
     const allMessages = [
       ...chatHistory.map((msg) => ({ role: msg.role, content: msg.content })),
       { role: 'user', content: sanitizedContent },
     ];
 
-    if (!validateTokenCount(allMessages)) {
-      return badRequest('Message thread is too long. Please start a new chat.');
+    const { messages: truncatedMessages, truncated, removedCount } = truncateMessagesToFit(
+      allMessages,
+      8000
+    );
+
+    if (truncated) {
+      logWarn('Context truncated for chat request', {
+        chatId: chat.id,
+        userId: session.userId,
+        removedCount,
+        originalCount: allMessages.length,
+        keptCount: truncatedMessages.length,
+      });
     }
 
     // Use transaction for atomic operations
@@ -120,14 +131,11 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
           setTimeout(() => reject(new Error('LLM timeout')), LLM_TIMEOUT)
         );
 
-        const llmPromise = callLLMWithRetry(
-          formatMessagesForLLM([...chatHistory, userMessage]),
-          {
-            model: 'gpt-4', // Configure as needed
-            maxTokens: 1000,
-            temperature: 0.7,
-          }
-        );
+        const llmPromise = callLLMWithRetry(truncatedMessages, {
+          model: 'gpt-4', // Configure as needed
+          maxTokens: 1000,
+          temperature: 0.7,
+        });
 
         aiResponse = await Promise.race([llmPromise, timeoutPromise]) as Awaited<typeof llmPromise>;
 
@@ -180,6 +188,8 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
         parentMessageId: userMessageId,
         metadata: {
           ...llmMetadata,
+          contextTruncated: truncated || undefined,
+          messagesRemoved: truncated ? removedCount : undefined,
           respondingToClientRequestId: clientRequestId ?? undefined,
         },
         createdAt: new Date(),

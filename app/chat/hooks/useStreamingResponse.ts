@@ -20,7 +20,12 @@ interface StreamingMessage {
 
 interface UseStreamingResponseOptions {
   chatId: string | null;
-  onMessageCreated?: (messageId: string, truncated?: boolean, removedCount?: number) => void;
+  onMessageCreated?: (
+    messageId: string,
+    chatId: string,
+    truncated?: boolean,
+    removedCount?: number,
+  ) => void;
   onComplete?: (message: MessageDTO) => void;
   onError?: (error: Error) => void;
   onFallback?: (message: string) => void;
@@ -38,6 +43,11 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const [messagesRemoved, setMessagesRemoved] = useState(0);
   const contextTruncatedRef = useRef(false);
   const messagesRemovedRef = useRef(0);
+  const activeChatIdRef = useRef<string | null>(chatId);
+
+  useEffect(() => {
+    activeChatIdRef.current = chatId;
+  }, [chatId]);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
@@ -93,7 +103,19 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to start streaming');
+          let errorMessage = 'Failed to start streaming';
+          try {
+            const errorBody = await response.json();
+            errorMessage = errorBody.error?.message || errorMessage;
+          } catch {
+            try {
+              const errorText = await response.text();
+              errorMessage = errorText || errorMessage;
+            } catch {
+              // ignore parse failure
+            }
+          }
+          throw new Error(errorMessage);
         }
 
         // Get the readable stream
@@ -116,126 +138,192 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           }
 
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop() || '';
+          const eventBlocks = buffer.split('\n\n');
+          buffer = eventBlocks.pop() || '';
 
-          for (const line of lines) {
-            if (line.startsWith('event:')) {
-              const eventMatch = line.match(/event: (.+)/);
-              const dataMatch = lines[lines.indexOf(line) + 1]?.match(/data: (.+)/);
+          for (const rawEvent of eventBlocks) {
+            const trimmedEvent = rawEvent.trim();
+            if (!trimmedEvent) {
+              continue;
+            }
 
-              if (eventMatch && dataMatch) {
-                const eventType = eventMatch[1];
-                const data = JSON.parse(dataMatch[1]);
+            const lines = trimmedEvent.split('\n');
+            let eventType = 'message';
+            let dataPayload = '';
 
-                switch (eventType) {
-                  case 'message_created': {
-                    const isTruncated = Boolean(data.truncated);
-                    const removedCount = isTruncated ? data.removedCount || 0 : 0;
-
-                    setContextTruncated(isTruncated);
-                    setMessagesRemoved(removedCount);
-                    contextTruncatedRef.current = isTruncated;
-                    messagesRemovedRef.current = removedCount;
-
-                    onMessageCreated?.(data.messageId, data.truncated, data.removedCount);
-                    break;
-                  }
-
-                  case 'content_delta': {
-                    accumulatedContent = data.accumulatedContent;
-                    const isContextTruncated = contextTruncatedRef.current;
-                    const removedMessagesCount = isContextTruncated
-                      ? messagesRemovedRef.current
-                      : undefined;
-                    setStreamingMessage({
-                      id: data.messageId,
-                      content: accumulatedContent,
-                      isComplete: false,
-                      contextTruncated: isContextTruncated,
-                      messagesRemoved: removedMessagesCount,
-                    });
-                    break;
-                  }
-
-                  case 'message_complete':
-                    setStreamingMessage({
-                      id: data.messageId,
-                      content: data.content,
-                      isComplete: true,
-                      contextTruncated: data.metadata?.contextTruncated,
-                      messagesRemoved: data.metadata?.messagesRemoved,
-                    });
-
-                    // Create complete message DTO
-                    const completeMessage: MessageDTO = {
-                      id: data.messageId,
-                      chatId: chatId || '',
-                      role: 'assistant',
-                      content: data.content,
-                      status: 'sent',
-                      parentMessageId: null,
-                      metadata: data.metadata,
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    };
-
-                    onComplete?.(completeMessage);
-
-                    // Update cache
-                    if (chatId) {
-                      queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
-                    }
-
-                    // Reset truncation state
-                    setContextTruncated(false);
-                    setMessagesRemoved(0);
-                    contextTruncatedRef.current = false;
-                    messagesRemovedRef.current = 0;
-
-                    break;
-
-                  case 'fallback': {
-                    // Circuit breaker is open - received fallback message
-                    const fallbackMetadata = {
-                      ...data.metadata,
-                      circuitBreakerOpen: true,
-                    };
-                    const fallbackMessage: MessageDTO = {
-                      id: data.messageId,
-                      chatId: chatId || '',
-                      role: 'assistant',
-                      content: data.message,
-                      status: 'sent',
-                      parentMessageId: null,
-                      metadata: fallbackMetadata,
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    };
-                    setStreamingMessage({
-                      id: data.messageId,
-                      content: data.message,
-                      isComplete: true,
-                    });
-                    setContextTruncated(false);
-                    setMessagesRemoved(0);
-                    contextTruncatedRef.current = false;
-                    messagesRemovedRef.current = 0;
-                    onComplete?.(fallbackMessage);
-                    if (chatId) {
-                      queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
-                    }
-                    onFallback?.(data.message);
-                    break;
-                  }
-
-                  case 'error':
-                    const streamError = new Error(data.message || 'Streaming error');
-                    setError(streamError);
-                    onError?.(streamError);
-                    break;
-                }
+            for (const rawLine of lines) {
+              const line = rawLine.trim();
+              if (!line || line.startsWith(':')) {
+                continue;
               }
+
+              if (line.startsWith('event:')) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith('data:')) {
+                const valuePart = line.slice(5).trim();
+                dataPayload = dataPayload ? `${dataPayload}\n${valuePart}` : valuePart;
+              }
+            }
+
+            if (!dataPayload) {
+              continue;
+            }
+
+            let parsedData: unknown;
+            try {
+              parsedData = JSON.parse(dataPayload);
+            } catch (parseError) {
+              console.error('Failed to parse streaming payload', parseError);
+              continue;
+            }
+
+            if (typeof parsedData !== 'object' || parsedData === null) {
+              continue;
+            }
+
+            const data = parsedData as Record<string, unknown>;
+
+            switch (eventType) {
+              case 'message_created': {
+                const isTruncated = Boolean(data.truncated);
+                const removedCount =
+                  isTruncated && typeof data.removedCount === 'number' ? data.removedCount : 0;
+                const resolvedChatId: string =
+                  (typeof data.chatId === 'string' && data.chatId) ||
+                  activeChatIdRef.current ||
+                  '';
+                const messageId = typeof data.messageId === 'string' ? data.messageId : '';
+
+                if (resolvedChatId) {
+                  activeChatIdRef.current = resolvedChatId;
+                }
+
+                setContextTruncated(isTruncated);
+                setMessagesRemoved(removedCount);
+                contextTruncatedRef.current = isTruncated;
+                messagesRemovedRef.current = removedCount;
+
+                onMessageCreated?.(
+                  messageId,
+                  resolvedChatId,
+                  Boolean(data.truncated),
+                  typeof data.removedCount === 'number' ? data.removedCount : undefined,
+                );
+                break;
+              }
+
+              case 'content_delta': {
+                accumulatedContent =
+                  typeof data.accumulatedContent === 'string'
+                    ? data.accumulatedContent
+                    : accumulatedContent;
+                const messageId = typeof data.messageId === 'string' ? data.messageId : '';
+                const isContextTruncated = contextTruncatedRef.current;
+                const removedMessagesCount = isContextTruncated
+                  ? messagesRemovedRef.current
+                  : undefined;
+                setStreamingMessage({
+                  id: messageId,
+                  content: accumulatedContent,
+                  isComplete: false,
+                  contextTruncated: isContextTruncated,
+                  messagesRemoved: removedMessagesCount,
+                });
+                break;
+              }
+
+              case 'message_complete': {
+                const resolvedChatId = activeChatIdRef.current || chatId || '';
+                const messageId = typeof data.messageId === 'string' ? data.messageId : '';
+                const content = typeof data.content === 'string' ? data.content : '';
+                const metadata = (data.metadata as MessageDTO['metadata']) || null;
+                setStreamingMessage({
+                  id: messageId,
+                  content,
+                  isComplete: true,
+                  contextTruncated: metadata?.contextTruncated,
+                  messagesRemoved: metadata?.messagesRemoved,
+                });
+
+                // Create complete message DTO
+                const completeMessage: MessageDTO = {
+                  id: messageId,
+                  chatId: resolvedChatId,
+                  role: 'assistant',
+                  content,
+                  status: 'sent',
+                  parentMessageId: null,
+                  metadata,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+
+                onComplete?.(completeMessage);
+
+                // Update cache
+                if (resolvedChatId) {
+                  queryClient.invalidateQueries({ queryKey: ['chat', resolvedChatId] });
+                }
+
+                // Reset truncation state
+                setContextTruncated(false);
+                setMessagesRemoved(0);
+                contextTruncatedRef.current = false;
+                messagesRemovedRef.current = 0;
+
+                break;
+              }
+
+              case 'fallback': {
+                const resolvedChatId =
+                  (typeof data.chatId === 'string' && data.chatId) ||
+                  activeChatIdRef.current ||
+                  chatId ||
+                  '';
+                // Circuit breaker is open - received fallback message
+                const fallbackMetadata = {
+                  ...(data.metadata as MessageDTO['metadata'] | null),
+                  circuitBreakerOpen: true,
+                };
+                const fallbackMessage: MessageDTO = {
+                  id: typeof data.messageId === 'string' ? data.messageId : '',
+                  chatId: resolvedChatId,
+                  role: 'assistant',
+                  content: typeof data.message === 'string' ? data.message : '',
+                  status: 'sent',
+                  parentMessageId: null,
+                  metadata: fallbackMetadata,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+                setStreamingMessage({
+                  id: fallbackMessage.id,
+                  content: fallbackMessage.content,
+                  isComplete: true,
+                });
+                setContextTruncated(false);
+                setMessagesRemoved(0);
+                contextTruncatedRef.current = false;
+                messagesRemovedRef.current = 0;
+                onComplete?.(fallbackMessage);
+                if (resolvedChatId) {
+                  queryClient.invalidateQueries({ queryKey: ['chat', resolvedChatId] });
+                }
+                onFallback?.(fallbackMessage.content);
+                break;
+              }
+
+              case 'error': {
+                const streamError = new Error(
+                  typeof data.message === 'string' ? data.message : 'Streaming error'
+                );
+                setError(streamError);
+                onError?.(streamError);
+                break;
+              }
+
+              default:
+                break;
             }
           }
         }
@@ -252,7 +340,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           reconnectAttempts.current++;
 
           setTimeout(() => {
-            sendStreamingMessage(content, parentMessageId);
+            void sendStreamingMessage(content, parentMessageId);
           }, delay);
         }
       } finally {

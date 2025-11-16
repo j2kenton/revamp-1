@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
               messageId: aiMessageId,
               message: fallbackMsg,
               metadata: fallbackMetadata,
+              chatId: chat!.id,
             });
 
             // Persist fallback message to database
@@ -252,6 +253,7 @@ export async function POST(request: NextRequest) {
               messageId: aiMessageId,
               message: fallbackMsg,
               metadata: fallbackMetadata,
+              chatId: chat!.id,
             });
           } else {
             sendEvent('error', {

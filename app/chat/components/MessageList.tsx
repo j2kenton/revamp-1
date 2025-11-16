@@ -18,6 +18,8 @@ interface MessageListProps {
     id: string;
     content: string;
     isComplete: boolean;
+    contextTruncated?: boolean;
+    messagesRemoved?: number;
   } | null;
 }
 
@@ -26,6 +28,15 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
   const { messages, isLoading, error } = useFetchChatHistory(chatId);
 
   // Combine messages with streaming message
+  const streamingMetadata =
+    streamingMessage &&
+    (streamingMessage.contextTruncated || typeof streamingMessage.messagesRemoved === 'number')
+      ? {
+          contextTruncated: streamingMessage.contextTruncated ?? false,
+          messagesRemoved: streamingMessage.messagesRemoved,
+        }
+      : null;
+
   const allMessages = streamingMessage
     ? [
         ...messages,
@@ -34,9 +45,9 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
           chatId: chatId || '',
           role: 'assistant' as const,
           content: streamingMessage.content,
-          status: 'sending' as const,
+          status: streamingMessage.isComplete ? 'sent' : 'sending',
           parentMessageId: null,
-          metadata: null,
+          metadata: streamingMetadata,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         } satisfies MessageDTO,
@@ -44,6 +55,7 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
     : messages;
 
   // Virtual scrolling setup
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack's hook manages its own memoization
   const rowVirtualizer = useVirtualizer({
     count: allMessages.length,
     getScrollElement: () => parentRef.current,
@@ -154,8 +166,10 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
         >
           {rowVirtualizer.getVirtualItems().map((virtualItem) => {
             const message = allMessages[virtualItem.index];
-            const isStreamingMessage =
-              streamingMessage && message.id === streamingMessage.id;
+            const activeStreamingId = streamingMessage?.id ?? null;
+            const isStreamingMessage = activeStreamingId !== null && message.id === activeStreamingId;
+            const streamInProgress =
+              isStreamingMessage && streamingMessage ? !streamingMessage.isComplete : false;
 
             return (
               <div
@@ -171,10 +185,7 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
                 }}
                 className="pb-4"
               >
-                <ChatMessage
-                  message={message}
-                  isStreaming={isStreamingMessage && !streamingMessage.isComplete}
-                />
+                <ChatMessage message={message} isStreaming={streamInProgress} />
               </div>
             );
           })}
