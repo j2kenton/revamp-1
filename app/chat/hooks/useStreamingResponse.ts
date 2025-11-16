@@ -137,7 +137,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       id: data.messageId,
                       content: accumulatedContent,
                       isComplete: false,
-                      contextTruncated,
+                      contextTruncated: contextTruncated,
                       messagesRemoved: contextTruncated ? messagesRemoved : undefined,
                     });
                     break;
