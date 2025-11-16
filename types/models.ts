@@ -56,6 +56,9 @@ export interface MessageMetadata {
   processingTime?: number;
   clientRequestId?: string;
   respondingToClientRequestId?: string;
+  contextTruncated?: boolean;
+  messagesRemoved?: number;
+  circuitBreakerOpen?: boolean;
   [key: string]: unknown;
 }
 

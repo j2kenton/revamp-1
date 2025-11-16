@@ -10,8 +10,13 @@ import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
 import { badRequest, unauthorized } from '@/server/api-response';
 import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
-import { validateTokenCount } from '@/lib/llm/service';
-import { logError, logInfo } from '@/utils/logger';
+import {
+  callLLMStreamWithRetry,
+  truncateMessagesToFit,
+  getFallbackMessage,
+  getCircuitBreaker,
+} from '@/lib/llm/service';
+import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 
 /**
@@ -61,14 +66,22 @@ export async function POST(request: NextRequest) {
     // Get chat history
     const chatHistory = await getChatMessages(chat.id);
 
-    // Validate token count
+    // Prepare messages with smart truncation
     const allMessages = [
       ...chatHistory.map((msg) => ({ role: msg.role, content: msg.content })),
       { role: 'user', content: sanitizedContent },
     ];
 
-    if (!validateTokenCount(allMessages)) {
-      return badRequest('Message thread is too long. Please start a new chat.');
+    const { messages: truncatedMessages, truncated, removedCount } =
+      truncateMessagesToFit(allMessages, 8000);
+
+    if (truncated) {
+      logWarn('Context truncated for streaming request', {
+        chatId: chat.id,
+        removedCount,
+        originalCount: allMessages.length,
+        keptCount: truncatedMessages.length,
+      });
     }
 
     // Create user message
@@ -104,81 +117,151 @@ export async function POST(request: NextRequest) {
         sendEvent('message_created', {
           messageId: userMessageId,
           chatId: chat!.id,
+          truncated,
+          removedCount,
         });
 
+        const aiMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        let accumulatedContent = '';
+        let heartbeatCount = 0;
+
         try {
-          // Simulate streaming response
-          // In production, replace with actual streaming LLM API
-          const mockResponse = `This is a streaming response to: "${sanitizedContent}".
+          // Check circuit breaker state
+          const circuitBreaker = getCircuitBreaker();
+          const circuitState = circuitBreaker.getState();
 
-In a production environment, this would stream tokens from a real LLM API.
-
-To implement real streaming:
-1. Use OpenAI's streaming API or similar
-2. Stream tokens as they arrive
-3. Handle connection drops gracefully
-4. Implement reconnection logic`;
-
-          const words = mockResponse.split(' ');
-          let accumulatedContent = '';
-
-          const aiMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-          // Stream words with delay to simulate real streaming
-          for (let i = 0; i < words.length; i++) {
-            accumulatedContent += (i > 0 ? ' ' : '') + words[i];
+          if (circuitState === 'OPEN') {
+            // Circuit is open, send fallback message immediately
+            const fallbackMsg = getFallbackMessage();
+            accumulatedContent = fallbackMsg;
 
             sendEvent('content_delta', {
               messageId: aiMessageId,
-              delta: words[i] + ' ',
-              accumulatedContent,
+              delta: fallbackMsg,
+              accumulatedContent: fallbackMsg,
             });
 
-            // Heartbeat every few words
-            if (i % 10 === 0) {
-              sendHeartbeat();
-            }
+            sendEvent('message_complete', {
+              messageId: aiMessageId,
+              content: fallbackMsg,
+              metadata: {
+                model: 'fallback',
+                tokensUsed: 0,
+                processingTime: 0,
+                circuitBreakerOpen: true,
+              },
+            });
 
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            // Persist fallback message to database
+            const aiMessage: MessageModel = {
+              id: aiMessageId,
+              chatId: chat!.id,
+              role: 'assistant',
+              content: accumulatedContent,
+              status: 'sent',
+              parentMessageId: userMessageId,
+              metadata: {
+                model: 'fallback',
+                tokensUsed: 0,
+                processingTime: 0,
+                circuitBreakerOpen: true,
+              },
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            await addMessage(chat!.id, aiMessage);
+
+            logWarn('Circuit breaker open - sent fallback message', {
+              chatId: chat!.id,
+              userId: session.userId,
+            });
+          } else {
+            // Stream LLM response
+            const startTime = Date.now();
+
+            const response = await callLLMStreamWithRetry(
+              truncatedMessages,
+              (chunk: string) => {
+                accumulatedContent += chunk;
+                heartbeatCount++;
+
+                sendEvent('content_delta', {
+                  messageId: aiMessageId,
+                  delta: chunk,
+                  accumulatedContent,
+                });
+
+                // Send heartbeat periodically
+                if (heartbeatCount % 10 === 0) {
+                  sendHeartbeat();
+                }
+              },
+              {
+                model: 'gpt-4',
+                maxTokens: 2000,
+                temperature: 0.7,
+              }
+            );
+
+            const processingTime = Date.now() - startTime;
+
+            // Save complete AI message
+            const aiMessage: MessageModel = {
+              id: aiMessageId,
+              chatId: chat!.id,
+              role: 'assistant',
+              content: accumulatedContent,
+              status: 'sent',
+              parentMessageId: userMessageId,
+              metadata: {
+                model: response.model,
+                tokensUsed: response.tokensUsed,
+                processingTime,
+                contextTruncated: truncated,
+                messagesRemoved: truncated ? removedCount : undefined,
+              },
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+
+            await addMessage(chat!.id, aiMessage);
+
+            // Send completion event
+            sendEvent('message_complete', {
+              messageId: aiMessageId,
+              content: accumulatedContent,
+              metadata: aiMessage.metadata,
+            });
+
+            logInfo('Streaming completed', {
+              chatId: chat!.id,
+              userId: session.userId,
+              messageId: aiMessageId,
+              tokensUsed: response.tokensUsed,
+              processingTime,
+            });
           }
-
-          // Save complete AI message
-          const aiMessage: MessageModel = {
-            id: aiMessageId,
-            chatId: chat!.id,
-            role: 'assistant',
-            content: accumulatedContent,
-            status: 'sent',
-            parentMessageId: userMessageId,
-            metadata: {
-              model: 'mock-streaming',
-              tokensUsed: words.length,
-              processingTime: words.length * 50,
-            },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-
-          await addMessage(chat!.id, aiMessage);
-
-          // Send completion event
-          sendEvent('message_complete', {
-            messageId: aiMessageId,
-            content: accumulatedContent,
-            metadata: aiMessage.metadata,
-          });
-
-          logInfo('Streaming completed', {
-            chatId: chat!.id,
-            userId: session.userId,
-            messageId: aiMessageId,
-          });
         } catch (error) {
           logError('Streaming error', error);
-          sendEvent('error', {
-            message: 'Failed to generate response',
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+
+          // Check if circuit breaker is now open
+          const isCircuitOpen =
+            error instanceof Error &&
+            error.message.includes('Circuit breaker is OPEN');
+
+          if (isCircuitOpen) {
+            // Send fallback message
+            const fallbackMsg = getFallbackMessage();
+            sendEvent('fallback', {
+              messageId: aiMessageId,
+              message: fallbackMsg,
+            });
+          } else {
+            sendEvent('error', {
+              message: 'Failed to generate response',
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
         } finally {
           controller.close();
         }
