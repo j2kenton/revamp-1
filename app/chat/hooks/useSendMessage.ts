@@ -7,6 +7,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
+import { deriveCsrfToken } from '@/lib/auth/csrf';
 import { reconcileMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO } from '@/types/models';
 
@@ -57,13 +58,21 @@ async function sendMessageToAPI(
   input: InternalSendMessageInput,
   accessToken: string | null,
 ): Promise<SendMessageResponse> {
+  const csrfToken = await deriveCsrfToken(accessToken);
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: accessToken ? `Bearer ${accessToken}` : '',
+    'X-Idempotency-Key': input.idempotencyKey,
+  };
+
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+
   const response = await fetch('/api/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: accessToken ? `Bearer ${accessToken}` : '',
-      'X-Idempotency-Key': input.idempotencyKey,
-    },
+    headers,
     body: JSON.stringify({
       content: input.content,
       chatId: input.chatId,

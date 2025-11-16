@@ -23,7 +23,7 @@ const SESSION_COOKIE_OPTIONS = {
   maxAge: 7 * 24 * 60 * 60, // 7 days
 };
 
-const JWT_FALLBACK_PREFIX = 'jwt-fallback';
+export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
 
 function getClientIp(request: NextRequest): string | undefined {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -37,6 +37,7 @@ function getClientIp(request: NextRequest): string | undefined {
 
 async function getSessionFromJwtFallback(
   request: NextRequest,
+  reason: 'redis_unavailable' | 'missing_cookie' | 'invalid_session' | 'expired_session' = 'redis_unavailable',
 ): Promise<SessionModel | null> {
   const token = getMsalTokenFromRequest(request);
   if (!token) {
@@ -51,6 +52,11 @@ async function getSessionFromJwtFallback(
   const now = new Date();
   const expiresAt = new Date(payload.exp * 1000);
   const csrfToken = createHash('sha256').update(token).digest('hex');
+
+  logWarn('Using JWT payload for session fallback', {
+    userId: payload.oid,
+    reason,
+  });
 
   return {
     id: `${JWT_FALLBACK_PREFIX}:${payload.oid}`,
@@ -79,7 +85,7 @@ export async function getSessionFromRequest(
   const sessionId = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   if (!sessionId) {
-    return null;
+    return getSessionFromJwtFallback(request, 'missing_cookie');
   }
 
   let session: SessionModel | null = null;
@@ -91,26 +97,28 @@ export async function getSessionFromRequest(
       logWarn('Redis unavailable, attempting JWT fallback for session', {
         sessionId,
       });
-      return getSessionFromJwtFallback(request);
+      return getSessionFromJwtFallback(request, 'redis_unavailable');
     }
 
     logWarn('Failed to retrieve session', { sessionId, error });
-    return null;
+    return getSessionFromJwtFallback(request, 'invalid_session');
   }
 
   if (!session) {
     logWarn('Invalid session ID in cookie', { sessionId });
-    return null;
+    return getSessionFromJwtFallback(request, 'invalid_session');
   }
 
   // Check if session is expired
   if (session.expiresAt < new Date()) {
     logWarn('Session expired', { sessionId });
-    return null;
+    return getSessionFromJwtFallback(request, 'expired_session');
   }
 
   // Refresh session TTL on access
-  await refreshSession(sessionId);
+  if (!session.id.startsWith(JWT_FALLBACK_PREFIX)) {
+    await refreshSession(sessionId);
+  }
 
   return session;
 }

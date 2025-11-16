@@ -16,17 +16,28 @@ The application uses the Microsoft Authentication Library (MSAL) to authenticate
 8. The application creates a session for the user in Redis.
 9. The application redirects the user to the dashboard.
 
+## Frontend Integration
+
+- `app/layout.tsx` wraps the entire tree with `MsalProvider`, `SessionProvider`, TanStack Query, and Redux so every client component has access to the active MSAL instance.
+- `lib/auth/MsalProvider.tsx` boots a singleton `PublicClientApplication`, restores cached accounts, and listens for MSAL events to keep the active account in sync.
+- `lib/auth/useAuth.ts` exposes `login`, `logout`, and `acquireToken`. It automatically refreshes tokens when they are about to expire (5‑minute buffer) and retries transient failures with exponential backoff. The hook also emits the derived CSRF token (see below) so API clients can attach it alongside the `Authorization` header.
+- Client requests attach both headers:
+  - `Authorization: Bearer <MSAL access token>`
+  - `X-CSRF-Token: SHA-256 hash of the MSAL access token` (generated via `lib/auth/csrf.ts`)
+
 ## Token Refresh
 
 Access tokens are short-lived and expire after about an hour. The application automatically refreshes the access token in the background using the refresh token. This ensures that the user remains logged in without having to re-enter their credentials.
 
 The token refresh logic is implemented in the `lib/auth/useAuth.ts` file. The `useAuth` hook checks if the access token is about to expire and, if so, uses the refresh token to obtain a new access token.
 
-## Session Management
+## Session Management and Redis Failover
 
 The application uses Redis to store user sessions. When a user logs in, the application creates a session for the user in Redis. The session contains the user's ID, email, and name.
 
 The session management logic is implemented in the `lib/redis/session.ts` file. The `createSession` function creates a new session for the user in Redis. The `getSession` function retrieves a session from Redis. The `deleteSession` function deletes a session from Redis.
+
+If Redis becomes unavailable, `server/middleware/session.ts` now falls back to validating the caller's MSAL JWT directly (via `validateMsalToken`). A deterministic CSRF token is derived from the access token (`SHA-256` of the JWT), allowing `server/middleware/csrf.ts` to continue enforcing CSRF protection even when Redis cannot be reached.
 
 ## Middleware
 

@@ -8,6 +8,7 @@ import { chatMessageSchema } from '@/lib/validation/chat.schema';
 import { sanitizeChatMessage } from '@/lib/sanitizer';
 import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
+import { withChatRateLimit } from '@/server/middleware/rate-limit';
 import { badRequest, unauthorized } from '@/server/api-response';
 import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
 import {
@@ -19,18 +20,8 @@ import {
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 
-/**
- * POST /api/chat/stream
- * Stream AI response as Server-Sent Events
- */
-export async function POST(request: NextRequest) {
+async function processChatStream(request: NextRequest) {
   try {
-    // CSRF validation
-    const csrfCheck = await withCsrfProtection(request);
-    if (!csrfCheck.valid && csrfCheck.error) {
-      return csrfCheck.error;
-    }
-
     // Require authenticated session
     const session = await requireSession(request);
 
@@ -284,4 +275,18 @@ export async function POST(request: NextRequest) {
 
     return badRequest('Failed to initialize stream');
   }
+}
+
+/**
+ * POST /api/chat/stream
+ * Validates CSRF before applying chat-specific rate limiting.
+ */
+export async function POST(request: NextRequest) {
+  const csrfCheck = await withCsrfProtection(request);
+  if (!csrfCheck.valid && csrfCheck.error) {
+    return csrfCheck.error;
+  }
+
+  const limitedHandler = withChatRateLimit(processChatStream);
+  return limitedHandler(request);
 }

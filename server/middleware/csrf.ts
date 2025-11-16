@@ -3,6 +3,7 @@
  * Validates CSRF tokens for state-changing requests
  */
 
+import { createHash } from 'crypto';
 import type { NextRequest } from 'next/server';
 
 import { validateCsrfToken } from '@/lib/redis/session';
@@ -10,7 +11,9 @@ import {
   getSessionFromRequest,
   getCsrfTokenFromRequest,
   requiresCsrfProtection,
+  JWT_FALLBACK_PREFIX,
 } from '@/server/middleware/session';
+import { getMsalTokenFromRequest } from '@/server/middleware/msal-auth';
 import { unauthorized } from '@/server/api-response';
 import { logWarn } from '@/utils/logger';
 
@@ -49,6 +52,27 @@ export async function withCsrfProtection(
   }
 
   // Validate CSRF token
+  if (session.id.startsWith(JWT_FALLBACK_PREFIX)) {
+    const fallbackToken = getMsalTokenFromRequest(request);
+    if (!fallbackToken) {
+      logWarn('CSRF fallback failed: Missing MSAL token', { sessionId: session.id });
+      return {
+        valid: false,
+        error: unauthorized('Invalid CSRF token'),
+      };
+    }
+    const expected = createHash('sha256').update(fallbackToken).digest('hex');
+    if (expected !== csrfToken) {
+      logWarn('CSRF fallback failed: Token mismatch', { sessionId: session.id });
+      return {
+        valid: false,
+        error: unauthorized('Invalid CSRF token'),
+      };
+    }
+
+    return { valid: true };
+  }
+
   const isValid = await validateCsrfToken(session.id, csrfToken);
 
   if (!isValid) {

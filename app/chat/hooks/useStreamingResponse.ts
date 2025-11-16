@@ -7,6 +7,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/useAuth';
+import { deriveCsrfToken } from '@/lib/auth/csrf';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MessageDTO } from '@/types/models';
 
@@ -92,12 +93,15 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           parentMessageId,
         };
 
+        const csrfToken = await deriveCsrfToken(accessToken);
+
         // Initiate streaming request
         const response = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
           },
           body: JSON.stringify(payload),
         });
