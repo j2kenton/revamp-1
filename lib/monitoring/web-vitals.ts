@@ -26,9 +26,24 @@ async function sendToAnalytics(metric: WebVitalsPayload) {
 
     // Use sendBeacon if available for better reliability
     if (navigator.sendBeacon) {
-      navigator.sendBeacon('/api/analytics/web-vitals', body);
+      const blob = new Blob([body], { type: 'application/json' });
+      const queued = navigator.sendBeacon('/api/analytics/web-vitals', blob);
+      
+      // Fall back to fetch if beacon failed to queue
+      if (!queued) {
+        fetch('/api/analytics/web-vitals', {
+          method: 'POST',
+          body,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          keepalive: true,
+        }).catch((error) => {
+          console.error('Failed to send web vitals:', error);
+        });
+      }
     } else {
-      // Fallback to fetch
+      // Fallback to fetch if sendBeacon is not available
       fetch('/api/analytics/web-vitals', {
         method: 'POST',
         body,
