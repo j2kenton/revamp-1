@@ -13,7 +13,7 @@ import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/ch
 import { withTransaction, txSet } from '@/lib/redis/transactions';
 import { callLLMWithRetry, formatMessagesForLLM, validateTokenCount } from '@/lib/llm/service';
 import { logError, logInfo } from '@/utils/logger';
-import type { MessageModel, MessageDTO } from '@/types/models';
+import type { MessageModel } from '@/types/models';
 import { messageToDTO } from '@/types/models';
 
 const IDEMPOTENCY_KEY_TTL = 24 * 60 * 60; // 24 hours

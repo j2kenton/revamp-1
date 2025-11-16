@@ -119,7 +119,7 @@ export async function authenticateWithMsal(
     // Create new session
     const session = await createSession(payload.oid, {
       userAgent: request.headers.get('user-agent') || undefined,
-      ipAddress: request.ip || undefined,
+      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
       email: payload.preferred_username,
       name: payload.name,
     });

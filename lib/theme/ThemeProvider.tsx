@@ -44,19 +44,15 @@ function getStoredTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('system');
-  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>('light');
+  // Initialize with stored values to avoid effect setState
+  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => getSystemTheme());
 
   // Calculate actual theme
   const actualTheme = theme === 'system' ? systemTheme : theme;
 
-  // Initialize theme from localStorage and system preference
+  // Listen for system theme changes
   useEffect(() => {
-    const stored = getStoredTheme();
-    const system = getSystemTheme();
-
-    setThemeState(stored);
-    setSystemTheme(system);
 
     // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');

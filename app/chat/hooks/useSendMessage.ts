@@ -59,7 +59,7 @@ async function sendMessageToAPI(
   return data.data;
 }
 
-export function useSendMessage() {
+export function useSendMessage(_chatId?: string | null) {
   const queryClient = useQueryClient();
   const { accessToken } = useAuth();
 
@@ -98,7 +98,7 @@ export function useSendMessage() {
       };
 
       // Optimistically update cache
-      queryClient.setQueryData(['chat', chatId], (old: any) => ({
+      queryClient.setQueryData(['chat', chatId], (old: { messages?: MessageDTO[] }) => ({
         ...old,
         messages: [...(old?.messages || []), optimisticMessage],
       }));
@@ -110,7 +110,7 @@ export function useSendMessage() {
     onSuccess: (data, variables, context) => {
       const { chatId } = data;
 
-      queryClient.setQueryData(['chat', chatId], (old: any) => {
+      queryClient.setQueryData(['chat', chatId], (old: { messages?: MessageDTO[] }) => {
         const messages = old?.messages || [];
 
         // Remove optimistic message if it exists

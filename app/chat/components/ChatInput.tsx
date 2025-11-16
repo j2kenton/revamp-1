@@ -22,9 +22,9 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
   const [isComposing, setIsComposing] = useState(false);
   const [debouncedLength, setDebouncedLength] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const debounceTimeoutRef = useRef<NodeJS.Timeout>();
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  const { sendMessage, isLoading, error } = useSendMessage();
+  const { sendMessage, isLoading, error } = useSendMessage(chatId);
 
   // Debounced character count update
   useEffect(() => {

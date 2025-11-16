@@ -10,7 +10,7 @@ import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
 import { badRequest, unauthorized } from '@/server/api-response';
 import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
-import { formatMessagesForLLM, validateTokenCount } from '@/lib/llm/service';
+import { validateTokenCount } from '@/lib/llm/service';
 import { logError, logInfo } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 

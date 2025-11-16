@@ -5,7 +5,6 @@
 
 import { getRedisClient } from './client';
 import { logError, logWarn } from '@/utils/logger';
-import type { Redis } from 'ioredis';
 
 /**
  * Transaction context for tracking operations

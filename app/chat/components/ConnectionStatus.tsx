@@ -11,7 +11,10 @@ import clsx from 'clsx';
 type ConnectionState = 'connected' | 'connecting' | 'disconnected';
 
 export function ConnectionStatus() {
-  const [status, setStatus] = useState<ConnectionState>('connected');
+  // Initialize with current status to avoid effect setState
+  const [status, setStatus] = useState<ConnectionState>(() =>
+    typeof window !== 'undefined' && navigator.onLine ? 'connected' : 'disconnected'
+  );
 
   // Monitor online/offline status
   useEffect(() => {
@@ -20,9 +23,6 @@ export function ConnectionStatus() {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // Set initial status
-    setStatus(navigator.onLine ? 'connected' : 'disconnected');
 
     return () => {
       window.removeEventListener('online', handleOnline);

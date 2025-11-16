@@ -95,7 +95,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
         // Process SSE stream
         let buffer = '';
-        let currentMessageId = '';
         let accumulatedContent = '';
 
         while (true) {
@@ -120,7 +119,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
                 switch (eventType) {
                   case 'message_created':
-                    currentMessageId = data.messageId;
                     onMessageCreated?.(data.messageId);
                     break;
 

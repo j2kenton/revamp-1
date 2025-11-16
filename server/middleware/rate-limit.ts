@@ -63,7 +63,10 @@ export async function withRateLimit(
 
       return {
         allowed: false,
-        error: tooManyRequests(retryAfter),
+        error: tooManyRequests(
+          `Too many requests. Please try again in ${retryAfter} seconds.`,
+          { retryAfter, limit: result.limit }
+        ),
       };
     }
 

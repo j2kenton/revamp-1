@@ -19,7 +19,6 @@ export const msalConfig: Configuration = {
     storeAuthStateInCookie: false, // Set to true for IE11 or Edge
   },
   system: {
-    allowNativeBroker: false, // Disables WAM Broker
     loggerOptions: {
       loggerCallback: (level, message, containsPii) => {
         if (containsPii) {
