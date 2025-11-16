@@ -4,67 +4,74 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 import { AuthError } from '@/utils/error-handler';
 import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
 import type { SessionModel } from '@/types/models';
 
-export interface MsalTokenPayload {
+export interface MsalTokenPayload extends JWTPayload {
   oid: string; // Object ID (user ID)
   preferred_username: string; // Email
   name: string;
   exp: number; // Expiration timestamp
   iat: number; // Issued at timestamp
+  iss: string; // Issuer
+  aud: string; // Audience
+  tid: string; // Tenant ID
 }
 
-/**
- * Decode JWT token (without verification - for development)
- * In production, you should verify the token signature with Azure AD public keys
- */
-function decodeJwtToken(token: string): MsalTokenPayload | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
+// Azure AD tenant ID and client ID from environment
+const TENANT_ID = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || 'common';
+const CLIENT_ID = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || '';
 
-    const payload = JSON.parse(
-      Buffer.from(parts[1], 'base64url').toString('utf-8')
-    );
+// JWKS endpoint for Azure AD public keys
+const JWKS_URI = `https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys`;
 
-    return payload as MsalTokenPayload;
-  } catch (error) {
-    logError('Failed to decode JWT token', error);
-    return null;
-  }
-}
+// Create a remote JWKS set that will fetch and cache Azure AD public keys
+const JWKS = createRemoteJWKSet(new URL(JWKS_URI));
 
 /**
- * Verify MSAL token signature (simplified version)
- * In production, implement full JWT validation with Azure AD public keys
+ * Verify MSAL token signature with Azure AD public keys
+ * Implements full JWT validation per Microsoft's security requirements
  * https://docs.microsoft.com/en-us/azure/active-directory/develop/access-tokens#validating-tokens
  */
 export async function validateMsalToken(
   token: string,
 ): Promise<MsalTokenPayload | null> {
-  // TODO: Implement proper token validation with Azure AD public keys
-  // For now, we'll just decode the token
-  // In production, use a library like 'jsonwebtoken' or 'jose' to verify signatures
+  try {
+    // Verify the token signature and validate claims
+    const { payload } = await jwtVerify(token, JWKS, {
+      // Validate issuer
+      issuer: `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
+      // Validate audience (should be the client ID)
+      audience: CLIENT_ID,
+      // Additional security checks
+      algorithms: ['RS256'], // Azure AD uses RS256
+    });
 
-  const payload = decodeJwtToken(token);
+    // Type assertion after validation
+    const msalPayload = payload as MsalTokenPayload;
 
-  if (!payload) {
+    // Validate required claims are present
+    if (!msalPayload.oid || !msalPayload.preferred_username) {
+      logWarn('MSAL token missing required claims', { payload: msalPayload });
+      return null;
+    }
+
+    return msalPayload;
+  } catch (error) {
+    // Log specific verification errors
+    if (error instanceof Error) {
+      logError('MSAL token verification failed', {
+        message: error.message,
+        name: error.name,
+      });
+    } else {
+      logError('MSAL token verification failed', error);
+    }
     return null;
   }
-
-  // Check expiration
-  const now = Math.floor(Date.now() / 1000);
-  if (payload.exp < now) {
-    logWarn('MSAL token expired', { exp: payload.exp, now });
-    return null;
-  }
-
-  return payload;
 }
 
 /**

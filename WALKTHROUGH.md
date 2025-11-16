@@ -71,6 +71,8 @@ The application uses Microsoft Authentication Library (MSAL) for Azure AD authen
 
 4. **Session Creation**
    - Server validates MSAL token via `server/middleware/msal-auth.ts`
+   - **Token Signature Verification**: Cryptographically validates tokens using Azure AD public keys (JWKS)
+   - Validates issuer, audience, expiration, and required claims
    - Session created in Redis with CSRF token
    - Session ID stored in httpOnly cookie
 
@@ -206,16 +208,60 @@ Enhanced rate limiting with:
 
 ### Monitoring
 
-Health check endpoint at `/api/health`:
+#### Health Check Endpoint
+
+`GET /api/health` provides comprehensive application health status:
 
 ```typescript
 {
-  status: 'healthy',
-  redis: { connected: true, status: 'ready' },
+  status: 'healthy' | 'degraded' | 'unhealthy',
+  timestamp: '2025-01-15T...',
   uptime: 12345,
-  timestamp: '2025-01-15T...'
+  checks: {
+    redis: {
+      status: 'healthy',
+      latency: 5
+    },
+    memory: {
+      status: 'healthy',
+      usage: {
+        heapUsed: 45,  // MB
+        heapTotal: 128,
+        external: 2,
+        rss: 150
+      },
+      usagePercent: 35
+    },
+    process: {
+      status: 'healthy',
+      pid: 1234,
+      version: 'v20.x.x',
+      platform: 'linux'
+    }
+  }
 }
 ```
+
+#### Web Vitals Monitoring
+
+Real-time performance metrics tracked and reported:
+
+- **Core Web Vitals**:
+  - CLS (Cumulative Layout Shift)
+  - FID (First Input Delay)
+  - LCP (Largest Contentful Paint)
+
+- **Additional Metrics**:
+  - FCP (First Contentful Paint)
+  - INP (Interaction to Next Paint)
+  - TTFB (Time to First Byte)
+
+Metrics are automatically sent to `/api/analytics/web-vitals` for analysis and aggregation.
+
+**Implementation**:
+- `lib/monitoring/web-vitals.ts` - Metric collection
+- `components/WebVitalsReporter.tsx` - Client-side integration
+- `app/api/analytics/web-vitals/route.ts` - Endpoint for receiving metrics
 
 ## Testing
 
@@ -225,9 +271,34 @@ Health check endpoint at `/api/health`:
 
 Located in `__tests__/unit/`:
 
-- Authentication hooks
-- Validation schemas
-- Token refresh flows
+- **Message Reconciliation** (`message-reconciler.test.ts`)
+  - Duplicate message handling
+  - Optimistic update replacement
+  - Client request ID matching
+
+- **Chat Components** (`ChatMessage.test.tsx`)
+  - Message rendering
+  - Status indicators
+  - Accessibility attributes
+  - Timestamp formatting
+
+- **Sanitization** (`sanitizer.test.ts`)
+  - HTML sanitization
+  - XSS prevention
+  - URL validation
+  - Special character escaping
+
+- **CSRF Protection** (`csrf.test.ts`)
+  - Token generation
+  - Token validation
+  - Mismatch detection
+
+- **Existing Tests**:
+  - Authentication hooks
+  - Validation schemas
+  - HTTP client
+  - Session hydration
+  - Rate limiting
 
 #### Integration Tests
 
@@ -239,17 +310,35 @@ Located in `__tests__/integration/`:
 
 #### E2E Tests
 
-Using Playwright:
+Using Playwright (`e2e/chat.spec.ts`):
 
-- Login flow
-- Session timeout recovery
-- Multi-tab synchronization
+- **Chat Interface**
+  - Empty state display
+  - Message input accessibility
+  - Character counter functionality
+  - Send button states
+  - Keyboard shortcuts (Enter, Shift+Enter)
+  - Character limit validation
+  - ARIA attributes
+
+- **Accessibility**
+  - Heading structure
+  - Landmark roles
+  - Keyboard navigation
+  - Screen reader compatibility
+
+- **Responsive Design**
+  - Mobile viewport (375x667)
+  - Tablet viewport (768x1024)
+  - Desktop viewport (1920x1080)
 
 #### Security Tests
 
 - CSRF protection
 - XSS prevention
 - Rate limiting effectiveness
+- Token signature verification
+- URL sanitization
 - SQL injection (N/A - using Redis)
 
 ### Running Tests
@@ -399,21 +488,47 @@ CMD ["npm", "start"]
 | `REDIS_PASSWORD`           | Redis password      | -           |
 | `REDIS_TLS`                | Enable TLS          | `false`     |
 
+## Accessibility
+
+The application has been audited for WCAG 2.1 Level AA compliance. See `ACCESSIBILITY_AUDIT.md` for the full report.
+
+### Key Accessibility Features
+
+- **Semantic HTML**: Proper use of ARIA roles, labels, and landmarks
+- **Keyboard Navigation**: Full keyboard support with visible focus indicators
+- **Screen Reader Support**: Live regions, status messages, and descriptive labels
+- **Color Contrast**: All color combinations meet WCAG AA standards (4.5:1 minimum)
+- **Focus Management**: Logical tab order and focus trap prevention
+- **Error Handling**: Clear error messages with `role="alert"` and `aria-live`
+
+### Component-Specific Features
+
+- **MessageList**: `role="log"` with `aria-live="polite"` for dynamic updates
+- **ChatMessage**: `role="article"` with descriptive `aria-label`
+- **ChatInput**: `aria-invalid`, `aria-describedby`, keyboard shortcuts
+- **MessageSkeleton**: `role="status"` with loading announcement
+- **ConnectionStatus**: Status indicators with both color and text
+
+**Audit Result**: ✅ WCAG 2.1 Level AA Compliant
+
 ## Key Features Summary
 
-✅ **MSAL Authentication** with automatic token refresh
+✅ **MSAL Authentication** with cryptographic token verification
+✅ **Automatic Token Refresh** with proactive expiry monitoring
 ✅ **Real-time Chat** with AI responses
 ✅ **SSE Streaming** for progressive responses
 ✅ **Optimistic Updates** for instant feedback
 ✅ **CSRF Protection** on all mutations
-✅ **Enhanced Rate Limiting** with lockouts
+✅ **Enhanced Rate Limiting** with progressive delays and lockouts
 ✅ **Redis Circuit Breaker** for resilience
 ✅ **Database Transactions** for consistency
 ✅ **Idempotency** for duplicate prevention
+✅ **Content Sanitization** with DOMPurify (XSS prevention)
 ✅ **Dark/Light Theme** with system preference
-✅ **Accessibility** (WCAG AA compliant)
+✅ **Accessibility** (WCAG 2.1 Level AA compliant)
 ✅ **Comprehensive Testing** (unit, integration, E2E)
 ✅ **Performance Monitoring** with Web Vitals
+✅ **Health Check Endpoint** for monitoring
 
 ## Troubleshooting
 

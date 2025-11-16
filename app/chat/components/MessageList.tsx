@@ -102,6 +102,7 @@ export function MessageList({ chatId }: MessageListProps) {
       aria-live="polite"
       aria-relevant="additions text"
       aria-busy={isLoading}
+      aria-label="Chat message history"
     >
       {messages.length === 0 ? (
         <div className="text-center text-gray-500">
