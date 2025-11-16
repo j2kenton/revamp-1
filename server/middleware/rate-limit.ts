@@ -9,7 +9,7 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
 import { getRedisClient } from '@/lib/redis/client';
 import { tooManyRequests } from '@/server/api-response';
 import { getSessionFromRequest } from '@/server/middleware/session';
-import { chatRateLimit } from '@/server/middleware/enhanced-rate-limit';
+import { chatRateLimit, enhancedRateLimit } from '@/server/middleware/enhanced-rate-limit';
 import { logWarn } from '@/utils/logger';
 
 /**
@@ -110,20 +110,19 @@ export function withChatRateLimit(
   const limitedHandler = requireRateLimit(RATE_LIMITS.CHAT_MESSAGE, handler);
 
   return async (request: NextRequest, context?: unknown) => {
+    let userId: string | null = null;
+
     try {
       const session = await getSessionFromRequest(request);
-
-      if (session?.userId) {
-        const { allowed, error } = await chatRateLimit(request, session.userId);
-
-        if (!allowed && error) {
-          return error;
-        }
-      }
+      userId = session?.userId ?? null;
     } catch (error) {
-      logWarn('Enhanced chat rate limit failed - falling back to base limiter', {
-        error,
-      });
+      logWarn('Failed to read session for chat rate limit', { error });
+    }
+
+    const { allowed, error } = await chatRateLimit(request, userId);
+
+    if (!allowed && error) {
+      return error;
     }
 
     return limitedHandler(request, context);
@@ -136,5 +135,23 @@ export function withChatRateLimit(
 export function withAuthRateLimit(
   handler: (request: NextRequest, context?: unknown) => Promise<Response>,
 ): (request: NextRequest, context?: unknown) => Promise<Response> {
-  return requireRateLimit(RATE_LIMITS.AUTH, handler);
+  const limitedHandler = requireRateLimit(RATE_LIMITS.AUTH, handler);
+
+  return async (request: NextRequest, context?: unknown) => {
+    const identifier = getRateLimitIdentifier(request);
+    const { allowed, error } = await enhancedRateLimit(request, identifier, 'auth', {
+      windowMs: 60 * 1000,
+      maxRequests: 10,
+      lockoutThreshold: 5,
+      lockoutDurationMs: 15 * 60 * 1000,
+      enableProgressiveDelay: true,
+      enableAccountLockout: true,
+    });
+
+    if (!allowed && error) {
+      return error;
+    }
+
+    return limitedHandler(request, context);
+  };
 }
