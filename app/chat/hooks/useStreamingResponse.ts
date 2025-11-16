@@ -14,23 +14,28 @@ interface StreamingMessage {
   id: string;
   content: string;
   isComplete: boolean;
+  contextTruncated?: boolean;
+  messagesRemoved?: number;
 }
 
 interface UseStreamingResponseOptions {
   chatId: string | null;
-  onMessageCreated?: (messageId: string) => void;
+  onMessageCreated?: (messageId: string, truncated?: boolean, removedCount?: number) => void;
   onComplete?: (message: MessageDTO) => void;
   onError?: (error: Error) => void;
+  onFallback?: (message: string) => void;
 }
 
 export function useStreamingResponse(options: UseStreamingResponseOptions) {
-  const { chatId, onMessageCreated, onComplete, onError } = options;
+  const { chatId, onMessageCreated, onComplete, onError, onFallback } = options;
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
 
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [contextTruncated, setContextTruncated] = useState(false);
+  const [messagesRemoved, setMessagesRemoved] = useState(0);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
@@ -119,7 +124,11 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
                 switch (eventType) {
                   case 'message_created':
-                    onMessageCreated?.(data.messageId);
+                    if (data.truncated) {
+                      setContextTruncated(true);
+                      setMessagesRemoved(data.removedCount || 0);
+                    }
+                    onMessageCreated?.(data.messageId, data.truncated, data.removedCount);
                     break;
 
                   case 'content_delta':
@@ -128,6 +137,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       id: data.messageId,
                       content: accumulatedContent,
                       isComplete: false,
+                      contextTruncated,
+                      messagesRemoved: contextTruncated ? messagesRemoved : undefined,
                     });
                     break;
 
@@ -136,6 +147,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       id: data.messageId,
                       content: data.content,
                       isComplete: true,
+                      contextTruncated: data.metadata?.contextTruncated,
+                      messagesRemoved: data.metadata?.messagesRemoved,
                     });
 
                     // Create complete message DTO
@@ -158,6 +171,20 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
                     }
 
+                    // Reset truncation state
+                    setContextTruncated(false);
+                    setMessagesRemoved(0);
+
+                    break;
+
+                  case 'fallback':
+                    // Circuit breaker is open - received fallback message
+                    setStreamingMessage({
+                      id: data.messageId,
+                      content: data.message,
+                      isComplete: true,
+                    });
+                    onFallback?.(data.message);
                     break;
 
                   case 'error':
@@ -208,5 +235,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     isStreaming,
     error,
     closeConnection,
+    contextTruncated,
+    messagesRemoved,
   };
 }

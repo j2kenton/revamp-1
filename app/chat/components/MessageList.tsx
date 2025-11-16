@@ -1,11 +1,12 @@
 /**
  * Message List Component
- * Displays chat messages with optimistic updates
+ * Displays chat messages with optimistic updates and virtual scrolling
  */
 
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChatMessage } from './ChatMessage';
 import { MessageSkeleton } from './MessageSkeleton';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
@@ -13,18 +14,53 @@ import type { MessageDTO } from '@/types/models';
 
 interface MessageListProps {
   chatId: string | null;
+  streamingMessage?: {
+    id: string;
+    content: string;
+    isComplete: boolean;
+  } | null;
 }
 
-export function MessageList({ chatId }: MessageListProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+export function MessageList({ chatId, streamingMessage }: MessageListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
   const { messages, isLoading, error } = useFetchChatHistory(chatId);
+
+  // Combine messages with streaming message
+  const allMessages = streamingMessage
+    ? [
+        ...messages,
+        {
+          id: streamingMessage.id,
+          chatId: chatId || '',
+          role: 'assistant' as const,
+          content: streamingMessage.content,
+          status: 'sending' as const,
+          parentMessageId: null,
+          metadata: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } satisfies MessageDTO,
+      ]
+    : messages;
+
+  // Virtual scrolling setup
+  const rowVirtualizer = useVirtualizer({
+    count: allMessages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 120, // Estimated height of each message
+    overscan: 5, // Number of items to render outside visible area
+  });
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (parentRef.current && allMessages.length > 0) {
+      // Scroll to the last item
+      rowVirtualizer.scrollToIndex(allMessages.length - 1, {
+        align: 'end',
+        behavior: 'smooth',
+      });
     }
-  }, [messages]);
+  }, [allMessages.length, rowVirtualizer]);
 
   if (!chatId) {
     return (
@@ -96,22 +132,53 @@ export function MessageList({ chatId }: MessageListProps) {
 
   return (
     <div
-      ref={scrollRef}
-      className="space-y-4 p-6"
+      ref={parentRef}
+      className="h-full overflow-auto p-6"
       role="log"
       aria-live="polite"
       aria-relevant="additions text"
       aria-busy={isLoading}
       aria-label="Chat message history"
     >
-      {messages.length === 0 ? (
+      {allMessages.length === 0 ? (
         <div className="text-center text-gray-500">
           <p>No messages yet. Start the conversation!</p>
         </div>
       ) : (
-        messages.map((message: MessageDTO) => (
-          <ChatMessage key={message.id} message={message} />
-        ))
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+            const message = allMessages[virtualItem.index];
+            const isStreamingMessage =
+              streamingMessage && message.id === streamingMessage.id;
+
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+                className="pb-4"
+              >
+                <ChatMessage
+                  message={message}
+                  isStreaming={Boolean(isStreamingMessage && streamingMessage && !streamingMessage.isComplete)}
+                />
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

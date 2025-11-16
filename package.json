@@ -24,6 +24,7 @@
     "@azure/msal-react": "^3.0.21",
     "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-query": "^5.90.9",
+    "@tanstack/react-virtual": "^3.13.12",
     "@types/ioredis": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
