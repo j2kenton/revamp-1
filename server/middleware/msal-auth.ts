@@ -23,7 +23,10 @@ export interface MsalTokenPayload extends JWTPayload {
 
 // Azure AD tenant ID and client ID from environment
 const TENANT_ID = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || 'common';
-const CLIENT_ID = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || '';
+const CLIENT_ID = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
+if (!CLIENT_ID) {
+  throw new Error('NEXT_PUBLIC_AZURE_AD_CLIENT_ID environment variable is required');
+}
 
 // JWKS endpoint for Azure AD public keys
 const JWKS_URI = `https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys`;
