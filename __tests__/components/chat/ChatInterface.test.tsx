@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { Provider } from 'react-redux';
@@ -150,7 +150,7 @@ describe('ChatInterface', () => {
       const input = screen.getByRole('textbox', { name: /message/i });
       const longMessage = 'a'.repeat(10001);
 
-      await user.type(input, longMessage);
+      fireEvent.change(input, { target: { value: longMessage } });
 
       expect(screen.getByText(/message is too long/i)).toBeInTheDocument();
     });

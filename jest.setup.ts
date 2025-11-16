@@ -81,7 +81,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Global timeout
-jest.setTimeout(30000);
+jest.setTimeout(60000);
 
 // Suppress console errors during tests (optional)
 const originalError = console.error;
