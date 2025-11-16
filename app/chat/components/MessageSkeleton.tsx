@@ -5,7 +5,7 @@
 
 export function MessageSkeleton() {
   return (
-    <div className="flex gap-3 animate-pulse">
+    <div className="flex gap-3 animate-pulse" role="status" aria-label="Loading message">
       <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-200"></div>
       <div className="flex-1 space-y-2">
         <div className="h-4 w-3/4 rounded bg-gray-200"></div>

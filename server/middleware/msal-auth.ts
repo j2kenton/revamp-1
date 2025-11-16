@@ -4,67 +4,133 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 import { AuthError } from '@/utils/error-handler';
 import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
 import type { SessionModel } from '@/types/models';
 
-export interface MsalTokenPayload {
+export interface MsalTokenPayload extends JWTPayload {
   oid: string; // Object ID (user ID)
   preferred_username: string; // Email
   name: string;
   exp: number; // Expiration timestamp
   iat: number; // Issued at timestamp
+  iss: string; // Issuer
+  aud: string; // Audience
+  tid: string; // Tenant ID
 }
 
+// Azure AD tenant ID and client ID from environment
+// NOTE: For multi-tenant applications, TENANT_ID should be set to a specific tenant ID
+// rather than 'common'. The 'common' endpoint cannot be used for JWKS validation.
+// If you need to support multiple tenants, the token's 'tid' claim should be used
+// to construct the JWKS URI dynamically.
+const TENANT_ID = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || 'common';
+const CLIENT_ID = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
+if (!CLIENT_ID) {
+  throw new Error('NEXT_PUBLIC_AZURE_AD_CLIENT_ID environment variable is required');
+}
+
+// Validate configuration at module load time
+if (TENANT_ID === 'common') {
+  logWarn(
+    'MSAL configuration warning: TENANT_ID is set to "common". ' +
+    'This is not valid for JWKS validation in multi-tenant applications. ' +
+    'Please set NEXT_PUBLIC_AZURE_AD_TENANT_ID to your specific tenant ID. ' +
+    'See: https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-convert-app-to-be-multi-tenant'
+  );
+}
+
+// Cache for JWKS sets by tenant ID to improve performance
+const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
 /**
- * Decode JWT token (without verification - for development)
- * In production, you should verify the token signature with Azure AD public keys
+ * Get or create a JWKS set for a specific tenant
+ * This ensures proper token validation for multi-tenant scenarios
  */
-function decodeJwtToken(token: string): MsalTokenPayload | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    const payload = JSON.parse(
-      Buffer.from(parts[1], 'base64url').toString('utf-8')
-    );
-
-    return payload as MsalTokenPayload;
-  } catch (error) {
-    logError('Failed to decode JWT token', error);
-    return null;
+function getJWKSForTenant(tenantId: string): ReturnType<typeof createRemoteJWKSet> {
+  if (!jwksCache.has(tenantId)) {
+    const jwksUri = `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`;
+    jwksCache.set(tenantId, createRemoteJWKSet(new URL(jwksUri)));
   }
+  return jwksCache.get(tenantId)!;
 }
 
 /**
- * Verify MSAL token signature (simplified version)
- * In production, implement full JWT validation with Azure AD public keys
+ * Verify MSAL token signature with Azure AD public keys
+ * Implements full JWT validation per Microsoft's security requirements
  * https://docs.microsoft.com/en-us/azure/active-directory/develop/access-tokens#validating-tokens
  */
 export async function validateMsalToken(
   token: string,
 ): Promise<MsalTokenPayload | null> {
-  // TODO: Implement proper token validation with Azure AD public keys
-  // For now, we'll just decode the token
-  // In production, use a library like 'jsonwebtoken' or 'jose' to verify signatures
+  try {
+    // First, decode without verification to extract the tenant ID from claims
+    // This is safe because we'll verify the signature in the next step
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      logWarn('Invalid JWT format');
+      return null;
+    }
 
-  const payload = decodeJwtToken(token);
+    // Decode payload to get tenant ID
+    const payloadDecoded = JSON.parse(
+      Buffer.from(parts[1], 'base64url').toString('utf-8')
+    );
+    
+    // Extract tenant ID from token claims
+    const tokenTenantId = payloadDecoded.tid;
+    
+    if (!tokenTenantId || typeof tokenTenantId !== 'string') {
+      logWarn('MSAL token missing tenant ID (tid) claim');
+      return null;
+    }
 
-  if (!payload) {
+    // Get JWKS for the specific tenant from the token
+    const JWKS = getJWKSForTenant(tokenTenantId);
+
+    // Verify the token signature and validate claims
+    const { payload } = await jwtVerify(token, JWKS, {
+      // Validate issuer with the tenant ID from the token
+      issuer: `https://login.microsoftonline.com/${tokenTenantId}/v2.0`,
+      // Validate audience (should be the client ID)
+      audience: CLIENT_ID,
+      // Additional security checks
+      algorithms: ['RS256'], // Azure AD uses RS256
+    });
+
+    // Type assertion after validation
+    const msalPayload = payload as MsalTokenPayload;
+
+    // Validate required claims are present
+    if (!msalPayload.oid || !msalPayload.preferred_username) {
+      logWarn('MSAL token missing required claims', { payload: msalPayload });
+      return null;
+    }
+
+    // If a specific tenant is configured, validate the token is from that tenant
+    if (TENANT_ID !== 'common' && msalPayload.tid !== TENANT_ID) {
+      logWarn('MSAL token tenant mismatch', {
+        expected: TENANT_ID,
+        actual: msalPayload.tid,
+      });
+      return null;
+    }
+
+    return msalPayload;
+  } catch (error) {
+    // Log specific verification errors
+    if (error instanceof Error) {
+      logError('MSAL token verification failed', {
+        message: error.message,
+        name: error.name,
+      });
+    } else {
+      logError('MSAL token verification failed', error);
+    }
     return null;
   }
-
-  // Check expiration
-  const now = Math.floor(Date.now() / 1000);
-  if (payload.exp < now) {
-    logWarn('MSAL token expired', { exp: payload.exp, now });
-    return null;
-  }
-
-  return payload;
 }
 
 /**

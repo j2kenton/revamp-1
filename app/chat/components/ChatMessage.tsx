@@ -17,6 +17,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
+  const roleLabel = isUser ? 'You' : 'Assistant';
+  const timeLabel = formatDistanceToNow(new Date(message.createdAt), {
+    addSuffix: true,
+  });
+
   const getStatusIcon = () => {
     switch (message.status) {
       case 'sending':
@@ -66,6 +71,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
       {/* Message bubble */}
       <div
+        role="article"
+        aria-label={`${roleLabel}, ${timeLabel}`}
         className={clsx('flex max-w-3xl flex-col gap-2 rounded-lg px-4 py-3', {
           'bg-blue-600 text-white': isUser,
           'bg-white text-gray-900 shadow-sm': isAssistant,
@@ -82,9 +89,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           })}
         >
           <span>
-            {formatDistanceToNow(new Date(message.createdAt), {
-              addSuffix: true,
-            })}
+            {timeLabel}
           </span>
           {getStatusIcon()}
           {message.metadata?.tokensUsed && (
