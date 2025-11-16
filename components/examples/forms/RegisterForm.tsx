@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,7 +35,7 @@ export function RegisterForm({
     register,
     handleSubmit,
     formState: { errors },
-    watch,
+    control,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -46,7 +46,10 @@ export function RegisterForm({
     },
   });
 
-  const password = watch('password');
+  const password = useWatch({
+    control,
+    name: 'password',
+  });
 
   return (
     <Card className="w-full max-w-md">

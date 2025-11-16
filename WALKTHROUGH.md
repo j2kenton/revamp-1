@@ -26,7 +26,7 @@ This is a full-stack Next.js application with the following architecture:
 
 ### Directory Structure
 
-```
+```plaintext
 /app
   /api
     /auth          - NextAuth configuration
@@ -176,19 +176,22 @@ Enhanced rate limiting with:
 
 ### Redis Resilience
 
-**Circuit Breaker Pattern**
+#### Circuit Breaker Pattern
+
 - Opens after 5 consecutive failures
 - Half-open state after 30s
 - Closes after 2 successful requests
 - Graceful degradation with fallbacks
 
-**Connection Pooling**
+#### Connection Pooling
+
 - Health checks every 30s
 - Automatic reconnection
 - Exponential backoff (max 5s)
 - Offline queue for requests
 
-**Fallback Strategies**
+#### Fallback Strategies
+
 - JWT validation when Redis unavailable
 - Allow requests if rate limiting fails
 - Cache session data client-side
@@ -218,29 +221,32 @@ Health check endpoint at `/api/health`:
 
 ### Test Coverage
 
-**Unit Tests** (`__tests__/unit/`)
+#### Unit Tests
+
+Located in `__tests__/unit/`:
+
 - Authentication hooks
 - Validation schemas
-- Sanitization functions
-- Transaction logic
 - Token refresh flows
 
-**Integration Tests** (`__tests__/integration/`)
+#### Integration Tests
+
+Located in `__tests__/integration/`:
+
 - Chat flow (send → receive)
-- Optimistic updates
-- Streaming messages
 - Session management
 - Error recovery
 
-**E2E Tests** (Playwright)
+#### E2E Tests
+
+Using Playwright:
+
 - Login flow
-- Send message
-- Receive AI response
-- Rate limiting behavior
 - Session timeout recovery
 - Multi-tab synchronization
 
-**Security Tests**
+#### Security Tests
+
 - CSRF protection
 - XSS prevention
 - Rate limiting effectiveness
@@ -329,10 +335,11 @@ npm run lint
 
 ### Deployment Platforms
 
-**Vercel (Recommended)**
+#### Vercel (Recommended)
+
 ```bash
 # Install Vercel CLI
-npm i -g vercel
+# Add Redis via Upstash integration
 
 # Deploy
 vercel
@@ -341,7 +348,8 @@ vercel
 # Add Redis via Upstash integration
 ```
 
-**Docker**
+#### Docker
+
 ```dockerfile
 FROM node:20-alpine
 WORKDIR /app
@@ -353,33 +361,43 @@ EXPOSE 3000
 CMD ["npm", "start"]
 ```
 
-**Environment-Specific Considerations**
+#### Environment-Specific Considerations
+
 - Use managed Redis (Upstash, Redis Cloud)
 - Enable Redis TLS in production
 - Set `NODE_ENV=production`
 - Use HTTPS for all endpoints
+
+### Deployment Considerations
+
+- **Secrets Management:** Store MSAL client/tenant IDs, `NEXTAUTH_SECRET`, and LLM keys in the platform secret store (Vercel env vars, GitHub OIDC, etc.). Never commit them to the repo.
+- **Redis Availability:** Configure health checks and connect the `REDIS_URL` to a highly available cluster. The app now fails over to JWT validation when Redis is down, but Redis should still auto-recover to re-enable server sessions.
+- **Rate Limiting:** Keep `ENABLE_RATE_LIMITING` enabled in production so the new chat-specific throttling, progressive delays, and lockouts remain active. Tune `RATE_LIMITS.CHAT_MESSAGE` to match your traffic profile.
+- **Origin Security:** Serve the app behind HTTPS and a WAF. Set `NEXTAUTH_URL` and allowed CORS origins precisely to avoid token leakage.
+- **Observability:** Provision logging and monitoring (Datadog, Azure Monitor). Enable structured logs for chat APIs and wire them to alerting for rate-limit spikes or JWT fallback usage.
+- **Smoke Tests:** Run the provided unit/integration suites plus sanity E2E (login → chat → rate-limit) against the deployment target before promoting traffic.
 - Enable security headers
 
-## Environment Variables
+## Environment Variables Reference
 
 ### Required
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | Azure AD Client ID | `abc123...` |
-| `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | Azure AD Tenant ID | `def456...` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
-| `NEXTAUTH_SECRET` | Session encryption key | Generate with `openssl rand -base64 32` |
+| Variable                         | Description            | Example                                 |
+| -------------------------------- | ---------------------- | --------------------------------------- |
+| `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | Azure AD Client ID     | `abc123...`                             |
+| `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | Azure AD Tenant ID     | `def456...`                             |
+| `REDIS_URL`                      | Redis connection URL   | `redis://localhost:6379`                |
+| `NEXTAUTH_SECRET`                | Session encryption key | Generate with `openssl rand -base64 32` |
 
 ### Optional
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_REDIRECT_URI` | Post-login redirect | `/` |
-| `REDIS_HOST` | Redis host | `localhost` |
-| `REDIS_PORT` | Redis port | `6379` |
-| `REDIS_PASSWORD` | Redis password | - |
-| `REDIS_TLS` | Enable TLS | `false` |
+| Variable                   | Description         | Default     |
+| -------------------------- | ------------------- | ----------- |
+| `NEXT_PUBLIC_REDIRECT_URI` | Post-login redirect | `/`         |
+| `REDIS_HOST`               | Redis host          | `localhost` |
+| `REDIS_PORT`               | Redis port          | `6379`      |
+| `REDIS_PASSWORD`           | Redis password      | -           |
+| `REDIS_TLS`                | Enable TLS          | `false`     |
 
 ## Key Features Summary
 
@@ -401,24 +419,28 @@ CMD ["npm", "start"]
 
 ### Common Issues
 
-**MSAL authentication fails**
+#### MSAL authentication fails
+
 - Check Azure AD app registration
 - Verify redirect URIs match exactly
 - Ensure Client ID and Tenant ID are correct
 - Check browser console for MSAL errors
 
-**Redis connection errors**
+#### Redis connection errors
+
 - Verify Redis is running: `redis-cli ping`
 - Check connection string format
 - Enable TLS if using Redis Cloud
 - Review circuit breaker logs
 
-**Rate limiting too aggressive**
+#### Rate limiting too aggressive
+
 - Adjust limits in `server/middleware/enhanced-rate-limit.ts`
 - Clear rate limit keys: `redis-cli DEL ratelimit:*`
 - Check lockout status: `redis-cli GET lockout:chat:userId`
 
-**Session expires too quickly**
+#### Session expires too quickly
+
 - Token refresh logic in `lib/auth/useAuth.ts`
 - Check token expiry buffer (default: 5 minutes)
 - Verify silent token acquisition works
@@ -447,6 +469,7 @@ CMD ["npm", "start"]
 ---
 
 **Need Help?**
+
 - Review code comments for implementation details
 - Check `/dev-resources/architecture/` for diagrams
 - File issues in project repository

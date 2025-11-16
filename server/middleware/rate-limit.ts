@@ -9,6 +9,7 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
 import { getRedisClient } from '@/lib/redis/client';
 import { tooManyRequests } from '@/server/api-response';
 import { getSessionFromRequest } from '@/server/middleware/session';
+import { chatRateLimit } from '@/server/middleware/enhanced-rate-limit';
 import { logWarn } from '@/utils/logger';
 
 /**
@@ -106,7 +107,27 @@ export function requireRateLimit(
 export function withChatRateLimit(
   handler: (request: NextRequest, context?: unknown) => Promise<Response>,
 ): (request: NextRequest, context?: unknown) => Promise<Response> {
-  return requireRateLimit(RATE_LIMITS.CHAT_MESSAGE, handler);
+  const limitedHandler = requireRateLimit(RATE_LIMITS.CHAT_MESSAGE, handler);
+
+  return async (request: NextRequest, context?: unknown) => {
+    try {
+      const session = await getSessionFromRequest(request);
+
+      if (session?.userId) {
+        const { allowed, error } = await chatRateLimit(request, session.userId);
+
+        if (!allowed && error) {
+          return error;
+        }
+      }
+    } catch (error) {
+      logWarn('Enhanced chat rate limit failed - falling back to base limiter', {
+        error,
+      });
+    }
+
+    return limitedHandler(request, context);
+  };
 }
 
 /**

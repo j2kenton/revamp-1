@@ -9,7 +9,7 @@ import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
 import type { SessionModel } from '@/types/models';
 
-interface MsalTokenPayload {
+export interface MsalTokenPayload {
   oid: string; // Object ID (user ID)
   preferred_username: string; // Email
   name: string;
@@ -44,7 +44,9 @@ function decodeJwtToken(token: string): MsalTokenPayload | null {
  * In production, implement full JWT validation with Azure AD public keys
  * https://docs.microsoft.com/en-us/azure/active-directory/develop/access-tokens#validating-tokens
  */
-async function verifyMsalToken(token: string): Promise<MsalTokenPayload | null> {
+export async function validateMsalToken(
+  token: string,
+): Promise<MsalTokenPayload | null> {
   // TODO: Implement proper token validation with Azure AD public keys
   // For now, we'll just decode the token
   // In production, use a library like 'jsonwebtoken' or 'jose' to verify signatures
@@ -99,7 +101,7 @@ export async function authenticateWithMsal(
 
   try {
     // Verify and decode token
-    const payload = await verifyMsalToken(token);
+    const payload = await validateMsalToken(token);
 
     if (!payload) {
       logWarn('Invalid MSAL token');

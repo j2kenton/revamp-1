@@ -8,6 +8,8 @@ import { chatMessageSchema } from '@/lib/validation/chat.schema';
 import { sanitizeChatMessage } from '@/lib/sanitizer';
 import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
+import { withChatRateLimit } from '@/server/middleware/rate-limit';
+import { withRequestDedup } from '@/server/middleware/request-dedup';
 import { success, badRequest, unauthorized, serverError } from '@/server/api-response';
 import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
 import { withTransaction, txSet } from '@/lib/redis/transactions';
@@ -19,18 +21,8 @@ import { messageToDTO } from '@/types/models';
 const IDEMPOTENCY_KEY_TTL = 24 * 60 * 60; // 24 hours
 const LLM_TIMEOUT = 30000; // 30 seconds
 
-/**
- * POST /api/chat
- * Send a message and receive AI response
- */
-export async function POST(request: NextRequest) {
+async function processChatRequest(request: NextRequest): Promise<Response> {
   try {
-    // CRITICAL: Validate CSRF token BEFORE rate limiting
-    const csrfCheck = await withCsrfProtection(request);
-    if (!csrfCheck.valid && csrfCheck.error) {
-      return csrfCheck.error;
-    }
-
     // Require authenticated session
     const session = await requireSession(request);
 
@@ -95,6 +87,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Use transaction for atomic operations
+    const clientRequestId = idempotencyKey || null;
+
     const result = await withTransaction(async (ctx) => {
       // Create user message
       const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -105,7 +99,11 @@ export async function POST(request: NextRequest) {
         content: sanitizedContent,
         status: 'sent',
         parentMessageId: parentMessageId || null,
-        metadata: null,
+        metadata: clientRequestId
+          ? {
+              clientRequestId,
+            }
+          : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -160,6 +158,7 @@ export async function POST(request: NextRequest) {
           parentMessageId: userMessageId,
           metadata: {
             error: error instanceof Error ? error.message : 'Unknown error',
+            respondingToClientRequestId: clientRequestId ?? undefined,
           },
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -179,7 +178,10 @@ export async function POST(request: NextRequest) {
         content: aiResponse.content,
         status: 'sent',
         parentMessageId: userMessageId,
-        metadata: llmMetadata,
+        metadata: {
+          ...llmMetadata,
+          respondingToClientRequestId: clientRequestId ?? undefined,
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -224,3 +226,16 @@ export async function POST(request: NextRequest) {
     return serverError('Failed to process message');
   }
 }
+
+async function handleChatPost(request: NextRequest): Promise<Response> {
+  // CRITICAL: Validate CSRF token BEFORE rate limiting
+  const csrfCheck = await withCsrfProtection(request);
+  if (!csrfCheck.valid && csrfCheck.error) {
+    return csrfCheck.error;
+  }
+
+  const limitedHandler = withChatRateLimit(processChatRequest);
+  return limitedHandler(request);
+}
+
+export const POST = withRequestDedup(handleChatPost);

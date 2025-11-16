@@ -58,7 +58,7 @@ export function MessageList({ chatId }: MessageListProps) {
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center" role="alert">
         <div className="text-center">
           <div className="mb-4 mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
             <svg
@@ -95,7 +95,14 @@ export function MessageList({ chatId }: MessageListProps) {
   }
 
   return (
-    <div ref={scrollRef} className="space-y-4 p-6">
+    <div
+      ref={scrollRef}
+      className="space-y-4 p-6"
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions text"
+      aria-busy={isLoading}
+    >
       {messages.length === 0 ? (
         <div className="text-center text-gray-500">
           <p>No messages yet. Start the conversation!</p>

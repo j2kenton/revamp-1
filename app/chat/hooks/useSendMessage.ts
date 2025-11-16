@@ -7,18 +7,40 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
+import { reconcileMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO } from '@/types/models';
 
-interface SendMessageInput {
+export interface SendMessageInput {
   content: string;
   chatId?: string;
   parentMessageId?: string;
 }
 
-interface SendMessageResponse {
+export interface SendMessageResponse {
   userMessage: MessageDTO;
   aiMessage: MessageDTO;
   chatId: string;
+  clientRequestId?: string;
+}
+
+interface InternalSendMessageInput extends SendMessageInput {
+  clientRequestId: string;
+  idempotencyKey: string;
+}
+
+interface MutationContext {
+  previousData?: { messages: MessageDTO[] };
+  optimisticMessage?: MessageDTO;
+}
+
+export class RateLimitError extends Error {
+  public readonly retryAfter: number;
+
+  constructor(message: string, retryAfter: number) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfter = retryAfter;
+  }
 }
 
 /**
@@ -32,59 +54,77 @@ function generateIdempotencyKey(): string {
  * Send message to chat API
  */
 async function sendMessageToAPI(
-  input: SendMessageInput,
-  accessToken: string | null
+  input: InternalSendMessageInput,
+  accessToken: string | null,
 ): Promise<SendMessageResponse> {
-  const idempotencyKey = generateIdempotencyKey();
-
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: accessToken ? `Bearer ${accessToken}` : '',
-      'X-Idempotency-Key': idempotencyKey,
+      'X-Idempotency-Key': input.idempotencyKey,
     },
     body: JSON.stringify({
-      ...input,
-      idempotencyKey,
+      content: input.content,
+      chatId: input.chatId,
+      parentMessageId: input.parentMessageId,
+      idempotencyKey: input.idempotencyKey,
     }),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || 'Failed to send message');
+    const errorBody = await response.json().catch(() => ({}));
+    const errorMessage =
+      errorBody.error?.message || 'Failed to send message';
+
+    if (response.status === 429) {
+      const retryHeader = response.headers.get('Retry-After');
+      const retryAfter =
+        typeof errorBody.error?.details?.retryAfter === 'number'
+          ? errorBody.error.details.retryAfter
+          : retryHeader
+            ? parseInt(retryHeader, 10)
+            : 0;
+
+      throw new RateLimitError(errorMessage, Math.max(retryAfter, 1));
+    }
+
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
-  return data.data;
+  return {
+    ...data.data,
+    clientRequestId: input.clientRequestId,
+  };
 }
 
 export function useSendMessage(_chatId?: string | null) {
   const queryClient = useQueryClient();
   const { accessToken } = useAuth();
 
-  const mutation = useMutation({
-    mutationFn: (input: SendMessageInput) =>
-      sendMessageToAPI(input, accessToken),
+  const mutation = useMutation<
+    SendMessageResponse,
+    Error,
+    InternalSendMessageInput,
+    MutationContext
+  >({
+    mutationFn: (input) => sendMessageToAPI(input, accessToken),
 
     // Optimistic update
     onMutate: async (variables) => {
       const { chatId, content } = variables;
 
       if (!chatId) {
-        // New chat - can't do optimistic update yet
-        return;
+        return {};
       }
 
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['chat', chatId] });
 
-      // Snapshot previous value
       const previousData = queryClient.getQueryData<{
         messages: MessageDTO[];
       }>(['chat', chatId]);
 
-      // Create optimistic message
       const optimisticMessage: MessageDTO = {
         id: `temp_${Date.now()}`,
         chatId,
@@ -92,16 +132,20 @@ export function useSendMessage(_chatId?: string | null) {
         content,
         status: 'sending',
         parentMessageId: null,
-        metadata: null,
+        metadata: {
+          clientRequestId: variables.clientRequestId,
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      // Optimistically update cache
-      queryClient.setQueryData(['chat', chatId], (old: { messages?: MessageDTO[] }) => ({
-        ...old,
-        messages: [...(old?.messages || []), optimisticMessage],
-      }));
+      queryClient.setQueryData(
+        ['chat', chatId],
+        (old: { messages?: MessageDTO[] }) => ({
+          ...old,
+          messages: [...(old?.messages || []), optimisticMessage],
+        }),
+      );
 
       return { previousData, optimisticMessage };
     },
@@ -110,50 +154,61 @@ export function useSendMessage(_chatId?: string | null) {
     onSuccess: (data, variables, context) => {
       const { chatId } = data;
 
-      queryClient.setQueryData(['chat', chatId], (old: { messages?: MessageDTO[] }) => {
-        const messages = old?.messages || [];
+      queryClient.setQueryData(
+        ['chat', chatId],
+        (old: { messages?: MessageDTO[] }) => {
+          const messages = old?.messages || [];
+          const reconciled = reconcileMessages({
+            existingMessages: messages,
+            incomingMessages: [data.userMessage, data.aiMessage],
+            clientRequestId:
+              variables.clientRequestId ?? data.clientRequestId,
+            optimisticMessageId: context?.optimisticMessage?.id,
+          });
 
-        // Remove optimistic message if it exists
-        const filtered = context?.optimisticMessage
-          ? messages.filter((m: MessageDTO) => m.id !== context.optimisticMessage.id)
-          : messages;
+          return {
+            ...old,
+            messages: reconciled,
+          };
+        },
+      );
 
-        // Add server messages
-        return {
-          ...old,
-          messages: [...filtered, data.userMessage, data.aiMessage],
-        };
-      });
-
-      // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
     },
 
     // On error, rollback optimistic update
-    onError: (error, variables, context) => {
+    onError: (_error, variables, context) => {
       if (context?.previousData && variables.chatId) {
         queryClient.setQueryData(['chat', variables.chatId], context.previousData);
       }
     },
 
-    // Retry configuration
     retry: (failureCount, error) => {
-      // Don't retry on 4xx errors (client errors)
-      if (error.message.includes('401') || error.message.includes('400')) {
+      if (
+        error instanceof RateLimitError ||
+        error.message.includes('401') ||
+        error.message.includes('400')
+      ) {
         return false;
       }
-      // Retry up to 3 times for other errors
+
       return failureCount < 3;
     },
 
-    retryDelay: (attemptIndex) => {
-      // Exponential backoff: 1s, 2s, 4s
-      return Math.min(1000 * Math.pow(2, attemptIndex), 4000);
-    },
+    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 4000),
   });
 
+  const sendMessage = (input: SendMessageInput) => {
+    const idempotencyKey = generateIdempotencyKey();
+    return mutation.mutateAsync({
+      ...input,
+      clientRequestId: idempotencyKey,
+      idempotencyKey,
+    });
+  };
+
   return {
-    sendMessage: mutation.mutateAsync,
+    sendMessage,
     isLoading: mutation.isPending,
     error: mutation.error,
     reset: mutation.reset,

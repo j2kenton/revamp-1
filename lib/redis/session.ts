@@ -6,6 +6,7 @@
 import { randomBytes } from 'crypto';
 import type { SessionModel, SessionData } from '@/types/models';
 import { getRedisClient } from '@/lib/redis/client';
+import { RedisUnavailableError } from '@/lib/redis/errors';
 import { logError } from '@/utils/logger';
 import { sessionKey, userSessionsKey } from '@/lib/redis/keys';
 import { hydrateSession } from '@/lib/session/hydrator';
@@ -80,7 +81,9 @@ export async function getSession(
     return hydrateSession(JSON.parse(data));
   } catch (error) {
     logError('Failed to get session', error, { sessionId });
-    return null;
+    throw new RedisUnavailableError('Failed to get session from Redis', {
+      cause: error,
+    });
   }
 }
 

@@ -3,10 +3,13 @@
  * Handles session management for API routes
  */
 
+import { createHash } from 'crypto';
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 
 import { getSession, refreshSession } from '@/lib/redis/session';
+import { isRedisUnavailableError } from '@/lib/redis/errors';
+import { getMsalTokenFromRequest, validateMsalToken } from '@/server/middleware/msal-auth';
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
@@ -20,6 +23,53 @@ const SESSION_COOKIE_OPTIONS = {
   maxAge: 7 * 24 * 60 * 60, // 7 days
 };
 
+const JWT_FALLBACK_PREFIX = 'jwt-fallback';
+
+function getClientIp(request: NextRequest): string | undefined {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0]?.trim();
+  }
+
+  const realIp = request.headers.get('x-real-ip');
+  return realIp ?? undefined;
+}
+
+async function getSessionFromJwtFallback(
+  request: NextRequest,
+): Promise<SessionModel | null> {
+  const token = getMsalTokenFromRequest(request);
+  if (!token) {
+    return null;
+  }
+
+  const payload = await validateMsalToken(token);
+  if (!payload) {
+    return null;
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(payload.exp * 1000);
+  const csrfToken = createHash('sha256').update(token).digest('hex');
+
+  return {
+    id: `${JWT_FALLBACK_PREFIX}:${payload.oid}`,
+    userId: payload.oid,
+    csrfToken,
+    data: {
+      userAgent: request.headers.get('user-agent') ?? undefined,
+      ipAddress: getClientIp(request),
+      email: payload.preferred_username,
+      name: payload.name,
+      lastActivityAt: now,
+      source: 'jwt-fallback',
+    },
+    expiresAt,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 /**
  * Get session from request
  */
@@ -32,7 +82,21 @@ export async function getSessionFromRequest(
     return null;
   }
 
-  const session = await getSession(sessionId);
+  let session: SessionModel | null = null;
+
+  try {
+    session = await getSession(sessionId);
+  } catch (error) {
+    if (isRedisUnavailableError(error)) {
+      logWarn('Redis unavailable, attempting JWT fallback for session', {
+        sessionId,
+      });
+      return getSessionFromJwtFallback(request);
+    }
+
+    logWarn('Failed to retrieve session', { sessionId, error });
+    return null;
+  }
 
   if (!session) {
     logWarn('Invalid session ID in cookie', { sessionId });

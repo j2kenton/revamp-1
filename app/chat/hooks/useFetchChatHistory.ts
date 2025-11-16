@@ -5,8 +5,10 @@
 
 'use client';
 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
+import { dedupeMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO, ChatDTO } from '@/types/models';
 
 interface ChatHistoryResponse {
@@ -60,9 +62,14 @@ export function useFetchChatHistory(chatId: string | null) {
     },
   });
 
+  const normalizedMessages = useMemo<MessageDTO[]>(
+    () => dedupeMessages(query.data?.messages || []),
+    [query.data?.messages],
+  );
+
   return {
     chat: query.data?.chat,
-    messages: query.data?.messages || [],
+    messages: normalizedMessages,
     pagination: query.data?.pagination,
     isLoading: query.isLoading,
     error: query.error,

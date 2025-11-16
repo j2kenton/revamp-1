@@ -6,11 +6,12 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { useSendMessage } from '@/app/chat/hooks/useSendMessage';
+import { useSendMessage, RateLimitError } from '@/app/chat/hooks/useSendMessage';
 import clsx from 'clsx';
 
 const MAX_LENGTH = 4000;
 const DEBOUNCE_MS = 300;
+const SEND_DEBOUNCE_MS = 600;
 
 interface ChatInputProps {
   chatId: string | null;
@@ -21,10 +22,14 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isComposing, setIsComposing] = useState(false);
   const [debouncedLength, setDebouncedLength] = useState(0);
+  const [isDebounced, setIsDebounced] = useState(false);
+  const [rateLimitRemaining, setRateLimitRemaining] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const sendDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { sendMessage, isLoading, error } = useSendMessage(chatId);
+  const { sendMessage, isLoading, error, reset } = useSendMessage(chatId);
 
   // Debounced character count update
   useEffect(() => {
@@ -51,15 +56,68 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
     }
   }, [message]);
 
+  useEffect(() => {
+    if (rateLimitRemaining === null) {
+      if (countdownRef.current) {
+        clearTimeout(countdownRef.current);
+        countdownRef.current = null;
+      }
+      return;
+    }
+
+    countdownRef.current = setTimeout(() => {
+      setRateLimitRemaining((prev) => {
+        if (!prev) {
+          return null;
+        }
+
+        if (prev <= 1) {
+          return null;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) {
+        clearTimeout(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [rateLimitRemaining]);
+
+  useEffect(() => {
+    return () => {
+      if (sendDebounceRef.current) {
+        clearTimeout(sendDebounceRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (rateLimitRemaining === null && error instanceof RateLimitError) {
+      reset();
+    }
+  }, [rateLimitRemaining, error, reset]);
+
   const handleSubmit = async () => {
     const trimmed = message.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || isDebounced || rateLimitRemaining !== null) return;
 
     try {
+      setIsDebounced(true);
+      sendDebounceRef.current = setTimeout(() => {
+        setIsDebounced(false);
+      }, SEND_DEBOUNCE_MS);
+
       const result = await sendMessage({
         content: trimmed,
         chatId: chatId || undefined,
       });
+
+      setRateLimitRemaining(null);
+      reset();
 
       // Clear input on success
       setMessage('');
@@ -69,6 +127,9 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
         onChatCreated(result.chatId);
       }
     } catch (err) {
+      if (err instanceof RateLimitError) {
+        setRateLimitRemaining(err.retryAfter);
+      }
       console.error('Failed to send message:', err);
     }
   };
@@ -86,7 +147,13 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
 
   const isNearLimit = message.length > MAX_LENGTH * 0.9;
   const isOverLimit = message.length > MAX_LENGTH;
-  const canSubmit = message.trim().length > 0 && !isOverLimit && !isLoading;
+  const isRateLimited = rateLimitRemaining !== null;
+  const canSubmit =
+    message.trim().length > 0 && !isOverLimit && !isLoading && !isDebounced && !isRateLimited;
+  const errorMessage =
+    error instanceof RateLimitError
+      ? error.message
+      : error?.message || 'Failed to send message. Please try again.';
 
   return (
     <div className="p-4">
@@ -94,8 +161,14 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
         <div
           className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-800"
           role="alert"
+          aria-live="assertive"
         >
-          {error.message || 'Failed to send message. Please try again.'}
+          {errorMessage}
+          {isRateLimited && (
+            <p className="mt-2 text-xs font-semibold" aria-live="assertive">
+              Try again in {rateLimitRemaining}s.
+            </p>
+          )}
         </div>
       )}
 
@@ -152,6 +225,7 @@ export function ChatInput({ chatId, onChatCreated }: ChatInputProps) {
               }
             )}
             aria-label="Send message"
+            aria-disabled={!canSubmit}
           >
             {isLoading ? (
               <div className="flex items-center gap-2">

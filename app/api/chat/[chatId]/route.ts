@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { requireSession } from '@/server/middleware/session';
+import { withChatRateLimit } from '@/server/middleware/rate-limit';
 import { success, badRequest, unauthorized, notFound } from '@/server/api-response';
 import { getChat, getChatMessages } from '@/lib/redis/chat';
 import { logError } from '@/utils/logger';
@@ -15,11 +16,10 @@ interface RouteContext {
   params: Promise<{ chatId: string }>;
 }
 
-/**
- * GET /api/chat/[chatId]
- * Fetch chat history with messages
- */
-export async function GET(request: NextRequest, context: RouteContext) {
+async function handleChatGet(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<Response> {
   try {
     // Require authenticated session
     const session = await requireSession(request);
@@ -95,3 +95,5 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return badRequest('Failed to retrieve chat');
   }
 }
+
+export const GET = withChatRateLimit(handleChatGet);
