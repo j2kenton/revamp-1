@@ -73,6 +73,8 @@ class CircuitBreaker {
         this.successCount = 0;
         logInfo('Circuit breaker CLOSED - service recovered');
       }
+    } else if (this.state === CircuitState.CLOSED) {
+      this.successCount = 0;
     }
   }
 
