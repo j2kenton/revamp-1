@@ -26,7 +26,8 @@ async function sendToAnalytics(metric: WebVitalsPayload) {
 
     // Use sendBeacon if available for better reliability
     if (navigator.sendBeacon) {
-      navigator.sendBeacon('/api/analytics/web-vitals', body);
+      const blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon('/api/analytics/web-vitals', blob);
     } else {
       // Fallback to fetch
       fetch('/api/analytics/web-vitals', {
