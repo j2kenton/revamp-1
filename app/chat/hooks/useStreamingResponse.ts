@@ -40,6 +40,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [rateLimitSeconds, setRateLimitSeconds] = useState<number | null>(null);
   const [contextTruncated, setContextTruncated] = useState(false);
   const [messagesRemoved, setMessagesRemoved] = useState(0);
   const contextTruncatedRef = useRef(false);
@@ -81,6 +82,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         setError(null);
         setIsStreaming(true);
         setStreamingMessage(null);
+        setRateLimitSeconds(null);
         setContextTruncated(false);
         setMessagesRemoved(0);
         contextTruncatedRef.current = false;
@@ -105,6 +107,35 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           },
           body: JSON.stringify(payload),
         });
+
+        if (response.status === 429) {
+          let errorMessage = 'Too many requests';
+          let retryAfter = parseInt(response.headers.get('Retry-After') ?? '0', 10);
+
+          try {
+            const errorBody = await response.json();
+            errorMessage = errorBody.error?.message || errorMessage;
+            const detailRetry = errorBody.error?.details?.retryAfter;
+            if (typeof detailRetry === 'number') {
+              retryAfter = detailRetry;
+            }
+          } catch {
+            // Ignore parsing failures
+          }
+
+          const normalizedRetry = Number.isFinite(retryAfter)
+            ? Math.max(retryAfter, 1)
+            : 30;
+
+          setRateLimitSeconds(normalizedRetry);
+
+          const rateLimitError = new Error(errorMessage);
+          rateLimitError.name = 'RateLimitError';
+          setError(rateLimitError);
+          onError?.(rateLimitError);
+          setIsStreaming(false);
+          return;
+        }
 
         if (!response.ok) {
           let errorMessage = 'Failed to start streaming';
@@ -371,5 +402,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     closeConnection,
     contextTruncated,
     messagesRemoved,
+    rateLimitSeconds,
   };
 }

@@ -5,6 +5,7 @@ import { SessionProvider } from '@/lib/auth/SessionProvider';
 import { MsalProvider } from '@/lib/auth/MsalProvider';
 import { TanStackQueryProvider } from '@/lib/tanstack-query/provider';
 import { WebVitalsReporter } from '@/components/WebVitalsReporter';
+import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 import './globals.css';
 
 const geistSans = Geist({
@@ -32,14 +33,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <WebVitalsReporter />
-        <MsalProvider>
-          <SessionProvider>
-            <TanStackQueryProvider>
-              <ReduxProvider>{children}</ReduxProvider>
-            </TanStackQueryProvider>
-          </SessionProvider>
-        </MsalProvider>
+        <ThemeProvider>
+          <WebVitalsReporter />
+          <MsalProvider>
+            <SessionProvider>
+              <TanStackQueryProvider>
+                <ReduxProvider>{children}</ReduxProvider>
+              </TanStackQueryProvider>
+            </SessionProvider>
+          </MsalProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

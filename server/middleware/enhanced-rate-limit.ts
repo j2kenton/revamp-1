@@ -42,6 +42,29 @@ function calculateProgressiveDelay(attemptCount: number): number {
 /**
  * Enhanced rate limiting with progressive delays and lockout
  */
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0]?.trim() ?? 'unknown';
+  }
+
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp;
+  }
+
+  // Next.js Request doesn't expose .ip; fall back to remote address on the socket when available
+  const anyReq = request as unknown as { socket?: { remoteAddress?: string } };
+  if (anyReq.socket?.remoteAddress) {
+    return anyReq.socket.remoteAddress;
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Enhanced rate limiting with progressive delays and lockout
+ */
 export async function enhancedRateLimit(
   request: NextRequest,
   identifier: string,
@@ -197,9 +220,13 @@ export async function enhancedRateLimit(
  */
 export async function chatRateLimit(
   request: NextRequest,
-  userId: string
+  userId?: string | null
 ): Promise<{ allowed: boolean; error?: Response; retryAfter?: number }> {
-  return enhancedRateLimit(request, userId, 'chat', {
+  const identifier = userId
+    ? `user:${userId}`
+    : `ip:${getClientIp(request)}`;
+
+  return enhancedRateLimit(request, identifier, 'chat', {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 20, // 20 messages per minute
     enableProgressiveDelay: true,

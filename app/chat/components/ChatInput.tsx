@@ -16,13 +16,15 @@ interface ChatInputProps {
   onSendMessage: (content: string) => void;
   isStreaming: boolean;
   error?: Error | null;
+  rateLimitSeconds: number | null;
 }
 
-export function ChatInput({ onSendMessage, isStreaming, error }: ChatInputProps) {
+export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isComposing, setIsComposing] = useState(false);
   const [debouncedLength, setDebouncedLength] = useState(0);
   const [isDebounced, setIsDebounced] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const sendDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -60,9 +62,33 @@ export function ChatInput({ onSendMessage, isStreaming, error }: ChatInputProps)
     };
   }, []);
 
+  useEffect(() => {
+    setCountdown(rateLimitSeconds);
+  }, [rateLimitSeconds]);
+
+  useEffect(() => {
+    if (countdown === null) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((prev) => {
+        if (prev === null) {
+          return null;
+        }
+        if (prev <= 1) {
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
   const handleSubmit = () => {
     const trimmed = message.trim();
-    if (!trimmed || isStreaming || isDebounced) return;
+    if (!trimmed || isStreaming || isDebounced || countdown !== null) return;
 
     setIsDebounced(true);
     sendDebounceRef.current = setTimeout(() => {
@@ -90,7 +116,11 @@ export function ChatInput({ onSendMessage, isStreaming, error }: ChatInputProps)
   const isNearLimit = message.length > MAX_LENGTH * 0.9;
   const isOverLimit = message.length > MAX_LENGTH;
   const canSubmit =
-    message.trim().length > 0 && !isOverLimit && !isStreaming && !isDebounced;
+    message.trim().length > 0 &&
+    !isOverLimit &&
+    !isStreaming &&
+    !isDebounced &&
+    countdown === null;
   const errorMessage = error?.message || 'Failed to send message. Please try again.';
 
   return (
@@ -104,6 +134,15 @@ export function ChatInput({ onSendMessage, isStreaming, error }: ChatInputProps)
           {errorMessage}
         </div>
       )}
+      {countdown !== null && (
+        <div
+          className="mb-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800"
+          role="status"
+          aria-live="polite"
+        >
+          You are sending messages too quickly. Please try again in {countdown}s.
+        </div>
+      )}
 
       <div className="relative">
         <textarea
@@ -114,7 +153,7 @@ export function ChatInput({ onSendMessage, isStreaming, error }: ChatInputProps)
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={() => setIsComposing(false)}
           placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-          disabled={isStreaming}
+          disabled={isStreaming || countdown !== null}
           className={clsx(
             'w-full resize-none rounded-lg border px-4 py-3 pr-32 focus:outline-none focus:ring-2',
             {
@@ -122,7 +161,7 @@ export function ChatInput({ onSendMessage, isStreaming, error }: ChatInputProps)
                 !isOverLimit,
               'border-red-300 focus:border-red-500 focus:ring-red-500':
                 isOverLimit,
-              'cursor-not-allowed opacity-50': isStreaming,
+              'cursor-not-allowed opacity-50': isStreaming || countdown !== null,
             }
           )}
           rows={1}
