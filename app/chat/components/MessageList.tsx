@@ -173,7 +173,7 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
               >
                 <ChatMessage
                   message={message}
-                  isStreaming={Boolean(isStreamingMessage && streamingMessage && !streamingMessage.isComplete)}
+                  isStreaming={isStreamingMessage && !streamingMessage.isComplete}
                 />
               </div>
             );
