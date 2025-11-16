@@ -152,6 +152,25 @@ export async function POST(request: NextRequest) {
               },
             });
 
+            // Persist fallback message to database
+            const aiMessage: MessageModel = {
+              id: aiMessageId,
+              chatId: chat!.id,
+              role: 'assistant',
+              content: accumulatedContent,
+              status: 'sent',
+              parentMessageId: userMessageId,
+              metadata: {
+                model: 'fallback',
+                tokensUsed: 0,
+                processingTime: 0,
+                circuitBreakerOpen: true,
+              },
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            await addMessage(chat!.id, aiMessage);
+
             logWarn('Circuit breaker open - sent fallback message', {
               chatId: chat!.id,
               userId: session.userId,
