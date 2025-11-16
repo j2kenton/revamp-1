@@ -249,3 +249,44 @@ Basic accessibility considerations are in place, but a full audit is still requi
 * The main chat page includes a "Skip to content" link.
 * The `ThemeToggle` component uses `label` and `aria-label` for accessibility.
 * Further testing is needed to ensure WCAG compliance for the new chat components.
+
+---
+
+## 11. Architectural Review Compliance
+
+This section documents the resolution of findings from the high-level architectural review.
+
+### Critical Findings: Resolved
+
+* ✅ **Token Count Validation**: Implemented in `app/api/chat/route.ts` to prevent excessive LLM costs.
+
+* ✅ **Database Transaction Support**: Implemented using a `withTransaction` wrapper in the chat API to ensure atomic operations.
+* ✅ **Optimistic UI with Rollback**: The `useSendMessage` hook now correctly rolls back failed optimistic updates.
+* ✅ **Message Reconciliation**: The `useSendMessage` hook now uses a reconciler to prevent message duplication on the client.
+
+### Major Gaps: Resolved
+
+* ✅ **Pagination for Chat History**: The `GET /api/chat/[chatId]` endpoint now supports `offset` and `limit` for efficient data fetching.
+
+* ✅ **Idempotency**: The `POST /api/chat` endpoint now enforces idempotency using a client-provided key stored in Redis.
+
+### Security & Reliability Issues: Resolved
+
+* ✅ **CSRF Validation Order**: Middleware is now correctly ordered to validate CSRF tokens before applying rate limits.
+
+* ✅ **Redis Failover**: The session middleware now includes a fallback to JWT validation if Redis is unavailable.
+
+### UX & Accessibility Gaps: Resolved
+
+* ✅ **Character Counter Feedback**: The chat input now provides visual color-coded feedback as the user approaches the character limit.
+
+* ✅ **Message Status Indicators**: The UI now displays distinct icons for `sending`, `sent`, and `failed` message statuses.
+* ✅ **Skip Navigation Links**: A skip link is implemented on the main chat page.
+
+### Performance & Scalability Concerns: Resolved
+
+* ✅ **Debounced Send Button**: The chat input now debounces the send action to prevent duplicate submissions from rapid clicks.
+
+### Testing Gaps: Resolved
+
+* ✅ **Test Coverage for Critical Paths**: Unit and E2E tests have been added for core logic, including CSRF, message reconciliation, sanitization, and the chat UI.
