@@ -36,6 +36,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const [error, setError] = useState<Error | null>(null);
   const [contextTruncated, setContextTruncated] = useState(false);
   const [messagesRemoved, setMessagesRemoved] = useState(0);
+  const contextTruncatedRef = useRef(false);
+  const messagesRemovedRef = useRef(0);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
@@ -68,6 +70,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         setError(null);
         setIsStreaming(true);
         setStreamingMessage(null);
+        setContextTruncated(false);
+        setMessagesRemoved(0);
+        contextTruncatedRef.current = false;
+        messagesRemovedRef.current = 0;
 
         // Create FormData or JSON payload
         const payload = {
@@ -123,24 +129,34 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 const data = JSON.parse(dataMatch[1]);
 
                 switch (eventType) {
-                  case 'message_created':
-                    if (data.truncated) {
-                      setContextTruncated(true);
-                      setMessagesRemoved(data.removedCount || 0);
-                    }
+                  case 'message_created': {
+                    const isTruncated = Boolean(data.truncated);
+                    const removedCount = isTruncated ? data.removedCount || 0 : 0;
+
+                    setContextTruncated(isTruncated);
+                    setMessagesRemoved(removedCount);
+                    contextTruncatedRef.current = isTruncated;
+                    messagesRemovedRef.current = removedCount;
+
                     onMessageCreated?.(data.messageId, data.truncated, data.removedCount);
                     break;
+                  }
 
-                  case 'content_delta':
+                  case 'content_delta': {
                     accumulatedContent = data.accumulatedContent;
+                    const isContextTruncated = contextTruncatedRef.current;
+                    const removedMessagesCount = isContextTruncated
+                      ? messagesRemovedRef.current
+                      : undefined;
                     setStreamingMessage({
                       id: data.messageId,
                       content: accumulatedContent,
                       isComplete: false,
-                      contextTruncated: contextTruncated,
-                      messagesRemoved: contextTruncated ? messagesRemoved : undefined,
+                      contextTruncated: isContextTruncated,
+                      messagesRemoved: removedMessagesCount,
                     });
                     break;
+                  }
 
                   case 'message_complete':
                     setStreamingMessage({
@@ -174,11 +190,17 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                     // Reset truncation state
                     setContextTruncated(false);
                     setMessagesRemoved(0);
+                    contextTruncatedRef.current = false;
+                    messagesRemovedRef.current = 0;
 
                     break;
 
-                  case 'fallback':
+                  case 'fallback': {
                     // Circuit breaker is open - received fallback message
+                    const fallbackMetadata = {
+                      ...data.metadata,
+                      circuitBreakerOpen: true,
+                    };
                     const fallbackMessage: MessageDTO = {
                       id: data.messageId,
                       chatId: chatId || '',
@@ -186,7 +208,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       content: data.message,
                       status: 'sent',
                       parentMessageId: null,
-                      metadata: { circuitBreakerOpen: true },
+                      metadata: fallbackMetadata,
                       createdAt: new Date().toISOString(),
                       updatedAt: new Date().toISOString(),
                     };
@@ -195,12 +217,17 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       content: data.message,
                       isComplete: true,
                     });
+                    setContextTruncated(false);
+                    setMessagesRemoved(0);
+                    contextTruncatedRef.current = false;
+                    messagesRemovedRef.current = 0;
                     onComplete?.(fallbackMessage);
                     if (chatId) {
                       queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
                     }
                     onFallback?.(data.message);
                     break;
+                  }
 
                   case 'error':
                     const streamError = new Error(data.message || 'Streaming error');
@@ -232,7 +259,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         setIsStreaming(false);
       }
     },
-    [accessToken, chatId, onMessageCreated, onComplete, onError, queryClient]
+    [accessToken, chatId, onMessageCreated, onComplete, onError, onFallback, queryClient]
   );
 
   /**

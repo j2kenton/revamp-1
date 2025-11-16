@@ -134,22 +134,17 @@ export async function POST(request: NextRequest) {
             // Circuit is open, send fallback message immediately
             const fallbackMsg = getFallbackMessage();
             accumulatedContent = fallbackMsg;
+            const fallbackMetadata = {
+              model: 'fallback',
+              tokensUsed: 0,
+              processingTime: 0,
+              circuitBreakerOpen: true,
+            };
 
-            sendEvent('content_delta', {
+            sendEvent('fallback', {
               messageId: aiMessageId,
-              delta: fallbackMsg,
-              accumulatedContent: fallbackMsg,
-            });
-
-            sendEvent('message_complete', {
-              messageId: aiMessageId,
-              content: fallbackMsg,
-              metadata: {
-                model: 'fallback',
-                tokensUsed: 0,
-                processingTime: 0,
-                circuitBreakerOpen: true,
-              },
+              message: fallbackMsg,
+              metadata: fallbackMetadata,
             });
 
             // Persist fallback message to database
@@ -160,12 +155,7 @@ export async function POST(request: NextRequest) {
               content: accumulatedContent,
               status: 'sent',
               parentMessageId: userMessageId,
-              metadata: {
-                model: 'fallback',
-                tokensUsed: 0,
-                processingTime: 0,
-                circuitBreakerOpen: true,
-              },
+              metadata: fallbackMetadata,
               createdAt: new Date(),
               updatedAt: new Date(),
             };
@@ -252,9 +242,16 @@ export async function POST(request: NextRequest) {
           if (isCircuitOpen) {
             // Send fallback message
             const fallbackMsg = getFallbackMessage();
+            const fallbackMetadata = {
+              model: 'fallback',
+              tokensUsed: 0,
+              processingTime: 0,
+              circuitBreakerOpen: true,
+            };
             sendEvent('fallback', {
               messageId: aiMessageId,
               message: fallbackMsg,
+              metadata: fallbackMetadata,
             });
           } else {
             sendEvent('error', {

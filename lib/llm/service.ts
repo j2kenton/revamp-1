@@ -18,6 +18,16 @@ interface LLMError extends Error {
   retryable?: boolean;
 }
 
+interface LLMRequestOptions {
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+interface LLMStreamOptions extends LLMRequestOptions {
+  mockDelay?: number;
+}
+
 /**
  * Circuit Breaker States
  */
@@ -110,7 +120,15 @@ class CircuitBreaker {
 const llmCircuitBreaker = new CircuitBreaker();
 
 /**
- * Get circuit breaker instance for testing/monitoring
+ * Access the singleton circuit breaker instance.
+ *
+ * @remarks
+ * This is provided for observability hooks (e.g., health dashboards) and unit tests
+ * that need to inspect breaker state transitions. The returned object is the live,
+ * shared instance, so mutating it (calling `reset`, `execute`, etc.) will affect all
+ * LLM calls for every user. Prefer read-only access (e.g., `getState()`) unless you
+ * are explicitly coordinating a controlled test. Never modify breaker thresholds at
+ * runtime outside of test environments.
  */
 export function getCircuitBreaker(): CircuitBreaker {
   return llmCircuitBreaker;
@@ -127,11 +145,7 @@ export type StreamCallback = (chunk: string) => void;
  */
 export async function callLLM(
   messages: Array<{ role: string; content: string }>,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: LLMRequestOptions = {}
 ): Promise<LLMResponse> {
   const startTime = Date.now();
 
@@ -194,11 +208,7 @@ To integrate a real LLM:
 export async function callLLMStream(
   messages: Array<{ role: string; content: string }>,
   onChunk: StreamCallback,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: LLMStreamOptions = {}
 ): Promise<LLMResponse> {
   const startTime = Date.now();
 
@@ -230,12 +240,16 @@ Each word is sent as a separate chunk to simulate real streaming behavior.`;
     const words = mockResponse.split(' ');
     let fullContent = '';
 
+    const mockDelay = typeof options.mockDelay === 'number' && options.mockDelay >= 0
+      ? options.mockDelay
+      : 30;
+
     for (let i = 0; i < words.length; i++) {
       const word = words[i] + ' ';
       fullContent += word;
       onChunk(word);
       // Simulate delay between tokens
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await new Promise((resolve) => setTimeout(resolve, mockDelay));
     }
 
     const processingTime = Date.now() - startTime;
@@ -284,6 +298,10 @@ export function validateTokenCount(
   messages: Array<{ role: string; content: string }>,
   maxTokens: number = 8000
 ): boolean {
+  if (maxTokens <= 0) {
+    throw new Error('maxTokens must be a positive number');
+  }
+
   const totalTokens = messages.reduce(
     (sum, msg) => sum + calculateTokenCount(msg.content),
     0
@@ -304,6 +322,10 @@ export function truncateMessagesToFit(
   truncated: boolean;
   removedCount: number;
 } {
+  if (maxTokens <= 0) {
+    throw new Error('maxTokens must be a positive number');
+  }
+
   const totalTokens = messages.reduce(
     (sum, msg) => sum + calculateTokenCount(msg.content),
     0
@@ -374,11 +396,7 @@ export function formatMessagesForLLM(
  */
 export async function callLLMWithRetry(
   messages: Array<{ role: string; content: string }>,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {},
+  options: LLMRequestOptions = {},
   maxRetries: number = 3
 ): Promise<LLMResponse> {
   // Check circuit breaker first
@@ -418,11 +436,7 @@ export async function callLLMWithRetry(
 export async function callLLMStreamWithRetry(
   messages: Array<{ role: string; content: string }>,
   onChunk: StreamCallback,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {},
+  options: LLMStreamOptions = {},
   maxRetries: number = 3
 ): Promise<LLMResponse> {
   // Check circuit breaker first
