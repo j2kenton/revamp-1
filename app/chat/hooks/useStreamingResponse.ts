@@ -179,11 +179,26 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
                   case 'fallback':
                     // Circuit breaker is open - received fallback message
+                    const fallbackMessage: MessageDTO = {
+                      id: data.messageId,
+                      chatId: chatId || '',
+                      role: 'assistant',
+                      content: data.message,
+                      status: 'sent',
+                      parentMessageId: null,
+                      metadata: { circuitBreakerOpen: true },
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    };
                     setStreamingMessage({
                       id: data.messageId,
                       content: data.message,
                       isComplete: true,
                     });
+                    onComplete?.(fallbackMessage);
+                    if (chatId) {
+                      queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+                    }
                     onFallback?.(data.message);
                     break;
 
