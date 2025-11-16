@@ -136,7 +136,7 @@ export async function GET(_request: NextRequest) {
         'X-Response-Time': `${Date.now() - startTime}ms`,
       },
     });
-  } catch (error) {
+  } catch (_error) {
     const errorResponse: HealthCheckResponse = {
       status: 'unhealthy',
       timestamp: new Date().toISOString(),

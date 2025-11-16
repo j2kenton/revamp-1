@@ -66,41 +66,33 @@ export function withRequestDedup(
     const redis = getRedisClient();
     const key = `reqdedup:${request.nextUrl.pathname}:${dedupId}`;
 
-    try {
-      const result = await redis.set(
-        key,
-        Date.now().toString(),
-        'NX',
-        'EX',
-        resolvedOptions.ttlSeconds,
-      );
+    const acquired = await redis.setnx(key, Date.now().toString());
 
-      if (result !== 'OK') {
-        const ttl = await redis.ttl(key);
-        const retryAfter = ttl > 0 ? ttl : resolvedOptions.ttlSeconds;
+    if (!acquired) {
+      const ttl = await redis.ttl(key);
+      const retryAfter = ttl > 0 ? ttl : resolvedOptions.ttlSeconds;
 
-        logWarn('Duplicate request blocked', {
+      logWarn('Duplicate request blocked', {
+        dedupId,
+        path: request.nextUrl.pathname,
+      });
+
+      return tooManyRequests(
+        'Duplicate request detected. Please wait before retrying.',
+        {
+          retryAfter,
           dedupId,
-          path: request.nextUrl.pathname,
-        });
+        },
+      );
+    }
 
-        return tooManyRequests(
-          'Duplicate request detected. Please wait before retrying.',
-          {
-            retryAfter,
-            dedupId,
-          },
-        );
-      }
+    await redis.expire(key, resolvedOptions.ttlSeconds);
 
+    try {
       const response = await handler(request, context);
       return response;
     } finally {
-      try {
-        await redis.del(key);
-      } catch {
-        // Best-effort cleanup; no-op if it fails.
-      }
+      await redis.del(key).catch(() => undefined);
     }
   };
 }

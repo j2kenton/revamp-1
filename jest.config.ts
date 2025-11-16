@@ -1,60 +1,71 @@
 import type { Config } from 'jest';
-// NOTE: Explicit file extension to satisfy Node ESM resolution in Jest 30+ / Next 16
-import nextJest from 'next/jest.js';
+import nextJest from 'next/jest';
 
-/**
- * Create Jest config with Next.js support.
- * This provides automatic transformation of Next.js components and features.
- */
 const createJestConfig = nextJest({
-  // Provide the path to your Next.js app to load next.config.ts and .env files in your test environment
+  // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: './',
 });
 
-/**
- * Jest configuration for unit and integration testing.
- */
+// Add any custom config to be passed to Jest
 const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'jsdom',
 
-  // Setup files to run after the test framework is installed
+  // Setup files
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 
-  // Module path aliases (must match tsconfig.json paths)
+  // Module paths
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
 
-  // Test match patterns
+  // Test patterns
   testMatch: [
-    '**/__tests__/**/*.{js,jsx,ts,tsx}',
-    '**/*.{spec,test}.{js,jsx,ts,tsx}',
+    '**/__tests__/**/*.test.[jt]s?(x)',
+    '**/__tests__/**/*.spec.[jt]s?(x)',
   ],
-  // Ignore Playwright E2E tests; they run with @playwright/test
-  testPathIgnorePatterns: ['<rootDir>/e2e/'],
 
-  // Coverage collection configuration
+  // Coverage configuration
+  coverageDirectory: 'coverage',
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
+    'components/**/*.{js,jsx,ts,tsx}',
     'lib/**/*.{js,jsx,ts,tsx}',
+    'server/**/*.{js,jsx,ts,tsx}',
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/.next/**',
     '!**/coverage/**',
-    '!**/jest.config.ts',
-    '!**/next.config.ts',
+    '!**/dist/**',
   ],
 
-  // Coverage thresholds (optional - adjust as needed)
+  // Coverage thresholds based on roadmap
   coverageThreshold: {
     global: {
-      branches: 0,
-      functions: 0,
-      lines: 0,
-      statements: 0,
+      statements: 70,
+      branches: 65,
+      functions: 70,
+      lines: 70,
     },
   },
+
+  // Transform files
+  transform: {
+    '^.+\\.(ts|tsx)$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          jsx: 'react',
+        },
+      },
+    ],
+  },
+
+  // Module file extensions
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+
+  // Ignore patterns
+  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/dist/', '/e2e/'],
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

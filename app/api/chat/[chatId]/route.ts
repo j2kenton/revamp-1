@@ -96,4 +96,9 @@ async function handleChatGet(
   }
 }
 
-export const GET = withChatRateLimit(handleChatGet);
+export async function GET(request: NextRequest, context: RouteContext) {
+  const limitedHandler = withChatRateLimit((req: NextRequest) =>
+    handleChatGet(req, context),
+  );
+  return limitedHandler(request);
+}
