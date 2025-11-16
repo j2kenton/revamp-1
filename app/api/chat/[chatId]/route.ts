@@ -1,0 +1,97 @@
+/**
+ * Chat History API Endpoint
+ * GET /api/chat/[chatId] - Get chat messages
+ */
+
+import { NextRequest } from 'next/server';
+import { requireSession } from '@/server/middleware/session';
+import { success, badRequest, unauthorized, notFound } from '@/server/api-response';
+import { getChat, getChatMessages } from '@/lib/redis/chat';
+import { logError } from '@/utils/logger';
+import { messageToDTO, chatToDTO } from '@/types/models';
+import { getMessagesSchema } from '@/lib/validation/chat.schema';
+
+interface RouteContext {
+  params: Promise<{ chatId: string }>;
+}
+
+/**
+ * GET /api/chat/[chatId]
+ * Fetch chat history with messages
+ */
+export async function GET(request: NextRequest, context: RouteContext) {
+  try {
+    // Require authenticated session
+    const session = await requireSession(request);
+
+    // Get chat ID from params
+    const { chatId } = await context.params;
+
+    if (!chatId) {
+      return badRequest('Chat ID is required');
+    }
+
+    // Get query parameters for pagination
+    const searchParams = request.nextUrl.searchParams;
+    const queryValidation = getMessagesSchema.safeParse({
+      offset: searchParams.get('offset') || '0',
+      limit: searchParams.get('limit') || '50',
+    });
+
+    if (!queryValidation.success) {
+      return badRequest('Invalid query parameters', {
+        errors: queryValidation.error.errors,
+      });
+    }
+
+    const { offset, limit } = queryValidation.data;
+
+    // Get chat
+    const chat = await getChat(chatId);
+
+    if (!chat) {
+      return notFound('Chat not found');
+    }
+
+    // Verify ownership
+    if (chat.userId !== session.userId) {
+      return unauthorized('You do not have access to this chat');
+    }
+
+    // Get messages
+    const messages = await getChatMessages(chatId, offset, limit);
+
+    // Convert to DTOs
+    const messagesDTO = messages.map(messageToDTO);
+    const chatDTO = chatToDTO(chat);
+
+    return success(
+      {
+        chat: chatDTO,
+        messages: messagesDTO,
+        pagination: {
+          offset,
+          limit,
+          total: messages.length,
+          hasMore: messages.length === limit,
+        },
+      },
+      {
+        message: 'Chat retrieved successfully',
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=300', // Cache for 5 minutes
+        },
+      }
+    );
+  } catch (error) {
+    logError('Chat retrieval error', error);
+
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return unauthorized();
+    }
+
+    return badRequest('Failed to retrieve chat');
+  }
+}

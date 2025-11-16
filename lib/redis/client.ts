@@ -37,7 +37,7 @@ function getRedisConfig(): {
 }
 
 /**
- * Create and configure Redis client
+ * Create and configure Redis client with connection pooling
  */
 export function createRedisClient(): Redis {
   const config = getRedisConfig();
@@ -52,12 +52,19 @@ export function createRedisClient(): Redis {
       },
     }),
     retryStrategy: (times) => {
-      const delay = Math.min(times * 50, 2000);
+      // Exponential backoff with max 5 seconds
+      const delay = Math.min(times * 100, 5000);
+      logInfo('Redis retry attempt', { attempt: times, delay });
       return delay;
     },
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,
+    enableOfflineQueue: true,
     lazyConnect: true,
+    // Connection pool settings
+    connectTimeout: 10000, // 10 seconds
+    keepAlive: 30000, // 30 seconds
+    family: 4, // IPv4
   });
 
   client.on('connect', () => {
@@ -134,4 +141,49 @@ export function getRedisStatus(): {
     connected: isRedisConnected(),
     status: redisClient?.status || null,
   };
+}
+
+/**
+ * Health check for Redis connection
+ */
+export async function healthCheck(): Promise<boolean> {
+  if (!redisClient) {
+    return false;
+  }
+
+  try {
+    const result = await redisClient.ping();
+    return result === 'PONG';
+  } catch (error) {
+    logError('Redis health check failed', error);
+    return false;
+  }
+}
+
+/**
+ * Periodic health check (call this on a schedule)
+ */
+let healthCheckInterval: NodeJS.Timeout | null = null;
+
+export function startHealthCheck(intervalMs: number = 30000) {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+  }
+
+  healthCheckInterval = setInterval(async () => {
+    const healthy = await healthCheck();
+    if (!healthy) {
+      logError('Redis health check failed - connection may be down', null);
+    }
+  }, intervalMs);
+
+  logInfo('Redis health check started', { intervalMs });
+}
+
+export function stopHealthCheck() {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+    logInfo('Redis health check stopped');
+  }
 }

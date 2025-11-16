@@ -126,17 +126,46 @@ export function notFound(
  * Create a 429 Too Many Requests response
  */
 export function tooManyRequests(
-  retryAfter?: number,
+  message: string = 'Too many requests',
+  details?: Record<string, unknown>,
 ): NextResponse<ApiResponse<null>> {
   const response = fail(
     ErrorCode.RATE_LIMIT_EXCEEDED,
-    'Too many requests',
-    retryAfter ? { retryAfter } : undefined,
+    message,
+    details,
     429,
   );
 
-  if (retryAfter) {
-    response.headers.set('Retry-After', retryAfter.toString());
+  if (details?.retryAfter && typeof details.retryAfter === 'number') {
+    response.headers.set('Retry-After', details.retryAfter.toString());
+  }
+
+  return response;
+}
+
+/**
+ * Create a 500 Internal Server Error response
+ */
+export function serverError(
+  message: string = 'Internal Server Error',
+): NextResponse<ApiResponse<null>> {
+  return fail(ErrorCode.INTERNAL_ERROR, message, undefined, 500);
+}
+
+/**
+ * Alias for ok() to match common naming convention
+ */
+export function success<T>(
+  data: T,
+  meta?: Partial<ApiMeta>,
+  options?: { headers?: Record<string, string> },
+): NextResponse<ApiResponse<T>> {
+  const response = ok(data, meta);
+
+  if (options?.headers) {
+    Object.entries(options.headers).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
   }
 
   return response;
