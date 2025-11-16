@@ -1,7 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
 import { useState } from 'react';
 import { ChatInput } from '@/app/chat/components/ChatInput';
 
@@ -12,33 +10,27 @@ interface ChatMessage {
   status: 'sending' | 'sent' | 'failed';
 }
 
-const server = setupServer(
-  http.post('/api/chat', async ({ request }) => {
-    const body = (await request.json().catch(() => ({}))) as { content?: string };
-    return HttpResponse.json({
-      data: {
-        userMessage: {
-          id: `user-${Date.now()}`,
-          content: body.content ?? '',
-          role: 'user',
-          status: 'sent',
-          createdAt: new Date().toISOString(),
-        },
-        aiMessage: {
-          id: `ai-${Date.now()}`,
-          content: 'AI response',
-          role: 'assistant',
-          status: 'sent',
-          createdAt: new Date().toISOString(),
-        },
-      },
-    });
-  }),
-);
+const originalFetch = global.fetch;
+const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
 
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+const buildResponse = (payload: unknown, init?: ResponseInit): Response =>
+  new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  });
+
+beforeAll(() => {
+  global.fetch = fetchMock;
+});
+
+afterEach(() => {
+  fetchMock.mockReset();
+});
+
+afterAll(() => {
+  global.fetch = originalFetch;
+});
 
 function TestChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -131,6 +123,28 @@ describe('ChatInput integration', () => {
   const renderChat = () => render(<TestChat />);
 
   it('shows optimistic message then AI response', async () => {
+    fetchMock.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return buildResponse({
+        data: {
+          userMessage: {
+            id: 'user-1',
+            content: 'Hello AI',
+            role: 'user',
+            status: 'sent',
+            createdAt: new Date().toISOString(),
+          },
+          aiMessage: {
+            id: 'ai-1',
+            content: 'AI response',
+            role: 'assistant',
+            status: 'sent',
+            createdAt: new Date().toISOString(),
+          },
+        },
+      });
+    });
+
     const user = userEvent.setup();
     renderChat();
 
@@ -147,12 +161,10 @@ describe('ChatInput integration', () => {
   });
 
   it('handles server errors gracefully', async () => {
-    server.use(
-      http.post('/api/chat', () =>
-        HttpResponse.json(
-          { error: { code: 'LLM_ERROR', message: 'Service unavailable' } },
-          { status: 500 },
-        ),
+    fetchMock.mockResolvedValue(
+      buildResponse(
+        { error: { code: 'LLM_ERROR', message: 'Service unavailable' } },
+        { status: 500 },
       ),
     );
 
@@ -171,31 +183,28 @@ describe('ChatInput integration', () => {
 
   it('prevents duplicate sends while streaming', async () => {
     const requestSpy = jest.fn();
-    server.use(
-      http.post('/api/chat', async ({ request }) => {
-        requestSpy();
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        const body = (await request.json().catch(() => ({}))) as { content?: string };
-        return HttpResponse.json({
-          data: {
-            userMessage: {
-              id: 'user-one',
-              content: body.content ?? '',
-              role: 'user',
-              status: 'sent',
-              createdAt: new Date().toISOString(),
-            },
-            aiMessage: {
-              id: 'ai-one',
-              content: 'OK',
-              role: 'assistant',
-              status: 'sent',
-              createdAt: new Date().toISOString(),
-            },
+    fetchMock.mockImplementation(async () => {
+      requestSpy();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return buildResponse({
+        data: {
+          userMessage: {
+            id: 'user-one',
+            content: 'Hello',
+            role: 'user',
+            status: 'sent',
+            createdAt: new Date().toISOString(),
           },
-        });
-      }),
-    );
+          aiMessage: {
+            id: 'ai-one',
+            content: 'OK',
+            role: 'assistant',
+            status: 'sent',
+            createdAt: new Date().toISOString(),
+          },
+        },
+      });
+    });
 
     const user = userEvent.setup();
     renderChat();
@@ -210,6 +219,10 @@ describe('ChatInput integration', () => {
 
     await waitFor(() => {
       expect(requestSpy).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('OK')).toBeInTheDocument();
     });
   });
 });

@@ -45,14 +45,35 @@ export async function storeIdempotencyKey(
   try {
     const client = redis as typeof redis & {
       setEx?: (k: string, ttl: number, value: string) => Promise<'OK' | null>;
+      setex?: (k: string, ttl: number, value: string) => Promise<'OK' | null>;
     };
+    const strategies: Array<
+      (redisKey: string, ttl: number, value: string) => Promise<'OK' | null>
+    > = [];
 
+    if (typeof client.setex === 'function') {
+      strategies.push(client.setex.bind(client));
+    }
     if (typeof client.setEx === 'function') {
-      await client.setEx(key, ttlSeconds, serialized);
-      return;
+      strategies.push(client.setEx.bind(client));
     }
 
-    await redis.setex(key, ttlSeconds, serialized);
+    if (strategies.length === 0) {
+      throw new Error('Redis client missing TTL command');
+    }
+
+    let lastError: unknown = null;
+
+    for (const handler of strategies) {
+      try {
+        await handler(key, ttlSeconds, serialized);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError;
   } catch (error) {
     logWarn('Failed to store idempotency payload', { userId, idempotencyKey, error });
   }

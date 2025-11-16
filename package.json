@@ -10,12 +10,16 @@
     "format": "prettier --write .",
     "write-output": "node scripts/write-output.ts",
     "test": "jest && playwright test",
-    "test:unit": "jest",
+    "test:unit": "jest --testPathPattern=__tests__",
     "test:unit:watch": "jest --watch",
-    "test:unit:coverage": "jest --coverage",
+    "test:unit:coverage": "jest --coverage --testPathPattern=__tests__",
+    "test:unit:chat": "jest --testPathPattern=__tests__.*chat --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
+    "test:e2e:chat": "playwright test chat.e2e.ts",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "test:ci": "npm run test:unit:coverage && npm run test:e2e",
     "type-check": "tsc --noEmit",
     "validate": "pnpm type-check && pnpm lint"
   },
@@ -69,7 +73,9 @@
     "msw": "^2.3.0",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
+    "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "undici": "^7.16.0"
   }
 }

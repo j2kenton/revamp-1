@@ -4,7 +4,7 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
+import type { JWTPayload } from 'jose';
 import { AuthError } from '@/utils/error-handler';
 import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
@@ -43,18 +43,35 @@ if (TENANT_ID === 'common') {
 }
 
 // Cache for JWKS sets by tenant ID to improve performance
-const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+type JoseModule = typeof import('jose');
+type RemoteJwks = ReturnType<JoseModule['createRemoteJWKSet']>;
+
+let joseModulePromise: Promise<JoseModule> | null = null;
+
+async function loadJose(): Promise<JoseModule> {
+  if (!joseModulePromise) {
+    joseModulePromise = import('jose');
+  }
+  return joseModulePromise;
+}
+
+const jwksCache = new Map<string, RemoteJwks>();
 
 /**
  * Get or create a JWKS set for a specific tenant
  * This ensures proper token validation for multi-tenant scenarios
  */
-function getJWKSForTenant(tenantId: string): ReturnType<typeof createRemoteJWKSet> {
+async function getJWKSForTenant(tenantId: string): Promise<RemoteJwks> {
   if (!jwksCache.has(tenantId)) {
+    const { createRemoteJWKSet } = await loadJose();
     const jwksUri = `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`;
     jwksCache.set(tenantId, createRemoteJWKSet(new URL(jwksUri)));
   }
-  return jwksCache.get(tenantId)!;
+  const jwks = jwksCache.get(tenantId);
+  if (!jwks) {
+    throw new Error('Failed to initialize JWKS');
+  }
+  return jwks;
 }
 
 /**
@@ -88,7 +105,8 @@ export async function validateMsalToken(
     }
 
     // Get JWKS for the specific tenant from the token
-    const JWKS = getJWKSForTenant(tokenTenantId);
+    const { jwtVerify } = await loadJose();
+    const JWKS = await getJWKSForTenant(tokenTenantId);
 
     // Verify the token signature and validate claims
     const { payload } = await jwtVerify(token, JWKS, {

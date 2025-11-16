@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { NextRequest } from 'next/server';
 import { withCsrfProtection, requireCsrfToken } from '@/server/middleware/csrf';
 
@@ -58,9 +59,8 @@ describe('withCsrfProtection', () => {
       id: 'jwt-fallback:123',
     });
     msalModule.getMsalTokenFromRequest.mockReturnValue('msal-token');
-    sessionModule.getCsrfTokenFromRequest.mockReturnValue(
-      'd5579c46dfcc7d0d7f20a6e1c4a8d32de9fa59c7805a3ec47e1d6f99a64f2b48', // sha256('msal-token')
-    );
+    const hashedToken = createHash('sha256').update('msal-token').digest('hex');
+    sessionModule.getCsrfTokenFromRequest.mockReturnValue(hashedToken);
     const req = new NextRequest('http://localhost', { method: 'POST' });
     const result = await withCsrfProtection(req);
     expect(result.valid).toBe(true);

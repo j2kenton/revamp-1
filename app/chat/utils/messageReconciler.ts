@@ -36,13 +36,16 @@ function matchesClientRequest(
 export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
   const seen = new Map<string, MessageDTO>();
   const normalized: MessageDTO[] = [];
+  const orderIndices = new Map<string, number>();
 
   messages.forEach((message) => {
     const existing = seen.get(message.id);
 
     if (!existing) {
       seen.set(message.id, message);
+      const position = normalized.length;
       normalized.push(message);
+      orderIndices.set(message.id, position);
       return;
     }
 
@@ -58,7 +61,23 @@ export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
     }
   });
 
-  return normalized;
+  return normalized.sort((a, b) => {
+    const createdDiff =
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (createdDiff !== 0) {
+      return createdDiff;
+    }
+
+    const updatedDiff =
+      new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+    if (updatedDiff !== 0) {
+      return updatedDiff;
+    }
+
+    const orderA = orderIndices.get(a.id) ?? 0;
+    const orderB = orderIndices.get(b.id) ?? 0;
+    return orderA - orderB;
+  });
 }
 
 /**
