@@ -1,9 +1,13 @@
 'use client';
 
+// 1. React/Next
+import React from 'react';
 import Image from 'next/image';
 
+// 2. Third-party
 import { useSession } from 'next-auth/react';
 
+// 3. @/ absolute
 import { AuthStatus } from '@/components/AuthStatus';
 
 export default function Home() {

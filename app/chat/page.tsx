@@ -5,15 +5,20 @@
 
 'use client';
 
-import { useState } from 'react';
+// 1. React/Next
+import React, { useState } from 'react';
+
+// 3. @/ absolute
+import type { MessageDTO } from '@/types/models';
+import { useAuth } from '@/lib/auth/useAuth';
+import { ThemeToggle } from '@/components/ThemeToggle';
+
+// 4. ./ relative
 import { MessageList } from './components/MessageList';
 import { ChatInput } from './components/ChatInput';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ChatErrorBoundary } from './components/ChatErrorBoundary';
 import { useStreamingResponse } from './hooks/useStreamingResponse';
-import type { MessageDTO } from '@/types/models';
-import { useAuth } from '@/lib/auth/useAuth';
-import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function ChatPage() {
   const [chatId, setChatId] = useState<string | null>(null);

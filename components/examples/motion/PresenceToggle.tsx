@@ -6,7 +6,10 @@
 
 'use client';
 
-import { useState } from 'react';
+// 1. React/Next
+import React, { useState } from 'react';
+
+// 2. Third-party
 import {
   AnimatePresence,
   motion,
@@ -14,6 +17,7 @@ import {
   useReducedMotion,
 } from 'framer-motion';
 
+// 3. @/ absolute
 import { scaleIn } from '@/lib/motion/variants';
 
 export function PresenceToggle() {

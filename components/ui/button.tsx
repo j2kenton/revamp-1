@@ -1,6 +1,10 @@
+// 1. React/Next
 import * as React from 'react';
+
+// 2. Third-party
 import { cva, type VariantProps } from 'class-variance-authority';
 
+// 3. @/ absolute
 import { cn } from '@/lib/utils/cn';
 
 const buttonVariants = cva(

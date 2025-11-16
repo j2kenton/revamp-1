@@ -7,8 +7,10 @@
 
 'use client';
 
-import { useState } from 'react';
+// 1. React/Next
+import React, { useState } from 'react';
 
+// 3. @/ absolute
 import { useSearch } from '@/lib/swr/hooks';
 import type { Post } from '@/lib/swr/types';
 

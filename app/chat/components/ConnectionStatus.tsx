@@ -5,7 +5,10 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+// 1. React/Next
+import React, { useState, useEffect } from 'react';
+
+// 2. Third-party
 import clsx from 'clsx';
 
 type ConnectionState = 'connected' | 'connecting' | 'disconnected';

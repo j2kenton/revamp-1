@@ -5,12 +5,19 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+// 1. React/Next
+import React, { useEffect, useRef } from 'react';
+
+// 2. Third-party
 import { useVirtualizer } from '@tanstack/react-virtual';
+
+// 3. @/ absolute
+import type { MessageDTO } from '@/types/models';
+import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
+
+// 4. ./ relative
 import { ChatMessage } from './ChatMessage';
 import { MessageSkeleton } from './MessageSkeleton';
-import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
-import type { MessageDTO } from '@/types/models';
 
 interface MessageListProps {
   chatId: string | null;

@@ -5,7 +5,10 @@
 
 'use client';
 
-import { useEffect } from 'react';
+// 1. React/Next
+import React, { useEffect } from 'react';
+
+// 3. @/ absolute
 import { initWebVitals } from '@/lib/monitoring/web-vitals';
 
 export function WebVitalsReporter() {

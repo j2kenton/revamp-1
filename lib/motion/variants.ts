@@ -6,6 +6,7 @@
  * with MotionConfig or useReducedMotion in components).
  */
 
+// 2. Third-party
 import type { Variants } from 'framer-motion';
 
 /**

@@ -3,6 +3,9 @@
  * Loading state for messages
  */
 
+// 1. React/Next
+import React from 'react';
+
 export function MessageSkeleton() {
   return (
     <div className="flex gap-3 animate-pulse" role="status" aria-label="Loading message">

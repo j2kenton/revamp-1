@@ -1,7 +1,10 @@
 'use client';
 
+// 1. React/Next
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+
+// 3. @/ absolute
 import { useAuth } from '@/lib/auth/useAuth';
 
 export default function LoginPage() {

@@ -1,3 +1,6 @@
+// 1. React/Next
+import React from 'react';
+
 export default function Loading() {
   return (
     <div

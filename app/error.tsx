@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+// 1. React/Next
+import React, { useEffect } from 'react';
 
 /**
  * Error boundary for the application.

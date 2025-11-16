@@ -1,4 +1,6 @@
 // 😁 Excuse the naming here. I admit that my point may be just a tiny bit subjective but I have Josh Comeau on my side so there! 🤪
+
+// 2. Third-party
 import {
   legacy_createStore as classicTimelessOriginalAndStillTheBestPatternCreateStore,
   StoreEnhancer,
@@ -7,6 +9,8 @@ import {
 } from 'redux';
 import { persistStore, persistReducer, Persistor } from 'redux-persist';
 import storage from 'redux-persist/lib/storage'; // defaults to localStorage for web
+
+// 4. ./ relative
 import { rootReducer, RootState } from './rootReducer';
 
 // Extend Window interface for Redux DevTools

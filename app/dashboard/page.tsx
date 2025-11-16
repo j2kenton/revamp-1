@@ -1,6 +1,14 @@
-import { getServerSession } from 'next-auth';
+// 1. React/Next
+import React from 'react';
 import { redirect } from 'next/navigation';
+
+// 2. Third-party
+import { getServerSession } from 'next-auth';
+
+// 3. @/ absolute
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
+// 4. ./ relative
 import SignOutButton from './SignOutButton';
 import GoHomeButton from './GoHomeButton';
 

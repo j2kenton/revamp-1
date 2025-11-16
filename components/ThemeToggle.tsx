@@ -5,8 +5,14 @@
 
 'use client';
 
-import { useTheme } from '@/lib/theme/ThemeProvider';
+// 1. React/Next
+import React from 'react';
+
+// 2. Third-party
 import clsx from 'clsx';
+
+// 3. @/ absolute
+import { useTheme } from '@/lib/theme/ThemeProvider';
 
 export function ThemeToggle() {
   const { theme, actualTheme, setTheme } = useTheme();

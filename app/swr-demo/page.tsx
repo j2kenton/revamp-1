@@ -7,8 +7,10 @@
 
 'use client';
 
-import { useState } from 'react';
+// 1. React/Next
+import React, { useState } from 'react';
 
+// 3. @/ absolute
 import { UserProfile } from '@/components/examples/UserProfile';
 import { PostsList } from '@/components/examples/PostsList';
 import { TodoList } from '@/components/examples/TodoList';
