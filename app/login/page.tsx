@@ -1,55 +1,34 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-
-import { signIn } from 'next-auth/react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-
-import { loginSchema, type LoginFormData } from './schema';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/lib/auth/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [serverError, setServerError] = useState('');
+  const { isAuthenticated, login, isLoading, error } = useAuth();
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
-  });
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, router]);
 
-  const onSubmit = async (data: LoginFormData) => {
-    setServerError('');
-
+  const handleLogin = async () => {
+    setAuthError(null);
     try {
-      const result = await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setServerError('Invalid email or password');
-      } else if (result?.ok) {
-        router.push('/dashboard');
-        router.refresh();
-      }
-    } catch (caughtError) {
-      console.error('Login error:', caughtError);
-      if (caughtError instanceof Error) {
-        setServerError(
-          caughtError.message || 'An error occurred. Please try again.',
-        );
-      } else {
-        setServerError('An unexpected error occurred. Please try again.');
-      }
+      await login();
+      // After successful login, redirect to dashboard
+      router.push('/dashboard');
+    } catch (err) {
+      console.error('Login failed:', err);
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to sign in. Please try again.'
+      );
     }
   };
 
@@ -61,91 +40,56 @@ export default function LoginPage() {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Demo credentials: demo@example.com / password
+            Sign in with your Microsoft account
           </p>
         </div>
 
-        <form
-          className="mt-8 space-y-6"
-          onSubmit={handleSubmit(onSubmit)}
-          noValidate
-        >
-          {serverError && (
+        <div className="mt-8 space-y-6">
+          {(authError || error) && (
             <div
               className="rounded-md bg-red-50 p-4"
               role="alert"
               aria-live="assertive"
             >
-              <p className="text-sm text-red-800">{serverError}</p>
+              <p className="text-sm text-red-800">
+                {authError || error?.message}
+              </p>
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                {...register('email')}
-                aria-invalid={errors.email ? 'true' : 'false'}
-                aria-describedby={errors.email ? 'email-error' : undefined}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
-              {errors.email && (
-                <p
-                  id="email-error"
-                  className="mt-1 text-sm text-red-600"
-                  role="alert"
-                >
-                  {errors.email.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                {...register('password')}
-                aria-invalid={errors.password ? 'true' : 'false'}
-                aria-describedby={
-                  errors.password ? 'password-error' : undefined
-                }
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
-              {errors.password && (
-                <p
-                  id="password-error"
-                  className="mt-1 text-sm text-red-600"
-                  role="alert"
-                >
-                  {errors.password.message}
-                </p>
-              )}
-            </div>
-          </div>
-
           <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-3 rounded-md bg-blue-600 px-4 py-3 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
+            {isLoading ? (
+              <>
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 21 21"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                  <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                  <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                </svg>
+                <span>Sign in with Microsoft</span>
+              </>
+            )}
           </button>
-        </form>
+
+          <p className="text-center text-xs text-gray-500">
+            By signing in, you agree to use your organizational Microsoft
+            account for authentication.
+          </p>
+        </div>
       </div>
     </div>
   );

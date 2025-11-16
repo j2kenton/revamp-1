@@ -1,0 +1,106 @@
+/**
+ * Request Deduplication Middleware
+ * Prevents duplicate in-flight requests from being processed simultaneously.
+ */
+
+import type { NextRequest } from 'next/server';
+
+import { getRedisClient } from '@/lib/redis/client';
+import { tooManyRequests } from '@/server/api-response';
+import { logWarn } from '@/utils/logger';
+
+interface RequestDedupOptions {
+  /**
+   * TTL for the deduplication lock (in seconds)
+   */
+  ttlSeconds?: number;
+
+  /**
+   * Headers inspected for deduplication keys
+   */
+  headerNames?: string[];
+}
+
+const DEFAULT_OPTIONS: Required<RequestDedupOptions> = {
+  ttlSeconds: 30,
+  headerNames: ['x-idempotency-key', 'x-request-id'],
+};
+
+/**
+ * Extract request deduplication identifier from headers.
+ */
+function getDedupIdentifier(
+  request: NextRequest,
+  headerNames: string[],
+): string | null {
+  for (const header of headerNames) {
+    const value = request.headers.get(header);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Wrap a route handler with request deduplication logic.
+ * Rejects duplicate requests with the same identifier that arrive within the TTL window.
+ */
+export function withRequestDedup(
+  handler: (request: NextRequest, context?: unknown) => Promise<Response>,
+  options: RequestDedupOptions = {},
+): (request: NextRequest, context?: unknown) => Promise<Response> {
+  const resolvedOptions: Required<RequestDedupOptions> = {
+    ...DEFAULT_OPTIONS,
+    ...options,
+  };
+
+  return async (request: NextRequest, context?: unknown) => {
+    const dedupId = getDedupIdentifier(request, resolvedOptions.headerNames);
+
+    if (!dedupId) {
+      return handler(request, context);
+    }
+
+    const redis = getRedisClient();
+    const key = `reqdedup:${request.nextUrl.pathname}:${dedupId}`;
+
+    try {
+      const result = await redis.set(
+        key,
+        Date.now().toString(),
+        'NX',
+        'EX',
+        resolvedOptions.ttlSeconds,
+      );
+
+      if (result !== 'OK') {
+        const ttl = await redis.ttl(key);
+        const retryAfter = ttl > 0 ? ttl : resolvedOptions.ttlSeconds;
+
+        logWarn('Duplicate request blocked', {
+          dedupId,
+          path: request.nextUrl.pathname,
+        });
+
+        return tooManyRequests(
+          'Duplicate request detected. Please wait before retrying.',
+          {
+            retryAfter,
+            dedupId,
+          },
+        );
+      }
+
+      const response = await handler(request, context);
+      return response;
+    } finally {
+      try {
+        await redis.del(key);
+      } catch {
+        // Best-effort cleanup; no-op if it fails.
+      }
+    }
+  };
+}

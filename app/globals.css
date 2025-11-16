@@ -24,3 +24,21 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.skip-link {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 50;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background-color: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  transform: translateY(-150%);
+  transition: transform 0.2s ease-in-out;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}

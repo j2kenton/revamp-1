@@ -15,11 +15,12 @@ import { RATE_LIMITS } from '@/lib/rate-limiter';
 // PATCH - Update a todo
 async function handlePatch(
   request: NextRequest,
-  { params }: { params: Promise<{ todoId: string }> },
-) {
+  context?: unknown,
+): Promise<Response> {
   try {
     const body = await request.json();
-    const { todoId } = await params;
+    const typedContext = context as { params: Promise<{ todoId: string }> } | undefined;
+    const { todoId } = await (typedContext?.params || Promise.resolve({ todoId: '' }));
 
     // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, 300));

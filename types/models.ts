@@ -54,6 +54,8 @@ export interface MessageMetadata {
   model?: string;
   tokensUsed?: number;
   processingTime?: number;
+  clientRequestId?: string;
+  respondingToClientRequestId?: string;
   [key: string]: unknown;
 }
 
