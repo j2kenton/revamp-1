@@ -3,7 +3,7 @@
  * Tracks Core Web Vitals and sends them to analytics
  */
 
-import { onCLS, onFCP, onFID, onINP, onLCP, onTTFB, type Metric } from 'web-vitals';
+import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from 'web-vitals';
 
 interface WebVitalsPayload {
   id: string;
@@ -49,7 +49,10 @@ async function sendToAnalytics(metric: WebVitalsPayload) {
 /**
  * Get rating for a metric value
  */
-function getRating(name: string, value: number): 'good' | 'needs-improvement' | 'poor' {
+function getRating(
+  name: string,
+  value: number,
+): 'good' | 'needs-improvement' | 'poor' {
   // Thresholds based on web.dev recommendations
   const thresholds: Record<string, { good: number; poor: number }> = {
     CLS: { good: 0.1, poor: 0.25 },
@@ -78,7 +81,7 @@ function handleMetric(metric: Metric) {
     value: metric.value,
     rating: getRating(metric.name, metric.value),
     delta: metric.delta,
-    navigationType: metric.navigationType,
+    navigationType: metric.navigationType ?? 'unknown',
   };
 
   // Log to console in development
@@ -97,7 +100,6 @@ export function initWebVitals() {
   try {
     // Core Web Vitals
     onCLS(handleMetric);
-    onFID(handleMetric);
     onLCP(handleMetric);
 
     // Other important metrics
