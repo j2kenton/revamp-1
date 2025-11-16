@@ -62,7 +62,7 @@ test.describe('Chat Interface', () => {
 
     await input.fill('First line');
     await input.press('Shift+Enter');
-    await input.press('Second line');
+    await input.type('Second line');
 
     await expect(input).toContainText('First line');
     // Should not have sent the message
