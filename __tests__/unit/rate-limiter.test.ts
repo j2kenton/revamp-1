@@ -56,6 +56,9 @@ describe('checkRateLimit', () => {
     const redis = createRedisMock({
       zremrangebyscore: jest.fn().mockRejectedValue(new Error('boom')),
     });
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
 
     const result = await checkRateLimit(
       redis as unknown as Redis,
@@ -64,5 +67,7 @@ describe('checkRateLimit', () => {
     );
 
     expect(result.allowed).toBe(true);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });
