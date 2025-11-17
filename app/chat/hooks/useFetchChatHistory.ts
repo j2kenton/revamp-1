@@ -27,7 +27,7 @@ interface ChatHistoryResponse {
  */
 async function fetchChatHistory(
   chatId: string,
-  accessToken: string | null
+  accessToken: string | null,
 ): Promise<ChatHistoryResponse> {
   const response = await fetch(`/api/chat/${chatId}`, {
     headers: {

@@ -10,12 +10,36 @@ import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
 import { reconcileMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO } from '@/types/models';
-import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START, PARSE_INT_RADIX } from '@/lib/constants/common';
+import {
+  RANDOM_STRING_BASE,
+  RANDOM_STRING_SLICE_START,
+  PARSE_INT_RADIX,
+} from '@/lib/constants/common';
 import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@/lib/constants/http-status';
-import { MAX_RETRY_COUNT, RETRY_DELAY_BASE_MS, BACKOFF_EXPONENT, MAX_RETRY_DELAY_MS } from '@/lib/constants/retry';
-import { BYPASS_ACCESS_TOKEN, BYPASS_CSRF_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
+import {
+  MAX_RETRY_COUNT,
+  RETRY_DELAY_BASE_MS,
+  BACKOFF_EXPONENT,
+  MAX_RETRY_DELAY_MS,
+} from '@/lib/constants/retry';
+import {
+  BYPASS_ACCESS_TOKEN,
+  BYPASS_CSRF_TOKEN,
+  isBypassAuthEnabled,
+} from '@/lib/auth/bypass';
+import { STRINGS } from '@/lib/constants/strings';
 
 const MIN_RETRY_AFTER_FALLBACK = 1;
+
+/**
+ * Calculate exponential backoff delay with max cap
+ */
+function calculateRetryDelay(attemptIndex: number): number {
+  return Math.min(
+    RETRY_DELAY_BASE_MS * Math.pow(BACKOFF_EXPONENT, attemptIndex),
+    MAX_RETRY_DELAY_MS,
+  );
+}
 
 export interface SendMessageInput {
   content: string;
@@ -68,7 +92,7 @@ async function sendMessageToAPI(
   const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
 
   if (!token) {
-    throw new Error('Not authenticated');
+    throw new Error(STRINGS.errors.notAuthenticated);
   }
 
   const csrfToken = bypassAuth
@@ -98,8 +122,7 @@ async function sendMessageToAPI(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    const errorMessage =
-      errorBody.error?.message || 'Failed to send message';
+    const errorMessage = errorBody.error?.message || STRINGS.errors.sendFailed;
 
     if (response.status === HTTP_STATUS_TOO_MANY_REQUESTS) {
       const retryHeader = response.headers.get('Retry-After');
@@ -110,7 +133,10 @@ async function sendMessageToAPI(
             ? parseInt(retryHeader, PARSE_INT_RADIX)
             : 0;
 
-      throw new RateLimitError(errorMessage, Math.max(retryAfter, MIN_RETRY_AFTER_FALLBACK));
+      throw new RateLimitError(
+        errorMessage,
+        Math.max(retryAfter, MIN_RETRY_AFTER_FALLBACK),
+      );
     }
 
     throw new Error(errorMessage);
@@ -185,8 +211,7 @@ export function useSendMessage(_chatId?: string | null) {
           const reconciled = reconcileMessages({
             existingMessages: messages,
             incomingMessages: [data.userMessage, data.aiMessage],
-            clientRequestId:
-              variables.clientRequestId ?? data.clientRequestId,
+            clientRequestId: variables.clientRequestId ?? data.clientRequestId,
             optimisticMessageId: context?.optimisticMessage?.id,
           });
 
@@ -203,7 +228,10 @@ export function useSendMessage(_chatId?: string | null) {
     // On error, rollback optimistic update
     onError: (_error, variables, context) => {
       if (context?.previousData && variables.chatId) {
-        queryClient.setQueryData(['chat', variables.chatId], context.previousData);
+        queryClient.setQueryData(
+          ['chat', variables.chatId],
+          context.previousData,
+        );
       }
     },
 
@@ -219,7 +247,7 @@ export function useSendMessage(_chatId?: string | null) {
       return failureCount < MAX_RETRY_COUNT;
     },
 
-    retryDelay: (attemptIndex) => Math.min(RETRY_DELAY_BASE_MS * Math.pow(BACKOFF_EXPONENT, attemptIndex), MAX_RETRY_DELAY_MS),
+    retryDelay: calculateRetryDelay,
   });
 
   const sendMessage = (input: SendMessageInput) => {

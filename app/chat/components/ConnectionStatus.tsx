@@ -7,13 +7,16 @@
 
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
+import { STRINGS } from '@/lib/constants/strings';
 
 type ConnectionState = 'connected' | 'connecting' | 'disconnected';
 
 export function ConnectionStatus() {
   // Initialize with current status to avoid effect setState
   const [status, setStatus] = useState<ConnectionState>(() =>
-    typeof window !== 'undefined' && navigator.onLine ? 'connected' : 'disconnected'
+    typeof window !== 'undefined' && navigator.onLine
+      ? 'connected'
+      : 'disconnected',
   );
 
   // Monitor online/offline status
@@ -34,6 +37,11 @@ export function ConnectionStatus() {
     return null; // Don't show anything when connected
   }
 
+  const statusText =
+    status === 'connecting'
+      ? STRINGS.connection.connecting
+      : STRINGS.connection.disconnected;
+
   return (
     <div
       className={clsx(
@@ -41,7 +49,7 @@ export function ConnectionStatus() {
         {
           'bg-yellow-100 text-yellow-800': status === 'connecting',
           'bg-red-100 text-red-800': status === 'disconnected',
-        }
+        },
       )}
       role="status"
       aria-live="polite"
@@ -52,10 +60,7 @@ export function ConnectionStatus() {
           'bg-red-500': status === 'disconnected',
         })}
       />
-      <span>
-        {status === 'connecting' && 'Connecting...'}
-        {status === 'disconnected' && 'Disconnected'}
-      </span>
+      <span>{statusText}</span>
     </div>
   );
 }

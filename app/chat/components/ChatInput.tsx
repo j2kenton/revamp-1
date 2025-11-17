@@ -7,19 +7,30 @@
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import clsx from 'clsx';
+import { LoadingSpinner } from '@/components/ui/icons';
+import {
+  MAX_MESSAGE_LENGTH,
+  CHAR_COUNT_DEBOUNCE_MS,
+  SEND_DEBOUNCE_MS,
+  MESSAGE_LENGTH_WARNING_THRESHOLD,
+} from '@/lib/constants/ui';
+import { STRINGS } from '@/lib/constants/strings';
 
-const MAX_LENGTH = 4000;
-const DEBOUNCE_MS = 300;
-const SEND_DEBOUNCE_MS = 600;
+const COUNTDOWN_INTERVAL_MS = 1000;
 
 interface ChatInputProps {
   onSendMessage: (content: string) => void;
   isStreaming: boolean;
-  error?: Error | null;
-  rateLimitSeconds: number | null;
+  error?: Error;
+  rateLimitSeconds?: number;
 }
 
-export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds }: ChatInputProps) {
+export function ChatInput({
+  onSendMessage,
+  isStreaming,
+  error,
+  rateLimitSeconds,
+}: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isComposing, setIsComposing] = useState(false);
   const [debouncedLength, setDebouncedLength] = useState(0);
@@ -37,7 +48,7 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
 
     debounceTimeoutRef.current = setTimeout(() => {
       setDebouncedLength(message.length);
-    }, DEBOUNCE_MS);
+    }, CHAR_COUNT_DEBOUNCE_MS);
 
     return () => {
       if (debounceTimeoutRef.current) {
@@ -63,7 +74,8 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
   }, []);
 
   useEffect(() => {
-    setCountdown(rateLimitSeconds);
+    // TODO: FIX THIS HOOK RULE VIOLATION
+    setCountdown(rateLimitSeconds ?? null);
   }, [rateLimitSeconds]);
 
   useEffect(() => {
@@ -81,47 +93,45 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
         }
         return prev - 1;
       });
-    }, 1000);
+    }, COUNTDOWN_INTERVAL_MS);
 
     return () => clearTimeout(timer);
   }, [countdown]);
 
   const handleSubmit = () => {
     const trimmed = message.trim();
-    if (!trimmed || isStreaming || isDebounced || countdown !== null) return;
+    if (!trimmed || isStreaming || isDebounced || countdown !== null) {
+      return;
+    }
 
     setIsDebounced(true);
     sendDebounceRef.current = setTimeout(() => {
       setIsDebounced(false);
     }, SEND_DEBOUNCE_MS);
 
-    // Fire-and-forget streaming request (hook handles errors/state)
     onSendMessage(trimmed);
-
-    // Clear input on send
     setMessage('');
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Don't process if IME composition is in progress
     if (isComposing) return;
 
-    // Submit on Enter (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
   };
 
-  const isNearLimit = message.length > MAX_LENGTH * 0.9;
-  const isOverLimit = message.length > MAX_LENGTH;
+  const isNearLimit =
+    message.length > MAX_MESSAGE_LENGTH * MESSAGE_LENGTH_WARNING_THRESHOLD;
+  const isOverLimit = message.length > MAX_MESSAGE_LENGTH;
   const canSubmit =
     message.trim().length > 0 &&
     !isOverLimit &&
     !isStreaming &&
     !isDebounced &&
-    countdown === null;
-  const errorMessage = error?.message || 'Failed to send message. Please try again.';
+    countdown === undefined;
+  const errorMessage = error?.message || STRINGS.errors.sendFailed;
 
   return (
     <div className="p-4">
@@ -140,7 +150,7 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
           role="status"
           aria-live="polite"
         >
-          You are sending messages too quickly. Please try again in {countdown}s.
+          {STRINGS.errors.rateLimitCountdown(countdown)}
         </div>
       )}
 
@@ -152,8 +162,8 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
           onKeyDown={handleKeyDown}
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={() => setIsComposing(false)}
-          placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-          disabled={isStreaming || countdown !== null}
+          placeholder={STRINGS.input.placeholder}
+          disabled={isStreaming || countdown !== undefined}
           className={clsx(
             'w-full resize-none rounded-lg border px-4 py-3 pr-32 focus:outline-none focus:ring-2',
             {
@@ -161,17 +171,17 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
                 !isOverLimit,
               'border-red-300 focus:border-red-500 focus:ring-red-500':
                 isOverLimit,
-              'cursor-not-allowed opacity-50': isStreaming || countdown !== null,
-            }
+              'cursor-not-allowed opacity-50':
+                isStreaming || countdown !== undefined,
+            },
           )}
           rows={1}
-          aria-label="Message input"
+          aria-label={STRINGS.input.ariaLabel}
           aria-invalid={isOverLimit}
           aria-describedby="char-counter"
         />
 
         <div className="absolute bottom-3 right-3 flex items-center gap-2">
-          {/* Character counter */}
           <span
             id="char-counter"
             className={clsx('text-xs font-medium', {
@@ -181,10 +191,9 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
             })}
             aria-live="polite"
           >
-            {debouncedLength} / {MAX_LENGTH}
+            {STRINGS.input.characterCount(debouncedLength, MAX_MESSAGE_LENGTH)}
           </span>
 
-          {/* Send button */}
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
@@ -193,18 +202,18 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
               {
                 'bg-blue-600 text-white hover:bg-blue-700': canSubmit,
                 'cursor-not-allowed bg-gray-300 text-gray-500': !canSubmit,
-              }
+              },
             )}
-            aria-label="Send message"
+            aria-label={STRINGS.input.sendButton}
             aria-disabled={!canSubmit}
           >
             {isStreaming ? (
               <div className="flex items-center gap-2">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                <span>Streaming</span>
+                <LoadingSpinner className="h-4 w-4 border-white border-t-transparent" />
+                <span>{STRINGS.status.streaming}</span>
               </div>
             ) : (
-              'Send'
+              STRINGS.input.sendButton
             )}
           </button>
         </div>
@@ -212,17 +221,18 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
 
       <div className="mt-2 text-xs text-gray-500">
         <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5">
-          Enter
+          {STRINGS.input.keyboardHints.enter}
         </kbd>{' '}
-        to send •{' '}
+        {STRINGS.input.keyboardHints.toSend}{' '}
+        {STRINGS.input.keyboardHints.separator}{' '}
         <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5">
-          Shift
+          {STRINGS.input.keyboardHints.shift}
         </kbd>
         {' + '}
         <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5">
-          Enter
+          {STRINGS.input.keyboardHints.enter}
         </kbd>{' '}
-        for new line
+        {STRINGS.input.keyboardHints.forNewLine}
       </div>
     </div>
   );
