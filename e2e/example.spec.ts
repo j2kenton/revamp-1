@@ -13,7 +13,7 @@ test.describe('Homepage', () => {
     await page.waitForLoadState('networkidle');
 
     // Check that the page loaded successfully
-    await expect(page).toHaveTitle(/Next.js/);
+    await expect(page).toHaveTitle(/CR Project App/);
   });
 });
 
