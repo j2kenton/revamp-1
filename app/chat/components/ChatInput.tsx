@@ -21,8 +21,8 @@ const COUNTDOWN_INTERVAL_MS = 1000;
 interface ChatInputProps {
   onSendMessage: (content: string) => void;
   isStreaming: boolean;
-  error?: Error;
-  rateLimitSeconds?: number;
+  error?: Error | null;
+  rateLimitSeconds?: number | null;
 }
 
 export function ChatInput({

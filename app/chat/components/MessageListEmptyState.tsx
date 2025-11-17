@@ -15,7 +15,7 @@ enum Variant {
 }
 
 interface MessageListEmptyStateProps {
-  variant: Variant;
+  variant?: Variant;
 }
 
 export function MessageListEmptyState(props: MessageListEmptyStateProps) {

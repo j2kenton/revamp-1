@@ -37,9 +37,9 @@ export const STRINGS = {
 
   // Connection status
   connection: {
-    connected: 'Connected',
-    connecting: 'Connecting...',
-    disconnected: 'Disconnected',
+    online: 'Online',
+    offline: 'Offline',
+    reconnecting: 'Reconnecting...',
   },
 
   // Chat input

@@ -3,15 +3,12 @@ import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/chat/route';
 import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
-import { withChatRateLimit } from '@/server/middleware/rate-limit';
-import { withRequestDedup } from '@/server/middleware/request-dedup';
 import {
   createChat,
   getChat,
   addMessage,
   getChatMessages,
 } from '@/lib/redis/chat';
-import { withTransaction, txSet } from '@/lib/redis/transactions';
 import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
 
 jest.mock('@/server/middleware/session', () => ({
