@@ -1,15 +1,12 @@
 'use client';
 
-// 1. React/Next
 import { useState } from 'react';
 
-// 3. @/ absolute
 import type { LoginFormData } from '@/lib/forms/schemas/auth.schema';
 import type { RegisterFormData } from '@/lib/forms/schemas/auth.schema';
 import type { ContactFormData } from '@/lib/forms/schemas/user.schema';
 import type { UserProfileFormData } from '@/lib/forms/schemas/user.schema';
 
-// 4. ./ relative
 import { LoginForm } from './forms/LoginForm';
 import { RegisterForm } from './forms/RegisterForm';
 import { ContactForm } from './forms/ContactForm';

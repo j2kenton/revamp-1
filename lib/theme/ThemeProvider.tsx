@@ -5,7 +5,6 @@
 
 'use client';
 
-// 1. React/Next
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';

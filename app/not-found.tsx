@@ -1,4 +1,3 @@
-// 1. React/Next
 import Link from 'next/link';
 
 /**

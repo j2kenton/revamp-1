@@ -1,6 +1,5 @@
 'use client';
 
-// 1. React/Next
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ChatRole = 'user' | 'assistant';

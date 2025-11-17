@@ -7,7 +7,6 @@
 
 'use client';
 
-// 1. React/Next
 import { useRouter } from 'next/navigation';
 
 export default function GoHomeButton() {

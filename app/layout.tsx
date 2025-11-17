@@ -1,9 +1,7 @@
-// 1. React/Next
 import { type ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 
-// 3. @/ absolute
 import { ReduxProvider } from '@/lib/redux/ReduxProvider';
 import { SessionProvider } from '@/lib/auth/SessionProvider';
 import { MsalProvider } from '@/lib/auth/MsalProvider';
@@ -11,7 +9,6 @@ import { TanStackQueryProvider } from '@/lib/tanstack-query/provider';
 import { WebVitalsReporter } from '@/components/WebVitalsReporter';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 
-// 4. ./ relative
 import './globals.css';
 
 const geistSans = Geist({

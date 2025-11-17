@@ -5,12 +5,8 @@
 
 'use client';
 
-// 1. React/Next
-
-// 2. Third-party
 import clsx from 'clsx';
 
-// 3. @/ absolute
 import { useTheme } from '@/lib/theme/ThemeProvider';
 
 export function ThemeToggle() {

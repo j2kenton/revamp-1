@@ -1,8 +1,5 @@
 'use client';
 
-// 1. React/Next
-
-// 3. @/ absolute
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks';
 import {
   increment,

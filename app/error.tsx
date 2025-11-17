@@ -1,6 +1,5 @@
 'use client';
 
-// 1. React/Next
 import { useEffect } from 'react';
 
 /**

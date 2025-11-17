@@ -7,13 +7,10 @@
 
 'use client';
 
-// 1. React/Next
 import { type Key, type ReactNode } from 'react';
 
-// 2. Third-party
 import { motion, useReducedMotion, MotionConfig } from 'framer-motion';
 
-// 3. @/ absolute
 import { staggerContainer, fadeInUp } from '@/lib/motion/variants';
 
 export interface StaggeredListProps<T> {

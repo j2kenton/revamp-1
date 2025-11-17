@@ -7,10 +7,8 @@
 
 'use client';
 
-// 1. React/Next
 import Image from 'next/image';
 
-// 3. @/ absolute
 import { useUser } from '@/lib/swr/hooks';
 
 interface UserProfileProps {

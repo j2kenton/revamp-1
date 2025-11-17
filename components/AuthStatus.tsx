@@ -1,6 +1,5 @@
 'use client';
 
-// 1. React/Next
 import Link from 'next/link';
 import type { Session } from 'next-auth';
 

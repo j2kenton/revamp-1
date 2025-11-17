@@ -5,13 +5,9 @@
 
 'use client';
 
-// 1. React/Next
-
-// 2. Third-party
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 
-// 3. @/ absolute
 import type { MessageDTO } from '@/types/models';
 
 interface ChatMessageProps {

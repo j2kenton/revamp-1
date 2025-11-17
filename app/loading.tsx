@@ -1,5 +1,3 @@
-// 1. React/Next
-
 export default function Loading() {
   return (
     <div

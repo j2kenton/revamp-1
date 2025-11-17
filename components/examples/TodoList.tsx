@@ -7,10 +7,8 @@
 
 'use client';
 
-// 1. React/Next
 import { useState } from 'react';
 
-// 3. @/ absolute
 import {
   useTodos,
   useCreateTodo,

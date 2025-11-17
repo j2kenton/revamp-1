@@ -5,14 +5,11 @@
 
 'use client';
 
-// 1. React/Next
 import { ReactNode, useEffect, useState } from 'react';
 
-// 2. Third-party
 import { PublicClientApplication, EventType, EventMessage, AuthenticationResult } from '@azure/msal-browser';
 import { MsalProvider as MsalReactProvider } from '@azure/msal-react';
 
-// 4. ./ relative
 import { msalConfig } from './msalConfig';
 
 interface MsalProviderProps {

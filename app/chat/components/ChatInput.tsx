@@ -5,10 +5,8 @@
 
 'use client';
 
-// 1. React/Next
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 
-// 2. Third-party
 import clsx from 'clsx';
 
 const MAX_LENGTH = 4000;
