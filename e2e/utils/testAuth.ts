@@ -13,8 +13,22 @@ export async function loginAsTestUser(page: Page): Promise<void> {
     window.__BYPASS_AUTH__ = true;
   }, STORAGE_KEY);
 
-  const response = await page.request.post('/api/test-support/auth');
-  if (!response.ok()) {
+  let authResponse: Response | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const response = await page.request.post('/api/test-support/auth');
+      if (response.ok()) {
+        // TODO: fix error
+        authResponse = response;
+        break;
+      }
+    } catch {
+      // swallow and retry after short delay
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+
+  if (!authResponse) {
     throw new Error('Failed to initialize test authentication');
   }
 

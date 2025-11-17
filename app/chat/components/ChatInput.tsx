@@ -130,7 +130,7 @@ export function ChatInput({
     !isOverLimit &&
     !isStreaming &&
     !isDebounced &&
-    countdown === undefined;
+    countdown === null;
   const errorMessage = error?.message || STRINGS.errors.sendFailed;
 
   return (
@@ -163,7 +163,7 @@ export function ChatInput({
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={() => setIsComposing(false)}
           placeholder={STRINGS.input.placeholder}
-          disabled={isStreaming || countdown !== undefined}
+          disabled={isStreaming || countdown !== null}
           className={clsx(
             'w-full resize-none rounded-lg border px-4 py-3 pr-32 focus:outline-none focus:ring-2',
             {
@@ -172,7 +172,7 @@ export function ChatInput({
               'border-red-300 focus:border-red-500 focus:ring-red-500':
                 isOverLimit,
               'cursor-not-allowed opacity-50':
-                isStreaming || countdown !== undefined,
+                isStreaming || countdown !== null,
             },
           )}
           rows={1}
@@ -204,7 +204,7 @@ export function ChatInput({
                 'cursor-not-allowed bg-gray-300 text-gray-500': !canSubmit,
               },
             )}
-            aria-label={STRINGS.input.sendButton}
+            aria-label="Send message"
             aria-disabled={!canSubmit}
           >
             {isStreaming ? (

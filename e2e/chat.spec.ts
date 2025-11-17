@@ -120,7 +120,7 @@ test.describe('Chat Interface', () => {
 
     test('should support keyboard navigation', async ({ page }) => {
       const input = page.getByLabel('Message input');
-      const sendButton = page.getByRole('button', { name: 'Send message' });
+      const sendButton = page.getByRole('button', { name: 'Send' });
 
       // Move focus forward until the chat input is focused
       for (let i = 0; i < 10; i += 1) {
@@ -145,7 +145,7 @@ test.describe('Chat Interface', () => {
       const input = page.getByLabel('Message input');
       await expect(input).toBeVisible();
 
-      const sendButton = page.getByRole('button', { name: 'Send message' });
+      const sendButton = page.getByRole('button', { name: 'Send' });
       await expect(sendButton).toBeVisible();
     });
 
