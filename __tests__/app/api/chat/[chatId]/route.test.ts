@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server';
-
 import { GET } from '@/app/api/chat/[chatId]/route';
 import { requireSession } from '@/server/middleware/session';
-import { withChatRateLimit } from '@/server/middleware/rate-limit';
 import { getChat, getChatMessages } from '@/lib/redis/chat';
 
 jest.mock('@/server/middleware/session', () => ({

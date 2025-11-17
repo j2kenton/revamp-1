@@ -86,7 +86,6 @@ export function ChatInterface({
       const decoder = new TextDecoder();
       let accumulated = '';
 
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const { value, done } = await reader.read();
         if (done) {
