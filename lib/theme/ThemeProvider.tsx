@@ -6,6 +6,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { THEME_COLORS, THEME_STORAGE_KEY } from '@/lib/constants/theme';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -17,8 +18,6 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-const STORAGE_KEY = 'app-theme';
 
 function getSystemTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light';
@@ -32,7 +31,7 @@ function getStoredTheme(): Theme {
   if (typeof window === 'undefined') return 'system';
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       return stored;
     }
@@ -44,17 +43,12 @@ function getStoredTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Initialize with stored values to avoid effect setState
   const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => getSystemTheme());
 
-  // Calculate actual theme
   const actualTheme = theme === 'system' ? systemTheme : theme;
 
-  // Listen for system theme changes
   useEffect(() => {
-
-    // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
       setSystemTheme(e.matches ? 'dark' : 'light');
@@ -67,22 +61,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Apply theme to document
   useEffect(() => {
     const root = document.documentElement;
 
-    // Remove old theme classes
     root.classList.remove('light', 'dark');
-
-    // Add new theme class
     root.classList.add(actualTheme);
 
-    // Update meta theme-color
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
       metaThemeColor.setAttribute(
         'content',
-        actualTheme === 'dark' ? '#1f2937' : '#ffffff'
+        actualTheme === 'dark' ? THEME_COLORS.DARK : THEME_COLORS.LIGHT
       );
     }
   }, [actualTheme]);
@@ -91,7 +80,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(newTheme);
 
     try {
-      localStorage.setItem(STORAGE_KEY, newTheme);
+      localStorage.setItem(THEME_STORAGE_KEY, newTheme);
     } catch {
       // Ignore localStorage errors
     }

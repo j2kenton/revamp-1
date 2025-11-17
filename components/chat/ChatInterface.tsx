@@ -1,6 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  MAX_CHAT_MESSAGE_LENGTH,
+  CHAR_COUNT_IMMEDIATE_THRESHOLD,
+  FOCUS_DELAY_MS,
+  RANDOM_STRING_RADIX,
+  RANDOM_STRING_SLICE_START,
+  RANDOM_STRING_SLICE_END,
+} from '@/lib/constants/ui';
+import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@/lib/constants/http-status';
+import { STRINGS } from '@/lib/constants/strings';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -14,8 +24,6 @@ export interface ChatInterfaceProps {
   streamingEnabled?: boolean;
 }
 
-const MAX_MESSAGE_LENGTH = 10000;
-
 type FetchResponse = {
   ok: boolean;
   status: number;
@@ -24,7 +32,7 @@ type FetchResponse = {
 };
 
 const createMessage = (role: ChatRole, content: string): ChatMessage => ({
-  id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  id: `${role}-${Date.now()}-${Math.random().toString(RANDOM_STRING_RADIX).slice(RANDOM_STRING_SLICE_START, RANDOM_STRING_SLICE_END)}`,
   role,
   content,
 });
@@ -34,14 +42,14 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [charCount, setCharCount] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [requestError, setRequestError] = useState<string | null>(null);
-  const [retryContent, setRetryContent] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | undefined>(undefined);
+  const [requestError, setRequestError] = useState<string | undefined>(undefined);
+  const [retryContent, setRetryContent] = useState<string | undefined>(undefined);
   const [isSending, setIsSending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingFocusRef = useRef(false);
-  const charCountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const charCountTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const appendMessage = useCallback((entry: ChatMessage) => {
     setMessages((prev) => [...prev, entry]);
@@ -64,7 +72,7 @@ export function ChatInterface({
   const focusInput = useCallback(() => {
     setTimeout(() => {
       inputRef.current?.focus();
-    }, 0);
+    }, FOCUS_DELAY_MS);
   }, []);
 
   const handleStream = useCallback(
@@ -119,17 +127,17 @@ export function ChatInterface({
         contentOverride ?? inputRef.current?.value ?? '';
       const trimmed = sourceValue.trim();
       if (!trimmed) {
-        setValidationError('Message is required.');
+        setValidationError(STRINGS.validation.messageRequired);
         return;
       }
-      if (trimmed.length > MAX_MESSAGE_LENGTH) {
-        setValidationError('Message is too long.');
+      if (trimmed.length > MAX_CHAT_MESSAGE_LENGTH) {
+        setValidationError(STRINGS.validation.messageTooLong);
         return;
       }
 
-      setValidationError(null);
-      setRequestError(null);
-      setRetryContent(null);
+      setValidationError(undefined);
+      setRequestError(undefined);
+      setRetryContent(undefined);
       setIsSending(true);
       if (streamingEnabled) {
         setIsStreaming(true);
@@ -155,10 +163,10 @@ export function ChatInterface({
           ) as unknown as FetchResponse);
 
         if (!response.ok) {
-          if (response.status === 429) {
-            setRequestError('Too many requests. Please try again soon.');
+          if (response.status === HTTP_STATUS_TOO_MANY_REQUESTS) {
+            setRequestError(STRINGS.errors.rateLimited);
           } else {
-            setRequestError('Failed to send message. Please try again.');
+            setRequestError(STRINGS.errors.sendFailed);
           }
           setRetryContent(trimmed);
           return;
@@ -180,13 +188,13 @@ export function ChatInterface({
           inputRef.current.value = '';
           if (charCountTimeoutRef.current) {
             clearTimeout(charCountTimeoutRef.current);
-            charCountTimeoutRef.current = null;
+            charCountTimeoutRef.current = undefined;
           }
           setCharCount(0);
         }
         shouldRestoreFocus = true;
       } catch {
-        setRequestError('Failed to send message. Please try again.');
+        setRequestError(STRINGS.errors.sendFailed);
         setRetryContent(trimmed);
       } finally {
         setIsSending(false);
@@ -211,7 +219,7 @@ export function ChatInterface({
     () => () => {
       if (charCountTimeoutRef.current) {
         clearTimeout(charCountTimeoutRef.current);
-        charCountTimeoutRef.current = null;
+        charCountTimeoutRef.current = undefined;
       }
     },
     [],
@@ -233,11 +241,11 @@ export function ChatInterface({
   const isDisabled = isSending || isStreaming;
 
   return (
-    <section aria-label="Chat interface" className="space-y-4">
+    <section aria-label={STRINGS.a11y.chatInterface} className="space-y-4">
       <div
         role="log"
         aria-live="polite"
-        aria-label="Chat messages"
+        aria-label={STRINGS.a11y.chatMessages}
         className="rounded-md border p-3"
       >
         <ul className="space-y-2">
@@ -265,7 +273,7 @@ export function ChatInterface({
               onClick={() => void handleSendMessage(retryContent)}
               className="rounded-md border px-3 py-1 text-sm"
             >
-              Retry
+              {STRINGS.actions.retry}
             </button>
           )}
         </div>
@@ -273,7 +281,7 @@ export function ChatInterface({
 
       {(isSending || isStreaming) && (
         <p className="text-sm text-gray-500" aria-live="polite">
-          Sending&hellip;
+          {STRINGS.status.sending}&hellip;
         </p>
       )}
 
@@ -284,32 +292,32 @@ export function ChatInterface({
         <textarea
           id="chat-message"
           ref={inputRef}
-          aria-label="Message input"
+          aria-label={STRINGS.input.ariaLabel}
           defaultValue=""
           onChange={(event) => {
             let nextValue = event.target.value;
-            if (nextValue.length > MAX_MESSAGE_LENGTH) {
-              nextValue = nextValue.slice(0, MAX_MESSAGE_LENGTH);
+            if (nextValue.length > MAX_CHAT_MESSAGE_LENGTH) {
+              nextValue = nextValue.slice(0, MAX_CHAT_MESSAGE_LENGTH);
               event.target.value = nextValue;
-              setValidationError('Message is too long.');
+              setValidationError(STRINGS.validation.messageTooLong);
             } else if (
-              validationError === 'Message is too long.' ||
-              (validationError === 'Message is required.' &&
+              validationError === STRINGS.validation.messageTooLong ||
+              (validationError === STRINGS.validation.messageRequired &&
                 nextValue.trim().length > 0)
             ) {
-              setValidationError(null);
+              setValidationError(undefined);
             }
             if (charCountTimeoutRef.current) {
               clearTimeout(charCountTimeoutRef.current);
-              charCountTimeoutRef.current = null;
+              charCountTimeoutRef.current = undefined;
             }
-            if (nextValue.length <= 200) {
+            if (nextValue.length <= CHAR_COUNT_IMMEDIATE_THRESHOLD) {
               setCharCount(nextValue.length);
             } else {
               charCountTimeoutRef.current = setTimeout(() => {
                 setCharCount(nextValue.length);
-                charCountTimeoutRef.current = null;
-              }, 0);
+                charCountTimeoutRef.current = undefined;
+              }, FOCUS_DELAY_MS);
             }
           }}
           onKeyDown={handleKeyDown}
@@ -319,7 +327,7 @@ export function ChatInterface({
         />
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>
-            {charCount} / {MAX_MESSAGE_LENGTH}
+            {STRINGS.input.characterCount(charCount, MAX_CHAT_MESSAGE_LENGTH)}
           </span>
           <button
             type="submit"
@@ -327,7 +335,7 @@ export function ChatInterface({
             aria-disabled={isDisabled}
             className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
           >
-            Send
+            {STRINGS.actions.send}
           </button>
         </div>
       </form>

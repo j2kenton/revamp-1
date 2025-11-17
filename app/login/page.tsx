@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/useAuth';
+import { LoadingSpinner, MicrosoftIcon } from '@/components/ui/icons';
+import { STRINGS } from '@/lib/constants/strings';
 
 export default function LoginPage() {
   const router = useRouter();
   const { isAuthenticated, login, isLoading, error } = useAuth();
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | undefined>(undefined);
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       router.push('/dashboard');
@@ -17,17 +18,16 @@ export default function LoginPage() {
   }, [isAuthenticated, router]);
 
   const handleLogin = async () => {
-    setAuthError(null);
+    setAuthError(undefined);
     try {
       await login();
-      // After successful login, redirect to dashboard
       router.push('/dashboard');
     } catch (err) {
       console.error('Login failed:', err);
       setAuthError(
         err instanceof Error
           ? err.message
-          : 'Failed to sign in. Please try again.'
+          : STRINGS.errors.authFailed
       );
     }
   };
@@ -37,10 +37,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-lg">
         <div>
           <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900">
-            Sign in to your account
+            {STRINGS.auth.signInTitle}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in with your Microsoft account
+            {STRINGS.auth.signInDescription}
           </p>
         </div>
 
@@ -64,30 +64,19 @@ export default function LoginPage() {
           >
             {isLoading ? (
               <>
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                <span>Signing in...</span>
+                <LoadingSpinner className="h-5 w-5 border-white border-t-transparent" />
+                <span>{STRINGS.auth.signingIn}</span>
               </>
             ) : (
               <>
-                <svg
-                  className="h-5 w-5"
-                  viewBox="0 0 21 21"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-                  <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-                  <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-                </svg>
-                <span>Sign in with Microsoft</span>
+                <MicrosoftIcon className="h-5 w-5" />
+                <span>{STRINGS.auth.signInButton}</span>
               </>
             )}
           </button>
 
           <p className="text-center text-xs text-gray-500">
-            By signing in, you agree to use your organizational Microsoft
-            account for authentication.
+            {STRINGS.auth.disclaimer}
           </p>
         </div>
       </div>

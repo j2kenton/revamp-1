@@ -14,8 +14,19 @@ import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START, PARSE_INT_RADIX } from '
 import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@/lib/constants/http-status';
 import { MAX_RETRY_COUNT, RETRY_DELAY_BASE_MS, BACKOFF_EXPONENT, MAX_RETRY_DELAY_MS } from '@/lib/constants/retry';
 import { BYPASS_ACCESS_TOKEN, BYPASS_CSRF_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
+import { STRINGS } from '@/lib/constants/strings';
 
 const MIN_RETRY_AFTER_FALLBACK = 1;
+
+/**
+ * Calculate exponential backoff delay with max cap
+ */
+function calculateRetryDelay(attemptIndex: number): number {
+  return Math.min(
+    RETRY_DELAY_BASE_MS * Math.pow(BACKOFF_EXPONENT, attemptIndex),
+    MAX_RETRY_DELAY_MS
+  );
+}
 
 export interface SendMessageInput {
   content: string;
@@ -62,13 +73,13 @@ function generateIdempotencyKey(): string {
  */
 async function sendMessageToAPI(
   input: InternalSendMessageInput,
-  accessToken: string | null,
+  accessToken?: string,
 ): Promise<SendMessageResponse> {
   const bypassAuth = isBypassAuthEnabled();
   const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
 
   if (!token) {
-    throw new Error('Not authenticated');
+    throw new Error(STRINGS.errors.notAuthenticated);
   }
 
   const csrfToken = bypassAuth
@@ -99,7 +110,7 @@ async function sendMessageToAPI(
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
     const errorMessage =
-      errorBody.error?.message || 'Failed to send message';
+      errorBody.error?.message || STRINGS.errors.sendFailed;
 
     if (response.status === HTTP_STATUS_TOO_MANY_REQUESTS) {
       const retryHeader = response.headers.get('Retry-After');
@@ -123,7 +134,7 @@ async function sendMessageToAPI(
   };
 }
 
-export function useSendMessage(_chatId?: string | null) {
+export function useSendMessage(_chatId?: string) {
   const queryClient = useQueryClient();
   const { accessToken } = useAuth();
 
@@ -219,7 +230,7 @@ export function useSendMessage(_chatId?: string | null) {
       return failureCount < MAX_RETRY_COUNT;
     },
 
-    retryDelay: (attemptIndex) => Math.min(RETRY_DELAY_BASE_MS * Math.pow(BACKOFF_EXPONENT, attemptIndex), MAX_RETRY_DELAY_MS),
+    retryDelay: calculateRetryDelay,
   });
 
   const sendMessage = (input: SendMessageInput) => {
