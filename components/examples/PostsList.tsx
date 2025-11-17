@@ -8,7 +8,6 @@
 'use client';
 
 import { useState } from 'react';
-
 import { usePosts } from '@/lib/swr/hooks';
 
 export function PostsList() {

@@ -13,7 +13,6 @@ import {
   MotionConfig,
   useReducedMotion,
 } from 'framer-motion';
-
 import { scaleIn } from '@/lib/motion/variants';
 
 export function PresenceToggle() {

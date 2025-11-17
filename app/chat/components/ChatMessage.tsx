@@ -6,8 +6,8 @@
 'use client';
 
 import { formatDistanceToNow } from 'date-fns';
-import type { MessageDTO } from '@/types/models';
 import clsx from 'clsx';
+import type { MessageDTO } from '@/types/models';
 
 interface ChatMessageProps {
   message: MessageDTO;

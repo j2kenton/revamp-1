@@ -5,8 +5,8 @@
 
 'use client';
 
-import { useTheme } from '@/lib/theme/ThemeProvider';
 import clsx from 'clsx';
+import { useTheme } from '@/lib/theme/ThemeProvider';
 
 export function ThemeToggle() {
   const { theme, actualTheme, setTheme } = useTheme();
