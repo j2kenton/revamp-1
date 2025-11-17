@@ -15,12 +15,16 @@ import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
 
 const SESSION_COOKIE_NAME = 'session_id';
+const MILLISECONDS_PER_SECOND = 1000;
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+const FORWARDED_IP_SEPARATOR_INDEX = 0;
+
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   path: '/',
-  maxAge: 7 * 24 * 60 * 60, // 7 days
+  maxAge: SESSION_MAX_AGE_SECONDS,
 };
 
 export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
@@ -28,7 +32,7 @@ export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
 function getClientIp(request: NextRequest): string | undefined {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    return forwarded.split(',')[0]?.trim();
+    return forwarded.split(',')[FORWARDED_IP_SEPARATOR_INDEX]?.trim();
   }
 
   const realIp = request.headers.get('x-real-ip');
@@ -50,7 +54,7 @@ async function getSessionFromJwtFallback(
   }
 
   const now = new Date();
-  const expiresAt = new Date(payload.exp * 1000);
+  const expiresAt = new Date(payload.exp * MILLISECONDS_PER_SECOND);
   const csrfToken = createHash('sha256').update(token).digest('hex');
 
   logWarn('Using JWT payload for session fallback', {

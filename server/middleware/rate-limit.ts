@@ -12,6 +12,13 @@ import { getSessionFromRequest } from '@/server/middleware/session';
 import { chatRateLimit, enhancedRateLimit } from '@/server/middleware/enhanced-rate-limit';
 import { logWarn } from '@/utils/logger';
 
+const FORWARDED_IP_SEPARATOR_INDEX = 0;
+const MILLISECONDS_PER_SECOND = 1000;
+const AUTH_WINDOW_MS = 60 * 1000;
+const AUTH_MAX_REQUESTS = 10;
+const AUTH_LOCKOUT_THRESHOLD = 5;
+const AUTH_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
 /**
  * Get identifier for rate limiting
  * Prefers user ID, falls back to IP address
@@ -23,7 +30,7 @@ function getRateLimitIdentifier(request: NextRequest, userId?: string): string {
 
   // Get IP from headers (works with proxies like Vercel)
   const forwarded = request.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
+  const ip = forwarded ? forwarded.split(',')[FORWARDED_IP_SEPARATOR_INDEX].trim() : 'unknown';
 
   return `ip:${ip}`;
 }
@@ -59,7 +66,7 @@ export async function withRateLimit(
       });
 
       const retryAfter = Math.ceil(
-        (result.resetAt.getTime() - Date.now()) / 1000,
+        (result.resetAt.getTime() - Date.now()) / MILLISECONDS_PER_SECOND,
       );
 
       return {
@@ -140,10 +147,10 @@ export function withAuthRateLimit(
   return async (request: NextRequest, context?: unknown) => {
     const identifier = getRateLimitIdentifier(request);
     const { allowed, error } = await enhancedRateLimit(request, identifier, 'auth', {
-      windowMs: 60 * 1000,
-      maxRequests: 10,
-      lockoutThreshold: 5,
-      lockoutDurationMs: 15 * 60 * 1000,
+      windowMs: AUTH_WINDOW_MS,
+      maxRequests: AUTH_MAX_REQUESTS,
+      lockoutThreshold: AUTH_LOCKOUT_THRESHOLD,
+      lockoutDurationMs: AUTH_LOCKOUT_DURATION_MS,
       enableProgressiveDelay: true,
       enableAccountLockout: true,
     });

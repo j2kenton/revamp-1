@@ -6,7 +6,8 @@
 import { getRedisClient } from '@/lib/redis/client';
 import { logWarn } from '@/utils/logger';
 
-const DEFAULT_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const DEFAULT_TTL_SECONDS = 24 * 60 * 60;
+const STRATEGIES_MIN_LENGTH = 0;
 
 function buildRedisKey(userId: string, key: string): string {
   return `idempotency:${userId}:${key}`;
@@ -58,7 +59,7 @@ export async function storeIdempotencyKey(
       strategies.push(client.setEx.bind(client));
     }
 
-    if (strategies.length === 0) {
+    if (strategies.length === STRATEGIES_MIN_LENGTH) {
       throw new Error('Redis client missing TTL command');
     }
 

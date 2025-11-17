@@ -6,6 +6,16 @@
 import Redis from 'ioredis';
 import { logError, logInfo } from '@/utils/logger';
 
+const DEFAULT_REDIS_PORT = 6379;
+const PARSE_INT_RADIX = 10;
+const RETRY_DELAY_BASE_MS = 100;
+const RETRY_DELAY_MAX_MS = 5000;
+const MAX_RETRIES_PER_REQUEST = 3;
+const CONNECTION_TIMEOUT_MS = 10000;
+const KEEP_ALIVE_MS = 30000;
+const IP_VERSION_IPV4 = 4;
+const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30000;
+
 let redisClient: Redis | null = null;
 
 /**
@@ -22,7 +32,7 @@ function getRedisConfig(): {
     const url = new URL(process.env.REDIS_URL);
     return {
       host: url.hostname,
-      port: parseInt(url.port || '6379', 10),
+      port: parseInt(url.port || DEFAULT_REDIS_PORT.toString(), PARSE_INT_RADIX),
       password: url.password || undefined,
       tls: url.protocol === 'rediss:',
     };
@@ -30,7 +40,7 @@ function getRedisConfig(): {
 
   return {
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    port: parseInt(process.env.REDIS_PORT || DEFAULT_REDIS_PORT.toString(), PARSE_INT_RADIX),
     password: process.env.REDIS_PASSWORD,
     tls: process.env.REDIS_TLS === 'true',
   };
@@ -53,18 +63,18 @@ export function createRedisClient(): Redis {
     }),
     retryStrategy: (times) => {
       // Exponential backoff with max 5 seconds
-      const delay = Math.min(times * 100, 5000);
+      const delay = Math.min(times * RETRY_DELAY_BASE_MS, RETRY_DELAY_MAX_MS);
       logInfo('Redis retry attempt', { attempt: times, delay });
       return delay;
     },
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: MAX_RETRIES_PER_REQUEST,
     enableReadyCheck: true,
     enableOfflineQueue: true,
     lazyConnect: true,
     // Connection pool settings
-    connectTimeout: 10000, // 10 seconds
-    keepAlive: 30000, // 30 seconds
-    family: 4, // IPv4
+    connectTimeout: CONNECTION_TIMEOUT_MS,
+    keepAlive: KEEP_ALIVE_MS,
+    family: IP_VERSION_IPV4,
   });
 
   client.on('connect', () => {
@@ -165,7 +175,7 @@ export async function healthCheck(): Promise<boolean> {
  */
 let healthCheckInterval: NodeJS.Timeout | null = null;
 
-export function startHealthCheck(intervalMs: number = 30000) {
+export function startHealthCheck(intervalMs: number = DEFAULT_HEALTH_CHECK_INTERVAL_MS) {
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }

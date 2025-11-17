@@ -9,6 +9,27 @@ import { withCircuitBreaker } from '@/lib/redis/circuit-breaker';
 import { tooManyRequests } from '@/server/api-response';
 import { logWarn, logError } from '@/utils/logger';
 
+const DEFAULT_WINDOW_MS = 60 * 1000;
+const DEFAULT_MAX_REQUESTS = 10;
+const DEFAULT_BLOCK_DURATION_MS = 15 * 60 * 1000;
+const DEFAULT_LOCKOUT_THRESHOLD = 5;
+const DEFAULT_LOCKOUT_DURATION_MS = 60 * 60 * 1000;
+const FORWARDED_IP_SEPARATOR_INDEX = 0;
+const MIN_ATTEMPT_COUNT = 0;
+const NO_DELAY = 0;
+const BACKOFF_BASE = 2;
+const BACKOFF_INITIAL_ATTEMPT = 1;
+const MILLISECONDS_PER_SECOND = 1000;
+const MAX_BACKOFF_MS = 30000;
+const FIRST_REQUEST_COUNT = 1;
+const ATTEMPT_RESET_SECONDS = 3600;
+const MIN_RETRY_AFTER_SECONDS = 60;
+const MILLISECONDS_TO_MINUTES = 60000;
+const CHAT_WINDOW_MS = 60 * 1000;
+const CHAT_MAX_REQUESTS = 20;
+const CHAT_LOCKOUT_THRESHOLD = 3;
+const CHAT_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
 interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds
   maxRequests: number; // Max requests per window
@@ -20,23 +41,23 @@ interface RateLimitConfig {
 }
 
 const DEFAULT_CONFIG: RateLimitConfig = {
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 10,
-  blockDurationMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: DEFAULT_WINDOW_MS,
+  maxRequests: DEFAULT_MAX_REQUESTS,
+  blockDurationMs: DEFAULT_BLOCK_DURATION_MS,
   enableProgressiveDelay: true,
   enableAccountLockout: true,
-  lockoutThreshold: 5,
-  lockoutDurationMs: 60 * 60 * 1000, // 1 hour
+  lockoutThreshold: DEFAULT_LOCKOUT_THRESHOLD,
+  lockoutDurationMs: DEFAULT_LOCKOUT_DURATION_MS,
 };
 
 /**
  * Calculate progressive delay based on attempt count
  */
 function calculateProgressiveDelay(attemptCount: number): number {
-  if (attemptCount <= 0) return 0;
+  if (attemptCount <= MIN_ATTEMPT_COUNT) return NO_DELAY;
 
   // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
-  return Math.min(Math.pow(2, attemptCount - 1) * 1000, 30000);
+  return Math.min(Math.pow(BACKOFF_BASE, attemptCount - BACKOFF_INITIAL_ATTEMPT) * MILLISECONDS_PER_SECOND, MAX_BACKOFF_MS);
 }
 
 /**
@@ -45,7 +66,7 @@ function calculateProgressiveDelay(attemptCount: number): number {
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    return forwarded.split(',')[0]?.trim() ?? 'unknown';
+    return forwarded.split(',')[FORWARDED_IP_SEPARATOR_INDEX]?.trim() ?? 'unknown';
   }
 
   const realIp = request.headers.get('x-real-ip');
@@ -91,7 +112,7 @@ export async function enhancedRateLimit(
 
       if (isLockedOut) {
         const ttl = await redis.ttl(lockoutKey);
-        const retryAfter = Math.max(ttl, 60); // At least 60 seconds
+        const retryAfter = Math.max(ttl, MIN_RETRY_AFTER_SECONDS);
 
         logWarn('Account locked out', {
           identifier,
@@ -103,7 +124,7 @@ export async function enhancedRateLimit(
           allowed: false,
           retryAfter,
           error: tooManyRequests(
-            `Account temporarily locked. Please try again in ${Math.ceil(retryAfter / 60)} minutes.`,
+            `Account temporarily locked. Please try again in ${Math.ceil(retryAfter / MIN_RETRY_AFTER_SECONDS)} minutes.`,
             {
               retryAfter,
               lockoutRemaining: retryAfter,
@@ -118,34 +139,34 @@ export async function enhancedRateLimit(
       async () => {
         const count = await redis.incr(rateLimitKey);
 
-        if (count === 1) {
+        if (count === FIRST_REQUEST_COUNT) {
           // First request in window, set expiry
           await redis.pexpire(rateLimitKey, fullConfig.windowMs);
         }
 
         return count;
       },
-      () => 0 // Fallback: allow request if Redis is down
+      () => MIN_ATTEMPT_COUNT // Fallback: allow request if Redis is down
     );
 
     if (currentCount > fullConfig.maxRequests) {
       // Rate limit exceeded
       const ttl = await redis.pttl(rateLimitKey);
-      const retryAfter = Math.max(Math.ceil(ttl / 1000), 60);
+      const retryAfter = Math.max(Math.ceil(ttl / MILLISECONDS_PER_SECOND), MIN_RETRY_AFTER_SECONDS);
 
       // Increment attempt counter
       if (fullConfig.enableAccountLockout) {
         const attempts = await redis.incr(attemptKey);
 
-        if (attempts === 1) {
-          await redis.expire(attemptKey, 3600); // Reset after 1 hour
+        if (attempts === FIRST_REQUEST_COUNT) {
+          await redis.expire(attemptKey, ATTEMPT_RESET_SECONDS);
         }
 
         // Check if lockout threshold exceeded
         if (attempts >= fullConfig.lockoutThreshold) {
           await redis.setex(
             lockoutKey,
-            Math.ceil(fullConfig.lockoutDurationMs / 1000),
+            Math.ceil(fullConfig.lockoutDurationMs / MILLISECONDS_PER_SECOND),
             'locked'
           );
 
@@ -157,11 +178,11 @@ export async function enhancedRateLimit(
 
           return {
             allowed: false,
-            retryAfter: Math.ceil(fullConfig.lockoutDurationMs / 1000),
+            retryAfter: Math.ceil(fullConfig.lockoutDurationMs / MILLISECONDS_PER_SECOND),
             error: tooManyRequests(
-              `Account locked due to too many failed attempts. Please try again in ${Math.ceil(fullConfig.lockoutDurationMs / 60000)} minutes.`,
+              `Account locked due to too many failed attempts. Please try again in ${Math.ceil(fullConfig.lockoutDurationMs / MILLISECONDS_TO_MINUTES)} minutes.`,
               {
-                retryAfter: Math.ceil(fullConfig.lockoutDurationMs / 1000),
+                retryAfter: Math.ceil(fullConfig.lockoutDurationMs / MILLISECONDS_PER_SECOND),
                 lockoutDuration: fullConfig.lockoutDurationMs,
               }
             ),
@@ -172,7 +193,7 @@ export async function enhancedRateLimit(
         if (fullConfig.enableProgressiveDelay) {
           const delay = calculateProgressiveDelay(attempts);
 
-          if (delay > 0) {
+          if (delay > NO_DELAY) {
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
         }
@@ -227,11 +248,11 @@ export async function chatRateLimit(
     : `ip:${getClientIp(request)}`;
 
   return enhancedRateLimit(request, identifier, 'chat', {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 20, // 20 messages per minute
+    windowMs: CHAT_WINDOW_MS,
+    maxRequests: CHAT_MAX_REQUESTS,
     enableProgressiveDelay: true,
     enableAccountLockout: true,
-    lockoutThreshold: 3, // Lock after 3 violations
-    lockoutDurationMs: 15 * 60 * 1000, // 15 minutes
+    lockoutThreshold: CHAT_LOCKOUT_THRESHOLD,
+    lockoutDurationMs: CHAT_LOCKOUT_DURATION_MS,
   });
 }

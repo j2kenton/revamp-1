@@ -9,6 +9,9 @@ import { getRedisClient } from '@/lib/redis/client';
 import { tooManyRequests } from '@/server/api-response';
 import { logWarn } from '@/utils/logger';
 
+const DEFAULT_TTL_SECONDS = 30;
+const TTL_THRESHOLD = 0;
+
 interface RequestDedupOptions {
   /**
    * TTL for the deduplication lock (in seconds)
@@ -22,7 +25,7 @@ interface RequestDedupOptions {
 }
 
 const DEFAULT_OPTIONS: Required<RequestDedupOptions> = {
-  ttlSeconds: 30,
+  ttlSeconds: DEFAULT_TTL_SECONDS,
   headerNames: ['x-idempotency-key', 'x-request-id'],
 };
 
@@ -70,7 +73,7 @@ export function withRequestDedup(
 
     if (!acquired) {
       const ttl = await redis.ttl(key);
-      const retryAfter = ttl > 0 ? ttl : resolvedOptions.ttlSeconds;
+      const retryAfter = ttl > TTL_THRESHOLD ? ttl : resolvedOptions.ttlSeconds;
 
       logWarn('Duplicate request blocked', {
         dedupId,

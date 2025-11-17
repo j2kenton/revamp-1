@@ -5,6 +5,11 @@
 
 import { logError, logWarn, logInfo } from '@/utils/logger';
 
+const INITIAL_COUNT = 0;
+const DEFAULT_FAILURE_THRESHOLD = 5;
+const DEFAULT_SUCCESS_THRESHOLD = 2;
+const DEFAULT_TIMEOUT_MS = 30000;
+
 enum CircuitState {
   CLOSED = 'CLOSED', // Normal operation
   OPEN = 'OPEN', // Failing, reject requests
@@ -20,8 +25,8 @@ interface CircuitBreakerConfig {
 
 class CircuitBreaker {
   private state: CircuitState = CircuitState.CLOSED;
-  private failureCount = 0;
-  private successCount = 0;
+  private failureCount = INITIAL_COUNT;
+  private successCount = INITIAL_COUNT;
   private nextAttempt = Date.now();
   private config: CircuitBreakerConfig;
 
@@ -75,14 +80,14 @@ class CircuitBreaker {
   }
 
   private onSuccess() {
-    this.failureCount = 0;
+    this.failureCount = INITIAL_COUNT;
 
     if (this.state === CircuitState.HALF_OPEN) {
       this.successCount++;
 
       if (this.successCount >= this.config.successThreshold) {
         this.state = CircuitState.CLOSED;
-        this.successCount = 0;
+        this.successCount = INITIAL_COUNT;
         logInfo('Circuit breaker closed', { name: this.config.name });
       }
     }
@@ -90,7 +95,7 @@ class CircuitBreaker {
 
   private onFailure() {
     this.failureCount++;
-    this.successCount = 0;
+    this.successCount = INITIAL_COUNT;
 
     if (this.failureCount >= this.config.failureThreshold) {
       this.state = CircuitState.OPEN;
@@ -110,8 +115,8 @@ class CircuitBreaker {
 
   reset() {
     this.state = CircuitState.CLOSED;
-    this.failureCount = 0;
-    this.successCount = 0;
+    this.failureCount = INITIAL_COUNT;
+    this.successCount = INITIAL_COUNT;
     this.nextAttempt = Date.now();
     logInfo('Circuit breaker manually reset', { name: this.config.name });
   }
@@ -120,9 +125,9 @@ class CircuitBreaker {
 // Create circuit breaker for Redis operations
 export const redisCircuitBreaker = new CircuitBreaker({
   name: 'Redis',
-  failureThreshold: 5, // Open after 5 failures
-  successThreshold: 2, // Close after 2 successes
-  timeout: 30000, // 30 seconds before retry
+  failureThreshold: DEFAULT_FAILURE_THRESHOLD,
+  successThreshold: DEFAULT_SUCCESS_THRESHOLD,
+  timeout: DEFAULT_TIMEOUT_MS,
 });
 
 /**

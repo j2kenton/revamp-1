@@ -1,6 +1,11 @@
 import type { Config } from 'jest';
 import nextJest from 'next/jest.js';
 
+const COVERAGE_THRESHOLD_STATEMENTS = 70;
+const COVERAGE_THRESHOLD_BRANCHES = 65;
+const COVERAGE_THRESHOLD_FUNCTIONS = 70;
+const COVERAGE_THRESHOLD_LINES = 70;
+
 const createJestConfig = nextJest({
   // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: './',
@@ -43,10 +48,10 @@ const config: Config = {
   // Coverage thresholds based on roadmap
   coverageThreshold: {
     global: {
-      statements: 70,
-      branches: 65,
-      functions: 70,
-      lines: 70,
+      statements: COVERAGE_THRESHOLD_STATEMENTS,
+      branches: COVERAGE_THRESHOLD_BRANCHES,
+      functions: COVERAGE_THRESHOLD_FUNCTIONS,
+      lines: COVERAGE_THRESHOLD_LINES,
     },
   },
 

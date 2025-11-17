@@ -5,6 +5,12 @@
 
 import type { Redis } from 'ioredis';
 
+const MILLISECONDS_PER_SECOND = 1000;
+const ZRANGE_START_INDEX = 0;
+const ZRANGE_LIMIT_ONE = 0;
+const SCORE_INDEX_IN_RESULT = 1;
+const PARSE_INT_RADIX = 10;
+
 export interface RateLimitConfig {
   /**
    * Maximum number of requests allowed in the window
@@ -41,22 +47,22 @@ export async function checkRateLimit(
   const { maxRequests, windowSeconds, keyPrefix = 'ratelimit' } = config;
   const key = `${keyPrefix}:${identifier}`;
   const now = Date.now();
-  const windowStart = now - windowSeconds * 1000;
+  const windowStart = now - windowSeconds * MILLISECONDS_PER_SECOND;
 
   try {
     // Remove old entries outside the current window
-    await redis.zremrangebyscore(key, 0, windowStart);
+    await redis.zremrangebyscore(key, ZRANGE_START_INDEX, windowStart);
 
     // Count requests in the current window
     const requestCount = await redis.zcard(key);
 
     if (requestCount >= maxRequests) {
       // Get the oldest request timestamp to calculate reset time
-      const oldestTimestamps = await redis.zrange(key, 0, 0, 'WITHSCORES');
+      const oldestTimestamps = await redis.zrange(key, ZRANGE_START_INDEX, ZRANGE_LIMIT_ONE, 'WITHSCORES');
       const oldestTimestamp =
-        oldestTimestamps.length > 1 ? parseInt(oldestTimestamps[1], 10) : now;
+        oldestTimestamps.length > SCORE_INDEX_IN_RESULT ? parseInt(oldestTimestamps[SCORE_INDEX_IN_RESULT], PARSE_INT_RADIX) : now;
 
-      const resetAt = new Date(oldestTimestamp + windowSeconds * 1000);
+      const resetAt = new Date(oldestTimestamp + windowSeconds * MILLISECONDS_PER_SECOND);
 
       return {
         allowed: false,
@@ -72,7 +78,7 @@ export async function checkRateLimit(
     // Set expiration on the key
     await redis.expire(key, windowSeconds);
 
-    const resetAt = new Date(now + windowSeconds * 1000);
+    const resetAt = new Date(now + windowSeconds * MILLISECONDS_PER_SECOND);
 
     return {
       allowed: true,
@@ -88,7 +94,7 @@ export async function checkRateLimit(
       allowed: true,
       limit: maxRequests,
       remaining: maxRequests,
-      resetAt: new Date(now + windowSeconds * 1000),
+      resetAt: new Date(now + windowSeconds * MILLISECONDS_PER_SECOND),
     };
   }
 }

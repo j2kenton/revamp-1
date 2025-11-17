@@ -10,6 +10,10 @@ import { validateData, formatZodError } from '@/lib/validation/schemas';
 import { sanitizeChatMessage } from '@/lib/sanitizer';
 import { badRequest } from '@/server/api-response';
 
+const MAX_MESSAGE_LENGTH = 2000;
+const DEFAULT_MAX_REQUEST_SIZE_BYTES = 100 * 1024;
+const PARSE_INT_RADIX = 10;
+
 /**
  * Validate request body against a schema
  */
@@ -65,10 +69,10 @@ export function validateAndSanitizeMessage(content: string):
     };
   }
 
-  if (trimmed.length > 2000) {
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
     return {
       sanitized: null,
-      error: badRequest('Message cannot exceed 2000 characters'),
+      error: badRequest(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`),
     };
   }
 
@@ -83,7 +87,7 @@ export function validateAndSanitizeMessage(content: string):
  */
 export function validateRequestSize(
   request: NextRequest,
-  maxSize: number = 100 * 1024, // 100KB default
+  maxSize: number = DEFAULT_MAX_REQUEST_SIZE_BYTES,
 ): { valid: boolean; error?: Response } {
   const contentLength = request.headers.get('content-length');
 
@@ -91,7 +95,7 @@ export function validateRequestSize(
     return { valid: true };
   }
 
-  const size = parseInt(contentLength, 10);
+  const size = parseInt(contentLength, PARSE_INT_RADIX);
 
   if (size > maxSize) {
     return {

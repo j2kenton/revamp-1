@@ -11,20 +11,24 @@ import { logError } from '@/utils/logger';
 import { sessionKey, userSessionsKey } from '@/lib/redis/keys';
 import { hydrateSession } from '@/lib/session/hydrator';
 
-const SESSION_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
+const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+const RANDOM_BYTES_SIZE = 32;
+const MILLISECONDS_PER_SECOND = 1000;
+const EMPTY_ARRAY_LENGTH = 0;
+const MIN_RESULT_FOR_SUCCESS = 0;
 
 /**
  * Generate a secure session ID
  */
 export function generateSessionId(): string {
-  return randomBytes(32).toString('hex');
+  return randomBytes(RANDOM_BYTES_SIZE).toString('hex');
 }
 
 /**
  * Generate a CSRF token
  */
 export function generateCsrfToken(): string {
-  return randomBytes(32).toString('base64url');
+  return randomBytes(RANDOM_BYTES_SIZE).toString('base64url');
 }
 
 /**
@@ -46,7 +50,7 @@ export async function createSession(
       lastActivityAt: new Date(),
       ...data,
     },
-    expiresAt: new Date(Date.now() + SESSION_TTL * 1000),
+    expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * MILLISECONDS_PER_SECOND),
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -54,7 +58,7 @@ export async function createSession(
   try {
     await redis.setex(
       sessionKey(sessionId),
-      SESSION_TTL,
+      SESSION_TTL_SECONDS,
       JSON.stringify(session),
     );
     await redis.sadd(userSessionsKey(userId), sessionId);
@@ -108,7 +112,7 @@ export async function updateSession(
 
     await redis.setex(
       sessionKey(sessionId),
-      SESSION_TTL,
+      SESSION_TTL_SECONDS,
       JSON.stringify(updatedSession),
     );
 
@@ -130,12 +134,12 @@ export async function refreshSession(sessionId: string): Promise<boolean> {
     if (!session) return false;
 
     session.data.lastActivityAt = new Date();
-    session.expiresAt = new Date(Date.now() + SESSION_TTL * 1000);
+    session.expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * MILLISECONDS_PER_SECOND);
     session.updatedAt = new Date();
 
     await redis.setex(
       sessionKey(sessionId),
-      SESSION_TTL,
+      SESSION_TTL_SECONDS,
       JSON.stringify(session),
     );
     return true;
@@ -157,7 +161,7 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
     if (session?.userId) {
       await redis.srem(userSessionsKey(session.userId), sessionId);
     }
-    return result > 0;
+    return result > MIN_RESULT_FOR_SUCCESS;
   } catch (error) {
     logError('Failed to delete session', error, { sessionId });
     return false;
@@ -219,7 +223,7 @@ export async function getUserSessions(userId: string): Promise<SessionModel[]> {
 
   try {
     const sessionIds: string[] = await redis.smembers(userSessionsKey(userId));
-    if (sessionIds.length === 0) return [];
+    if (sessionIds.length === EMPTY_ARRAY_LENGTH) return [];
 
     const keys = sessionIds.map((id) => sessionKey(id));
     const results = await redis.mget(keys);
@@ -270,8 +274,8 @@ export async function deleteUserSessions(userId: string): Promise<number> {
 
   try {
     const sessionIds: string[] = await redis.smembers(userSessionsKey(userId));
-    if (sessionIds.length === 0) {
-      return 0;
+    if (sessionIds.length === EMPTY_ARRAY_LENGTH) {
+      return EMPTY_ARRAY_LENGTH;
     }
 
     const keys = sessionIds.map((id) => sessionKey(id));
