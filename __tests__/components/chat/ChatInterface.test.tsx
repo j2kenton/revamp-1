@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
+import { legacy_createStore as createStore, combineReducers } from 'redux';
 import { chatReducer } from '@/lib/redux/features/chat/reducer';
 
 // Mock SWR
@@ -16,13 +16,12 @@ jest.mock('swr', () => ({
   })),
 }));
 
-const createMockStore = () => {
-  return configureStore({
-    reducer: {
+const createMockStore = () =>
+  createStore(
+    combineReducers({
       chat: chatReducer,
-    },
-  });
-};
+    }),
+  );
 
 describe('ChatInterface', () => {
   let store: ReturnType<typeof createMockStore>;
