@@ -10,21 +10,22 @@ import { RedisUnavailableError } from '@/lib/redis/errors';
 import { logError } from '@/utils/logger';
 import { sessionKey, userSessionsKey } from '@/lib/redis/keys';
 import { hydrateSession } from '@/lib/session/hydrator';
+import { MILLISECONDS_PER_SECOND, RANDOM_BYTES_SIZE } from '@/lib/constants/common';
 
-const SESSION_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
+const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
  * Generate a secure session ID
  */
 export function generateSessionId(): string {
-  return randomBytes(32).toString('hex');
+  return randomBytes(RANDOM_BYTES_SIZE).toString('hex');
 }
 
 /**
  * Generate a CSRF token
  */
 export function generateCsrfToken(): string {
-  return randomBytes(32).toString('base64url');
+  return randomBytes(RANDOM_BYTES_SIZE).toString('base64url');
 }
 
 /**
@@ -46,7 +47,7 @@ export async function createSession(
       lastActivityAt: new Date(),
       ...data,
     },
-    expiresAt: new Date(Date.now() + SESSION_TTL * 1000),
+    expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * MILLISECONDS_PER_SECOND),
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -54,7 +55,7 @@ export async function createSession(
   try {
     await redis.setex(
       sessionKey(sessionId),
-      SESSION_TTL,
+      SESSION_TTL_SECONDS,
       JSON.stringify(session),
     );
     await redis.sadd(userSessionsKey(userId), sessionId);
@@ -108,7 +109,7 @@ export async function updateSession(
 
     await redis.setex(
       sessionKey(sessionId),
-      SESSION_TTL,
+      SESSION_TTL_SECONDS,
       JSON.stringify(updatedSession),
     );
 
@@ -130,12 +131,12 @@ export async function refreshSession(sessionId: string): Promise<boolean> {
     if (!session) return false;
 
     session.data.lastActivityAt = new Date();
-    session.expiresAt = new Date(Date.now() + SESSION_TTL * 1000);
+    session.expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * MILLISECONDS_PER_SECOND);
     session.updatedAt = new Date();
 
     await redis.setex(
       sessionKey(sessionId),
-      SESSION_TTL,
+      SESSION_TTL_SECONDS,
       JSON.stringify(session),
     );
     return true;

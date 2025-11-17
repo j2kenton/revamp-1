@@ -9,6 +9,8 @@ import { getRedisClient } from '@/lib/redis/client';
 import { tooManyRequests } from '@/server/api-response';
 import { logWarn } from '@/utils/logger';
 
+const DEFAULT_TTL_SECONDS = 30;
+
 interface RequestDedupOptions {
   /**
    * TTL for the deduplication lock (in seconds)
@@ -22,7 +24,7 @@ interface RequestDedupOptions {
 }
 
 const DEFAULT_OPTIONS: Required<RequestDedupOptions> = {
-  ttlSeconds: 30,
+  ttlSeconds: DEFAULT_TTL_SECONDS,
   headerNames: ['x-idempotency-key', 'x-request-id'],
 };
 

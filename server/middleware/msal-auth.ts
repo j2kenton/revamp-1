@@ -9,6 +9,13 @@ import { AuthError } from '@/utils/error-handler';
 import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
 import type { SessionModel } from '@/types/models';
+import { HTTP_STATUS_UNAUTHORIZED } from '@/lib/constants/http-status';
+
+const JWT_PARTS_COUNT = 3;
+const JWT_PAYLOAD_INDEX = 1;
+const AUTH_HEADER_PARTS_COUNT = 2;
+const AUTH_HEADER_BEARER_INDEX = 0;
+const AUTH_HEADER_TOKEN_INDEX = 1;
 
 export interface MsalTokenPayload extends JWTPayload {
   oid: string; // Object ID (user ID)
@@ -86,14 +93,14 @@ export async function validateMsalToken(
     // First, decode without verification to extract the tenant ID from claims
     // This is safe because we'll verify the signature in the next step
     const parts = token.split('.');
-    if (parts.length !== 3) {
+    if (parts.length !== JWT_PARTS_COUNT) {
       logWarn('Invalid JWT format');
       return null;
     }
 
     // Decode payload to get tenant ID
     const payloadDecoded = JSON.parse(
-      Buffer.from(parts[1], 'base64url').toString('utf-8')
+      Buffer.from(parts[JWT_PAYLOAD_INDEX], 'base64url').toString('utf-8')
     );
     
     // Extract tenant ID from token claims
@@ -163,11 +170,11 @@ export function getMsalTokenFromRequest(request: NextRequest): string | null {
 
   // Expected format: "Bearer <token>"
   const parts = authHeader.split(' ');
-  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+  if (parts.length !== AUTH_HEADER_PARTS_COUNT || parts[AUTH_HEADER_BEARER_INDEX] !== 'Bearer') {
     return null;
   }
 
-  return parts[1];
+  return parts[AUTH_HEADER_TOKEN_INDEX];
 }
 
 /**
@@ -258,7 +265,7 @@ export function withMsalAuth(
             },
           }),
           {
-            status: 401,
+            status: HTTP_STATUS_UNAUTHORIZED,
             headers: {
               'Content-Type': 'application/json',
             },

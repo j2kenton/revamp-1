@@ -4,6 +4,13 @@
  */
 
 import type { ApiResponse } from '@/types/api';
+import {
+  HTTP_STATUS_NO_CONTENT,
+  HTTP_STATUS_RESET_CONTENT,
+} from '@/lib/constants/http-status';
+
+const DEFAULT_TIMEOUT_MS = 30000;
+const CONTENT_LENGTH_EMPTY = '0';
 
 export interface FetchOptions extends RequestInit {
   timeout?: number;
@@ -16,7 +23,7 @@ export async function fetchWithTimeout<T>(
   url: string,
   options: FetchOptions = {},
 ): Promise<ApiResponse<T>> {
-  const { timeout = 30000, ...fetchOptions } = options;
+  const { timeout = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -32,9 +39,9 @@ export async function fetchWithTimeout<T>(
     // Handle empty responses (204, 205, or no body)
     const contentLength = response.headers.get('content-length');
     const hasBody =
-      response.status !== 204 &&
-      response.status !== 205 &&
-      contentLength !== '0';
+      response.status !== HTTP_STATUS_NO_CONTENT &&
+      response.status !== HTTP_STATUS_RESET_CONTENT &&
+      contentLength !== CONTENT_LENGTH_EMPTY;
 
     if (!hasBody) {
       // Return success with null data for empty responses

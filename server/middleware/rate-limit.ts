@@ -11,6 +11,12 @@ import { tooManyRequests } from '@/server/api-response';
 import { getSessionFromRequest } from '@/server/middleware/session';
 import { chatRateLimit, enhancedRateLimit } from '@/server/middleware/enhanced-rate-limit';
 import { logWarn } from '@/utils/logger';
+import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
+
+const AUTH_WINDOW_MS = 60 * 1000;
+const AUTH_MAX_REQUESTS = 10;
+const AUTH_LOCKOUT_THRESHOLD = 5;
+const AUTH_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
 /**
  * Get identifier for rate limiting
@@ -59,7 +65,7 @@ export async function withRateLimit(
       });
 
       const retryAfter = Math.ceil(
-        (result.resetAt.getTime() - Date.now()) / 1000,
+        (result.resetAt.getTime() - Date.now()) / MILLISECONDS_PER_SECOND,
       );
 
       return {
@@ -140,10 +146,10 @@ export function withAuthRateLimit(
   return async (request: NextRequest, context?: unknown) => {
     const identifier = getRateLimitIdentifier(request);
     const { allowed, error } = await enhancedRateLimit(request, identifier, 'auth', {
-      windowMs: 60 * 1000,
-      maxRequests: 10,
-      lockoutThreshold: 5,
-      lockoutDurationMs: 15 * 60 * 1000,
+      windowMs: AUTH_WINDOW_MS,
+      maxRequests: AUTH_MAX_REQUESTS,
+      lockoutThreshold: AUTH_LOCKOUT_THRESHOLD,
+      lockoutDurationMs: AUTH_LOCKOUT_DURATION_MS,
       enableProgressiveDelay: true,
       enableAccountLockout: true,
     });

@@ -102,7 +102,7 @@ export function reconcileMessages({
       nextMessages.push(incomingMessages[0]);
     }
 
-    for (let i = 1; i < incomingMessages.length; i += 1) {
+    for (let i = 1; i < incomingMessages.length; i++) {
       nextMessages.push(incomingMessages[i]);
     }
   }

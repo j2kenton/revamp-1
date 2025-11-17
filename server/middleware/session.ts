@@ -13,14 +13,17 @@ import { getMsalTokenFromRequest, validateMsalToken } from '@/server/middleware/
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
+import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
 
 const SESSION_COOKIE_NAME = 'session_id';
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   path: '/',
-  maxAge: 7 * 24 * 60 * 60, // 7 days
+  maxAge: SESSION_MAX_AGE_SECONDS,
 };
 
 export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
@@ -50,7 +53,7 @@ async function getSessionFromJwtFallback(
   }
 
   const now = new Date();
-  const expiresAt = new Date(payload.exp * 1000);
+  const expiresAt = new Date(payload.exp * MILLISECONDS_PER_SECOND);
   const csrfToken = createHash('sha256').update(token).digest('hex');
 
   logWarn('Using JWT payload for session fallback', {

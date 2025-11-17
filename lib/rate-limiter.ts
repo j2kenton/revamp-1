@@ -4,6 +4,7 @@
  */
 
 import type { Redis } from 'ioredis';
+import { MILLISECONDS_PER_SECOND, PARSE_INT_RADIX } from '@/lib/constants/common';
 
 export interface RateLimitConfig {
   /**
@@ -41,7 +42,7 @@ export async function checkRateLimit(
   const { maxRequests, windowSeconds, keyPrefix = 'ratelimit' } = config;
   const key = `${keyPrefix}:${identifier}`;
   const now = Date.now();
-  const windowStart = now - windowSeconds * 1000;
+  const windowStart = now - windowSeconds * MILLISECONDS_PER_SECOND;
 
   try {
     // Remove old entries outside the current window
@@ -54,9 +55,9 @@ export async function checkRateLimit(
       // Get the oldest request timestamp to calculate reset time
       const oldestTimestamps = await redis.zrange(key, 0, 0, 'WITHSCORES');
       const oldestTimestamp =
-        oldestTimestamps.length > 1 ? parseInt(oldestTimestamps[1], 10) : now;
+        oldestTimestamps.length > 1 ? parseInt(oldestTimestamps[1], PARSE_INT_RADIX) : now;
 
-      const resetAt = new Date(oldestTimestamp + windowSeconds * 1000);
+      const resetAt = new Date(oldestTimestamp + windowSeconds * MILLISECONDS_PER_SECOND);
 
       return {
         allowed: false,
@@ -72,7 +73,7 @@ export async function checkRateLimit(
     // Set expiration on the key
     await redis.expire(key, windowSeconds);
 
-    const resetAt = new Date(now + windowSeconds * 1000);
+    const resetAt = new Date(now + windowSeconds * MILLISECONDS_PER_SECOND);
 
     return {
       allowed: true,
@@ -88,7 +89,7 @@ export async function checkRateLimit(
       allowed: true,
       limit: maxRequests,
       remaining: maxRequests,
-      resetAt: new Date(now + windowSeconds * 1000),
+      resetAt: new Date(now + windowSeconds * MILLISECONDS_PER_SECOND),
     };
   }
 }

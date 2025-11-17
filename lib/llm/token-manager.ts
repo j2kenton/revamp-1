@@ -3,6 +3,13 @@
  * Provides helpers for counting tokens, estimating cost, and managing context windows.
  */
 
+const CHARS_PER_TOKEN_ESTIMATE = 4;
+const COST_DECIMAL_PLACES = 6;
+const OUTPUT_TOKEN_RATIO = 0.5;
+const MIN_OUTPUT_TOKENS = 1;
+const LOOP_DECREMENT = 1;
+const FALLBACK_MESSAGE_INDEX_OFFSET = 1;
+
 export const TOKEN_LIMITS = {
   maxMessageTokens: 4000,
   maxContextTokens: 12000,
@@ -25,18 +32,18 @@ export class TokenManager {
     if (!text) return 0;
     const normalized = text.trim();
     if (!normalized) return 0;
-    const charEstimate = Math.ceil(normalized.length / 4);
+    const charEstimate = Math.ceil(normalized.length / CHARS_PER_TOKEN_ESTIMATE);
     const wordEstimate = normalized.split(/\s+/).length;
     return Math.max(charEstimate, wordEstimate);
   }
 
   static estimateCost(inputTokens: number, outputTokens: number) {
-    const inputCost = Number((inputTokens * COST_PER_INPUT_TOKEN).toFixed(6));
-    const outputCost = Number((outputTokens * COST_PER_OUTPUT_TOKEN).toFixed(6));
+    const inputCost = Number((inputTokens * COST_PER_INPUT_TOKEN).toFixed(COST_DECIMAL_PLACES));
+    const outputCost = Number((outputTokens * COST_PER_OUTPUT_TOKEN).toFixed(COST_DECIMAL_PLACES));
     return {
       inputCost,
       outputCost,
-      totalCost: Number((inputCost + outputCost).toFixed(6)),
+      totalCost: Number((inputCost + outputCost).toFixed(COST_DECIMAL_PLACES)),
     };
   }
 
@@ -78,7 +85,7 @@ export class TokenManager {
       };
     }
 
-    const estimatedOutputTokens = Math.max(Math.ceil(messageTokens * 0.5), 1);
+    const estimatedOutputTokens = Math.max(Math.ceil(messageTokens * OUTPUT_TOKEN_RATIO), MIN_OUTPUT_TOKENS);
     const { totalCost } = this.estimateCost(totalTokens, estimatedOutputTokens);
 
     return {
@@ -97,7 +104,7 @@ export class TokenManager {
     const kept: ConversationMessage[] = [];
     let tokenCount = 0;
 
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
+    for (let i = messages.length - LOOP_DECREMENT; i >= 0; i -= LOOP_DECREMENT) {
       const msg = messages[i];
       const msgTokens = this.countTokens(msg.text);
 
@@ -114,8 +121,8 @@ export class TokenManager {
 
     if (kept.length === 0 && messages.length > 0) {
       return {
-        truncatedMessages: [messages[messages.length - 1]],
-        removedCount: messages.length - 1,
+        truncatedMessages: [messages[messages.length - LOOP_DECREMENT]],
+        removedCount: messages.length - FALLBACK_MESSAGE_INDEX_OFFSET,
       };
     }
 

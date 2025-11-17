@@ -5,6 +5,14 @@
 
 import type { ApiError } from '@/types/api';
 import { ErrorCode } from '@/types/api';
+import {
+  HTTP_STATUS_BAD_REQUEST,
+  HTTP_STATUS_UNAUTHORIZED,
+  HTTP_STATUS_FORBIDDEN,
+  HTTP_STATUS_NOT_FOUND,
+  HTTP_STATUS_TOO_MANY_REQUESTS,
+  HTTP_STATUS_INTERNAL_SERVER_ERROR,
+} from '@/lib/constants/http-status';
 
 /**
  * Custom application error class
@@ -17,7 +25,7 @@ export class AppError extends Error {
   constructor(
     message: string,
     code: string = ErrorCode.INTERNAL_ERROR,
-    statusCode: number = 500,
+    statusCode: number = HTTP_STATUS_INTERNAL_SERVER_ERROR,
     details?: Record<string, unknown>,
   ) {
     super(message);
@@ -36,7 +44,7 @@ export class AppError extends Error {
  */
 export class ValidationError extends AppError {
   constructor(message: string, details?: Record<string, unknown>) {
-    super(message, ErrorCode.VALIDATION_ERROR, 400, details);
+    super(message, ErrorCode.VALIDATION_ERROR, HTTP_STATUS_BAD_REQUEST, details);
     this.name = 'ValidationError';
   }
 }
@@ -46,7 +54,7 @@ export class ValidationError extends AppError {
  */
 export class AuthError extends AppError {
   constructor(message: string = 'Unauthorized') {
-    super(message, ErrorCode.UNAUTHORIZED, 401);
+    super(message, ErrorCode.UNAUTHORIZED, HTTP_STATUS_UNAUTHORIZED);
     this.name = 'AuthError';
   }
 }
@@ -56,7 +64,7 @@ export class AuthError extends AppError {
  */
 export class ForbiddenError extends AppError {
   constructor(message: string = 'Forbidden') {
-    super(message, ErrorCode.FORBIDDEN, 403);
+    super(message, ErrorCode.FORBIDDEN, HTTP_STATUS_FORBIDDEN);
     this.name = 'ForbiddenError';
   }
 }
@@ -66,7 +74,7 @@ export class ForbiddenError extends AppError {
  */
 export class NotFoundError extends AppError {
   constructor(resource: string = 'Resource') {
-    super(`${resource} not found`, ErrorCode.NOT_FOUND, 404);
+    super(`${resource} not found`, ErrorCode.NOT_FOUND, HTTP_STATUS_NOT_FOUND);
     this.name = 'NotFoundError';
   }
 }
@@ -79,7 +87,7 @@ export class RateLimitError extends AppError {
     super(
       'Too many requests',
       ErrorCode.RATE_LIMIT_EXCEEDED,
-      429,
+      HTTP_STATUS_TOO_MANY_REQUESTS,
       retryAfter ? { retryAfter } : undefined,
     );
     this.name = 'RateLimitError';
@@ -122,7 +130,7 @@ export function getStatusCode(error: unknown): number {
     return error.statusCode;
   }
 
-  return 500;
+  return HTTP_STATUS_INTERNAL_SERVER_ERROR;
 }
 
 /**
@@ -135,7 +143,7 @@ export function shouldLogError(error: unknown): boolean {
   }
 
   if (error instanceof AppError) {
-    return error.statusCode >= 500;
+    return error.statusCode >= HTTP_STATUS_INTERNAL_SERVER_ERROR;
   }
 
   return true;

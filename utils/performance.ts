@@ -3,6 +3,8 @@
  * Track and measure application performance
  */
 
+const DECIMAL_PLACES = 2;
+
 export interface PerformanceMetric {
   name: string;
   duration: number;
@@ -45,7 +47,7 @@ export class PerformanceTimer {
 
     if (process.env.NODE_ENV !== 'production') {
       console.log(
-        `[Performance] ${metric.name}: ${metric.duration.toFixed(2)}ms`,
+        `[Performance] ${metric.name}: ${metric.duration.toFixed(DECIMAL_PLACES)}ms`,
         metric.metadata || '',
       );
     }

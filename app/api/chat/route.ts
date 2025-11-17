@@ -17,9 +17,14 @@ import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 import { messageToDTO } from '@/types/models';
+import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START } from '@/lib/constants/common';
 
-const IDEMPOTENCY_KEY_TTL = 24 * 60 * 60; // 24 hours
-const LLM_TIMEOUT = 30000; // 30 seconds
+const IDEMPOTENCY_KEY_TTL_SECONDS = 24 * 60 * 60;
+const LLM_TIMEOUT_MS = 30000;
+const TITLE_MAX_LENGTH = 50;
+const CONTEXT_MAX_TOKENS = 8000;
+const LLM_MAX_TOKENS = 1000;
+const LLM_TEMPERATURE = 0.7;
 
 async function processChatRequest(request: NextRequest): Promise<Response> {
   try {
@@ -69,7 +74,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
     if (!chat) {
       // Create new chat with title from first message
-      const title = sanitizedContent.slice(0, 50) + (sanitizedContent.length > 50 ? '...' : '');
+      const title = sanitizedContent.slice(0, TITLE_MAX_LENGTH) + (sanitizedContent.length > TITLE_MAX_LENGTH ? '...' : '');
       chat = await createChat(session.userId, title);
     }
 
@@ -84,7 +89,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
     const { messages: truncatedMessages, truncated, removedCount } = truncateMessagesToFit(
       allMessages,
-      8000
+      CONTEXT_MAX_TOKENS
     );
 
     if (truncated) {
@@ -102,7 +107,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
     const result = await withTransaction(async (ctx) => {
       // Create user message
-      const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const userMessageId = `msg_${Date.now()}_${Math.random().toString(RANDOM_STRING_BASE).slice(RANDOM_STRING_SLICE_START)}`;
       const userMessage: MessageModel = {
         id: userMessageId,
         chatId: chat!.id,
@@ -128,13 +133,13 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
       try {
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('LLM timeout')), LLM_TIMEOUT)
+          setTimeout(() => reject(new Error('LLM timeout')), LLM_TIMEOUT_MS)
         );
 
         const llmPromise = callLLMWithRetry(truncatedMessages, {
           model: 'gpt-4', // Configure as needed
-          maxTokens: 1000,
-          temperature: 0.7,
+          maxTokens: LLM_MAX_TOKENS,
+          temperature: LLM_TEMPERATURE,
         });
 
         aiResponse = await Promise.race([llmPromise, timeoutPromise]) as Awaited<typeof llmPromise>;
@@ -158,7 +163,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
         // Mark user message as failed
         const failedMessage: MessageModel = {
-          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          id: `msg_${Date.now()}_${Math.random().toString(RANDOM_STRING_BASE).slice(RANDOM_STRING_SLICE_START)}`,
           chatId: chat!.id,
           role: 'assistant',
           content: 'I apologize, but I encountered an error processing your request. Please try again.',
@@ -178,7 +183,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
       }
 
       // Create AI response message
-      const aiMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const aiMessageId = `msg_${Date.now()}_${Math.random().toString(RANDOM_STRING_BASE).slice(RANDOM_STRING_SLICE_START)}`;
       const aiMessage: MessageModel = {
         id: aiMessageId,
         chatId: chat!.id,
@@ -212,7 +217,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
           ctx,
           idempotencyKeyStore,
           JSON.stringify(responseData),
-          IDEMPOTENCY_KEY_TTL
+          IDEMPOTENCY_KEY_TTL_SECONDS
         );
       }
 

@@ -6,7 +6,7 @@
 import { getRedisClient } from '@/lib/redis/client';
 import { logWarn } from '@/utils/logger';
 
-const DEFAULT_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const DEFAULT_TTL_SECONDS = 24 * 60 * 60;
 
 function buildRedisKey(userId: string, key: string): string {
   return `idempotency:${userId}:${key}`;

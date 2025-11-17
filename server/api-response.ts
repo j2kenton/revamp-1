@@ -14,6 +14,20 @@ import {
   shouldLogError,
 } from '@/utils/error-handler';
 import { logError } from '@/utils/logger';
+import {
+  HTTP_STATUS_OK,
+  HTTP_STATUS_BAD_REQUEST,
+  HTTP_STATUS_UNAUTHORIZED,
+  HTTP_STATUS_FORBIDDEN,
+  HTTP_STATUS_NOT_FOUND,
+  HTTP_STATUS_TOO_MANY_REQUESTS,
+  HTTP_STATUS_INTERNAL_SERVER_ERROR,
+} from '@/lib/constants/http-status';
+
+const CACHE_MAX_AGE_STATIC_SECONDS = 31536000;
+const CACHE_MAX_AGE_DYNAMIC_SECONDS = 60;
+const CACHE_STALE_WHILE_REVALIDATE_SECONDS = 30;
+const CACHE_MAX_AGE_PRIVATE_SECONDS = 300;
 
 /**
  * Create a successful API response
@@ -21,7 +35,7 @@ import { logError } from '@/utils/logger';
 export function ok<T>(
   data: T,
   meta?: Partial<ApiMeta>,
-  status: number = 200,
+  status: number = HTTP_STATUS_OK,
 ): NextResponse<ApiResponse<T>> {
   const response: ApiResponse<T> = {
     data,
@@ -42,7 +56,7 @@ export function fail(
   code: string,
   message: string,
   details?: Record<string, unknown>,
-  status: number = 400,
+  status: number = HTTP_STATUS_BAD_REQUEST,
 ): NextResponse<ApiResponse<null>> {
   const error: ApiError = {
     code,
@@ -92,7 +106,7 @@ export function badRequest(
   message: string = 'Bad Request',
   details?: Record<string, unknown>,
 ): NextResponse<ApiResponse<null>> {
-  return fail(ErrorCode.BAD_REQUEST, message, details, 400);
+  return fail(ErrorCode.BAD_REQUEST, message, details, HTTP_STATUS_BAD_REQUEST);
 }
 
 /**
@@ -101,7 +115,7 @@ export function badRequest(
 export function unauthorized(
   message: string = 'Unauthorized',
 ): NextResponse<ApiResponse<null>> {
-  return fail(ErrorCode.UNAUTHORIZED, message, undefined, 401);
+  return fail(ErrorCode.UNAUTHORIZED, message, undefined, HTTP_STATUS_UNAUTHORIZED);
 }
 
 /**
@@ -110,7 +124,7 @@ export function unauthorized(
 export function forbidden(
   message: string = 'Forbidden',
 ): NextResponse<ApiResponse<null>> {
-  return fail(ErrorCode.FORBIDDEN, message, undefined, 403);
+  return fail(ErrorCode.FORBIDDEN, message, undefined, HTTP_STATUS_FORBIDDEN);
 }
 
 /**
@@ -119,7 +133,7 @@ export function forbidden(
 export function notFound(
   resource: string = 'Resource',
 ): NextResponse<ApiResponse<null>> {
-  return fail(ErrorCode.NOT_FOUND, `${resource} not found`, undefined, 404);
+  return fail(ErrorCode.NOT_FOUND, `${resource} not found`, undefined, HTTP_STATUS_NOT_FOUND);
 }
 
 /**
@@ -133,7 +147,7 @@ export function tooManyRequests(
     ErrorCode.RATE_LIMIT_EXCEEDED,
     message,
     details,
-    429,
+    HTTP_STATUS_TOO_MANY_REQUESTS,
   );
 
   if (details?.retryAfter && typeof details.retryAfter === 'number') {
@@ -149,7 +163,7 @@ export function tooManyRequests(
 export function serverError(
   message: string = 'Internal Server Error',
 ): NextResponse<ApiResponse<null>> {
-  return fail(ErrorCode.INTERNAL_ERROR, message, undefined, 500);
+  return fail(ErrorCode.INTERNAL_ERROR, message, undefined, HTTP_STATUS_INTERNAL_SERVER_ERROR);
 }
 
 /**
@@ -200,9 +214,9 @@ export function setCacheHeaders(
   type: 'static' | 'dynamic' | 'private' | 'no-cache',
 ): NextResponse {
   const cacheHeaders = {
-    static: 'public, max-age=31536000, immutable',
-    dynamic: 'public, max-age=60, stale-while-revalidate=30',
-    private: 'private, max-age=300',
+    static: `public, max-age=${CACHE_MAX_AGE_STATIC_SECONDS}, immutable`,
+    dynamic: `public, max-age=${CACHE_MAX_AGE_DYNAMIC_SECONDS}, stale-while-revalidate=${CACHE_STALE_WHILE_REVALIDATE_SECONDS}`,
+    private: `private, max-age=${CACHE_MAX_AGE_PRIVATE_SECONDS}`,
     'no-cache': 'no-store, must-revalidate',
   };
 

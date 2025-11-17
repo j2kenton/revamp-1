@@ -5,6 +5,10 @@
 
 import { logError, logWarn, logInfo } from '@/utils/logger';
 
+const DEFAULT_FAILURE_THRESHOLD = 5;
+const DEFAULT_SUCCESS_THRESHOLD = 2;
+const DEFAULT_TIMEOUT_MS = 30000;
+
 enum CircuitState {
   CLOSED = 'CLOSED', // Normal operation
   OPEN = 'OPEN', // Failing, reject requests
@@ -120,9 +124,9 @@ class CircuitBreaker {
 // Create circuit breaker for Redis operations
 export const redisCircuitBreaker = new CircuitBreaker({
   name: 'Redis',
-  failureThreshold: 5, // Open after 5 failures
-  successThreshold: 2, // Close after 2 successes
-  timeout: 30000, // 30 seconds before retry
+  failureThreshold: DEFAULT_FAILURE_THRESHOLD,
+  successThreshold: DEFAULT_SUCCESS_THRESHOLD,
+  timeout: DEFAULT_TIMEOUT_MS,
 });
 
 /**
