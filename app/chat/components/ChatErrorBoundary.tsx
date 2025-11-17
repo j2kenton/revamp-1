@@ -6,7 +6,7 @@
 'use client';
 
 // 1. React/Next
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import Link from 'next/link';
 
 interface ChatErrorBoundaryProps {

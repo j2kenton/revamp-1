@@ -1,7 +1,6 @@
 'use client';
 
 // 1. React/Next
-import React from 'react';
 import Image from 'next/image';
 
 // 2. Third-party

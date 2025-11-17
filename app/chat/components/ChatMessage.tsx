@@ -6,7 +6,6 @@
 'use client';
 
 // 1. React/Next
-import React from 'react';
 
 // 2. Third-party
 import { formatDistanceToNow } from 'date-fns';

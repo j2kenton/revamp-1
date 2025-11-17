@@ -7,7 +7,6 @@
 'use client';
 
 // 1. React/Next
-import React from 'react';
 
 // 3. @/ absolute
 import { FadeInCard } from '@/components/examples/motion/FadeInCard';

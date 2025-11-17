@@ -6,7 +6,7 @@
 'use client';
 
 // 1. React/Next
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 // 2. Third-party
 import clsx from 'clsx';

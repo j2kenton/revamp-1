@@ -1,7 +1,7 @@
 'use client';
 
 // 1. React/Next
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 // 3. @/ absolute

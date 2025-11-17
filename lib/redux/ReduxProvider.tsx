@@ -1,7 +1,7 @@
 'use client';
 
 // 1. React/Next
-import React from 'react';
+import { type ReactNode } from 'react';
 
 // 2. Third-party
 import { Provider } from 'react-redux';
@@ -11,7 +11,7 @@ import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './store';
 
 interface ReduxProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 /**

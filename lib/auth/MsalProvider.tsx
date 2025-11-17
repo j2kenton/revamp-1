@@ -6,7 +6,7 @@
 'use client';
 
 // 1. React/Next
-import React, { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 
 // 2. Third-party
 import { PublicClientApplication, EventType, EventMessage, AuthenticationResult } from '@azure/msal-browser';

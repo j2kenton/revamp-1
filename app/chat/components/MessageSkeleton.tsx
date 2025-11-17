@@ -4,7 +4,6 @@
  */
 
 // 1. React/Next
-import React from 'react';
 
 export function MessageSkeleton() {
   return (

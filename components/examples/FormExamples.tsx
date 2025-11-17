@@ -1,7 +1,7 @@
 'use client';
 
 // 1. React/Next
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // 3. @/ absolute
 import type { LoginFormData } from '@/lib/forms/schemas/auth.schema';

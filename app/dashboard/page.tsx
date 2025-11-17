@@ -1,5 +1,4 @@
 // 1. React/Next
-import React from 'react';
 import { redirect } from 'next/navigation';
 
 // 2. Third-party

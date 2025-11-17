@@ -6,7 +6,7 @@
 'use client';
 
 // 1. React/Next
-import React, { useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 // 2. Third-party
 import {

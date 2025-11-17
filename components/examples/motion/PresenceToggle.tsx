@@ -7,7 +7,7 @@
 'use client';
 
 // 1. React/Next
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // 2. Third-party
 import {

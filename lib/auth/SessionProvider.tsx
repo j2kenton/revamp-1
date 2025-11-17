@@ -1,13 +1,13 @@
 'use client';
 
 // 1. React/Next
-import React from 'react';
+import { type ReactNode } from 'react';
 
 // 2. Third-party
 import { SessionProvider as NextAuthSessionProvider } from 'next-auth/react';
 
 interface SessionProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function SessionProvider({ children }: SessionProviderProps) {

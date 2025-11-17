@@ -8,7 +8,7 @@
 'use client';
 
 // 1. React/Next
-import React, { type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 // 2. Third-party
 import { motion, useReducedMotion, MotionConfig } from 'framer-motion';
