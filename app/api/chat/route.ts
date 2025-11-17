@@ -17,13 +17,12 @@ import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 import { messageToDTO } from '@/types/models';
+import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START } from '@/lib/constants/common';
 
 const IDEMPOTENCY_KEY_TTL_SECONDS = 24 * 60 * 60;
 const LLM_TIMEOUT_MS = 30000;
 const TITLE_MAX_LENGTH = 50;
 const CONTEXT_MAX_TOKENS = 8000;
-const RANDOM_STRING_BASE = 36;
-const RANDOM_STRING_SLICE_START = 2;
 const LLM_MAX_TOKENS = 1000;
 const LLM_TEMPERATURE = 0.7;
 

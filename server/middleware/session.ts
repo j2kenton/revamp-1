@@ -13,11 +13,10 @@ import { getMsalTokenFromRequest, validateMsalToken } from '@/server/middleware/
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
+import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
 
 const SESSION_COOKIE_NAME = 'session_id';
-const MILLISECONDS_PER_SECOND = 1000;
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
-const FORWARDED_IP_SEPARATOR_INDEX = 0;
 
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -32,7 +31,7 @@ export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
 function getClientIp(request: NextRequest): string | undefined {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    return forwarded.split(',')[FORWARDED_IP_SEPARATOR_INDEX]?.trim();
+    return forwarded.split(',')[0]?.trim();
   }
 
   const realIp = request.headers.get('x-real-ip');

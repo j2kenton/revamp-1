@@ -10,12 +10,9 @@ import { RedisUnavailableError } from '@/lib/redis/errors';
 import { logError } from '@/utils/logger';
 import { sessionKey, userSessionsKey } from '@/lib/redis/keys';
 import { hydrateSession } from '@/lib/session/hydrator';
+import { MILLISECONDS_PER_SECOND, RANDOM_BYTES_SIZE } from '@/lib/constants/common';
 
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
-const RANDOM_BYTES_SIZE = 32;
-const MILLISECONDS_PER_SECOND = 1000;
-const EMPTY_ARRAY_LENGTH = 0;
-const MIN_RESULT_FOR_SUCCESS = 0;
 
 /**
  * Generate a secure session ID
@@ -161,7 +158,7 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
     if (session?.userId) {
       await redis.srem(userSessionsKey(session.userId), sessionId);
     }
-    return result > MIN_RESULT_FOR_SUCCESS;
+    return result > 0;
   } catch (error) {
     logError('Failed to delete session', error, { sessionId });
     return false;
@@ -223,7 +220,7 @@ export async function getUserSessions(userId: string): Promise<SessionModel[]> {
 
   try {
     const sessionIds: string[] = await redis.smembers(userSessionsKey(userId));
-    if (sessionIds.length === EMPTY_ARRAY_LENGTH) return [];
+    if (sessionIds.length === 0) return [];
 
     const keys = sessionIds.map((id) => sessionKey(id));
     const results = await redis.mget(keys);
@@ -274,8 +271,8 @@ export async function deleteUserSessions(userId: string): Promise<number> {
 
   try {
     const sessionIds: string[] = await redis.smembers(userSessionsKey(userId));
-    if (sessionIds.length === EMPTY_ARRAY_LENGTH) {
-      return EMPTY_ARRAY_LENGTH;
+    if (sessionIds.length === 0) {
+      return 0;
     }
 
     const keys = sessionIds.map((id) => sessionKey(id));

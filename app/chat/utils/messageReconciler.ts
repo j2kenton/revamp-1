@@ -5,13 +5,6 @@
 
 import type { MessageDTO } from '@/types/models';
 
-const TIMESTAMP_DIFF_THRESHOLD = 0;
-const ARRAY_START_INDEX = 0;
-const FIRST_INCOMING_MESSAGE_INDEX = 0;
-const SECOND_MESSAGE_INDEX = 1;
-const LOOP_INCREMENT = 1;
-const DEFAULT_ORDER_INDEX = 0;
-
 interface ReconcileMessagesParams {
   existingMessages: MessageDTO[];
   incomingMessages: MessageDTO[];
@@ -62,7 +55,7 @@ export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
     if (incomingTimestamp >= existingTimestamp) {
       seen.set(message.id, message);
       const index = normalized.findIndex((item) => item.id === message.id);
-      if (index >= ARRAY_START_INDEX) {
+      if (index >= 0) {
         normalized[index] = message;
       }
     }
@@ -71,18 +64,18 @@ export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
   return normalized.sort((a, b) => {
     const createdDiff =
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    if (createdDiff !== TIMESTAMP_DIFF_THRESHOLD) {
+    if (createdDiff !== 0) {
       return createdDiff;
     }
 
     const updatedDiff =
       new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
-    if (updatedDiff !== TIMESTAMP_DIFF_THRESHOLD) {
+    if (updatedDiff !== 0) {
       return updatedDiff;
     }
 
-    const orderA = orderIndices.get(a.id) ?? DEFAULT_ORDER_INDEX;
-    const orderB = orderIndices.get(b.id) ?? DEFAULT_ORDER_INDEX;
+    const orderA = orderIndices.get(a.id) ?? 0;
+    const orderB = orderIndices.get(b.id) ?? 0;
     return orderA - orderB;
   });
 }
@@ -98,18 +91,18 @@ export function reconcileMessages({
 }: ReconcileMessagesParams): MessageDTO[] {
   const nextMessages = [...existingMessages];
 
-  if (incomingMessages.length > ARRAY_START_INDEX) {
+  if (incomingMessages.length > 0) {
     const replacementIndex = nextMessages.findIndex((message) =>
       matchesClientRequest(message, clientRequestId, optimisticMessageId),
     );
 
-    if (replacementIndex >= ARRAY_START_INDEX) {
-      nextMessages.splice(replacementIndex, SECOND_MESSAGE_INDEX, incomingMessages[FIRST_INCOMING_MESSAGE_INDEX]);
+    if (replacementIndex >= 0) {
+      nextMessages.splice(replacementIndex, 1, incomingMessages[0]);
     } else {
-      nextMessages.push(incomingMessages[FIRST_INCOMING_MESSAGE_INDEX]);
+      nextMessages.push(incomingMessages[0]);
     }
 
-    for (let i = SECOND_MESSAGE_INDEX; i < incomingMessages.length; i += LOOP_INCREMENT) {
+    for (let i = 1; i < incomingMessages.length; i++) {
       nextMessages.push(incomingMessages[i]);
     }
   }

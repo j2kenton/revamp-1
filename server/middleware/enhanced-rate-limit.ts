@@ -8,22 +8,18 @@ import { getRedisClient } from '@/lib/redis/client';
 import { withCircuitBreaker } from '@/lib/redis/circuit-breaker';
 import { tooManyRequests } from '@/server/api-response';
 import { logWarn, logError } from '@/utils/logger';
+import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
+import { BACKOFF_EXPONENT, MIN_RETRY_AFTER_SECONDS } from '@/lib/constants/retry';
 
 const DEFAULT_WINDOW_MS = 60 * 1000;
 const DEFAULT_MAX_REQUESTS = 10;
 const DEFAULT_BLOCK_DURATION_MS = 15 * 60 * 1000;
 const DEFAULT_LOCKOUT_THRESHOLD = 5;
 const DEFAULT_LOCKOUT_DURATION_MS = 60 * 60 * 1000;
-const FORWARDED_IP_SEPARATOR_INDEX = 0;
-const MIN_ATTEMPT_COUNT = 0;
 const NO_DELAY = 0;
-const BACKOFF_BASE = 2;
 const BACKOFF_INITIAL_ATTEMPT = 1;
-const MILLISECONDS_PER_SECOND = 1000;
 const MAX_BACKOFF_MS = 30000;
-const FIRST_REQUEST_COUNT = 1;
 const ATTEMPT_RESET_SECONDS = 3600;
-const MIN_RETRY_AFTER_SECONDS = 60;
 const MILLISECONDS_TO_MINUTES = 60000;
 const CHAT_WINDOW_MS = 60 * 1000;
 const CHAT_MAX_REQUESTS = 20;
@@ -54,10 +50,10 @@ const DEFAULT_CONFIG: RateLimitConfig = {
  * Calculate progressive delay based on attempt count
  */
 function calculateProgressiveDelay(attemptCount: number): number {
-  if (attemptCount <= MIN_ATTEMPT_COUNT) return NO_DELAY;
+  if (attemptCount <= 0) return NO_DELAY;
 
   // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
-  return Math.min(Math.pow(BACKOFF_BASE, attemptCount - BACKOFF_INITIAL_ATTEMPT) * MILLISECONDS_PER_SECOND, MAX_BACKOFF_MS);
+  return Math.min(Math.pow(BACKOFF_EXPONENT, attemptCount - BACKOFF_INITIAL_ATTEMPT) * MILLISECONDS_PER_SECOND, MAX_BACKOFF_MS);
 }
 
 /**
@@ -66,7 +62,7 @@ function calculateProgressiveDelay(attemptCount: number): number {
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    return forwarded.split(',')[FORWARDED_IP_SEPARATOR_INDEX]?.trim() ?? 'unknown';
+    return forwarded.split(',')[0]?.trim() ?? 'unknown';
   }
 
   const realIp = request.headers.get('x-real-ip');
@@ -139,14 +135,14 @@ export async function enhancedRateLimit(
       async () => {
         const count = await redis.incr(rateLimitKey);
 
-        if (count === FIRST_REQUEST_COUNT) {
+        if (count === 1) {
           // First request in window, set expiry
           await redis.pexpire(rateLimitKey, fullConfig.windowMs);
         }
 
         return count;
       },
-      () => MIN_ATTEMPT_COUNT // Fallback: allow request if Redis is down
+      () => 0 // Fallback: allow request if Redis is down
     );
 
     if (currentCount > fullConfig.maxRequests) {
@@ -158,7 +154,7 @@ export async function enhancedRateLimit(
       if (fullConfig.enableAccountLockout) {
         const attempts = await redis.incr(attemptKey);
 
-        if (attempts === FIRST_REQUEST_COUNT) {
+        if (attempts === 1) {
           await redis.expire(attemptKey, ATTEMPT_RESET_SECONDS);
         }
 

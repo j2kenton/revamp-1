@@ -4,10 +4,12 @@
  */
 
 import type { ApiResponse } from '@/types/api';
+import {
+  HTTP_STATUS_NO_CONTENT,
+  HTTP_STATUS_RESET_CONTENT,
+} from '@/lib/constants/http-status';
 
 const DEFAULT_TIMEOUT_MS = 30000;
-const HTTP_STATUS_NO_CONTENT = 204;
-const HTTP_STATUS_RESET_CONTENT = 205;
 const CONTENT_LENGTH_EMPTY = '0';
 
 export interface FetchOptions extends RequestInit {

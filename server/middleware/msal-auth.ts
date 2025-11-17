@@ -9,13 +9,13 @@ import { AuthError } from '@/utils/error-handler';
 import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
 import type { SessionModel } from '@/types/models';
+import { HTTP_STATUS_UNAUTHORIZED } from '@/lib/constants/http-status';
 
 const JWT_PARTS_COUNT = 3;
 const JWT_PAYLOAD_INDEX = 1;
 const AUTH_HEADER_PARTS_COUNT = 2;
 const AUTH_HEADER_BEARER_INDEX = 0;
 const AUTH_HEADER_TOKEN_INDEX = 1;
-const HTTP_STATUS_UNAUTHORIZED = 401;
 
 export interface MsalTokenPayload extends JWTPayload {
   oid: string; // Object ID (user ID)

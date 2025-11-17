@@ -10,7 +10,6 @@ import { tooManyRequests } from '@/server/api-response';
 import { logWarn } from '@/utils/logger';
 
 const DEFAULT_TTL_SECONDS = 30;
-const TTL_THRESHOLD = 0;
 
 interface RequestDedupOptions {
   /**
@@ -73,7 +72,7 @@ export function withRequestDedup(
 
     if (!acquired) {
       const ttl = await redis.ttl(key);
-      const retryAfter = ttl > TTL_THRESHOLD ? ttl : resolvedOptions.ttlSeconds;
+      const retryAfter = ttl > 0 ? ttl : resolvedOptions.ttlSeconds;
 
       logWarn('Duplicate request blocked', {
         dedupId,

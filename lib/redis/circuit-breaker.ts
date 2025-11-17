@@ -5,7 +5,6 @@
 
 import { logError, logWarn, logInfo } from '@/utils/logger';
 
-const INITIAL_COUNT = 0;
 const DEFAULT_FAILURE_THRESHOLD = 5;
 const DEFAULT_SUCCESS_THRESHOLD = 2;
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -25,8 +24,8 @@ interface CircuitBreakerConfig {
 
 class CircuitBreaker {
   private state: CircuitState = CircuitState.CLOSED;
-  private failureCount = INITIAL_COUNT;
-  private successCount = INITIAL_COUNT;
+  private failureCount = 0;
+  private successCount = 0;
   private nextAttempt = Date.now();
   private config: CircuitBreakerConfig;
 
@@ -80,14 +79,14 @@ class CircuitBreaker {
   }
 
   private onSuccess() {
-    this.failureCount = INITIAL_COUNT;
+    this.failureCount = 0;
 
     if (this.state === CircuitState.HALF_OPEN) {
       this.successCount++;
 
       if (this.successCount >= this.config.successThreshold) {
         this.state = CircuitState.CLOSED;
-        this.successCount = INITIAL_COUNT;
+        this.successCount = 0;
         logInfo('Circuit breaker closed', { name: this.config.name });
       }
     }
@@ -95,7 +94,7 @@ class CircuitBreaker {
 
   private onFailure() {
     this.failureCount++;
-    this.successCount = INITIAL_COUNT;
+    this.successCount = 0;
 
     if (this.failureCount >= this.config.failureThreshold) {
       this.state = CircuitState.OPEN;
@@ -115,8 +114,8 @@ class CircuitBreaker {
 
   reset() {
     this.state = CircuitState.CLOSED;
-    this.failureCount = INITIAL_COUNT;
-    this.successCount = INITIAL_COUNT;
+    this.failureCount = 0;
+    this.successCount = 0;
     this.nextAttempt = Date.now();
     logInfo('Circuit breaker manually reset', { name: this.config.name });
   }

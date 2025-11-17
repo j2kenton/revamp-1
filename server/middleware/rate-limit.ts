@@ -11,9 +11,8 @@ import { tooManyRequests } from '@/server/api-response';
 import { getSessionFromRequest } from '@/server/middleware/session';
 import { chatRateLimit, enhancedRateLimit } from '@/server/middleware/enhanced-rate-limit';
 import { logWarn } from '@/utils/logger';
+import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
 
-const FORWARDED_IP_SEPARATOR_INDEX = 0;
-const MILLISECONDS_PER_SECOND = 1000;
 const AUTH_WINDOW_MS = 60 * 1000;
 const AUTH_MAX_REQUESTS = 10;
 const AUTH_LOCKOUT_THRESHOLD = 5;
@@ -30,7 +29,7 @@ function getRateLimitIdentifier(request: NextRequest, userId?: string): string {
 
   // Get IP from headers (works with proxies like Vercel)
   const forwarded = request.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[FORWARDED_IP_SEPARATOR_INDEX].trim() : 'unknown';
+  const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
 
   return `ip:${ip}`;
 }

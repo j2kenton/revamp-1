@@ -9,10 +9,10 @@ import type { z } from 'zod';
 import { validateData, formatZodError } from '@/lib/validation/schemas';
 import { sanitizeChatMessage } from '@/lib/sanitizer';
 import { badRequest } from '@/server/api-response';
+import { PARSE_INT_RADIX } from '@/lib/constants/common';
 
 const MAX_MESSAGE_LENGTH = 2000;
 const DEFAULT_MAX_REQUEST_SIZE_BYTES = 100 * 1024;
-const PARSE_INT_RADIX = 10;
 
 /**
  * Validate request body against a schema

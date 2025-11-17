@@ -4,7 +4,6 @@
  */
 
 const CHARS_PER_TOKEN_ESTIMATE = 4;
-const MIN_TOKEN_COUNT = 0;
 const COST_DECIMAL_PLACES = 6;
 const OUTPUT_TOKEN_RATIO = 0.5;
 const MIN_OUTPUT_TOKENS = 1;
@@ -30,9 +29,9 @@ export class TokenManager {
    * Rough approximation based on length.
    */
   static countTokens(text: string): number {
-    if (!text) return MIN_TOKEN_COUNT;
+    if (!text) return 0;
     const normalized = text.trim();
-    if (!normalized) return MIN_TOKEN_COUNT;
+    if (!normalized) return 0;
     const charEstimate = Math.ceil(normalized.length / CHARS_PER_TOKEN_ESTIMATE);
     const wordEstimate = normalized.split(/\s+/).length;
     return Math.max(charEstimate, wordEstimate);
@@ -59,7 +58,7 @@ export class TokenManager {
         messageTokens,
         contextTokens,
         totalTokens,
-        estimatedCost: MIN_TOKEN_COUNT,
+        estimatedCost: 0,
         error: `Message too long (${messageTokens}/${TOKEN_LIMITS.maxMessageTokens})`,
       };
     }
@@ -70,7 +69,7 @@ export class TokenManager {
         messageTokens,
         contextTokens,
         totalTokens,
-        estimatedCost: MIN_TOKEN_COUNT,
+        estimatedCost: 0,
         error: `Context too long (${contextTokens}/${TOKEN_LIMITS.maxContextTokens})`,
       };
     }
@@ -81,7 +80,7 @@ export class TokenManager {
         messageTokens,
         contextTokens,
         totalTokens,
-        estimatedCost: MIN_TOKEN_COUNT,
+        estimatedCost: 0,
         error: `Total input too long (${totalTokens}/${TOKEN_LIMITS.maxTotalTokens})`,
       };
     }
@@ -103,13 +102,13 @@ export class TokenManager {
     maxTokens: number = TOKEN_LIMITS.maxContextTokens,
   ) {
     const kept: ConversationMessage[] = [];
-    let tokenCount = MIN_TOKEN_COUNT;
+    let tokenCount = 0;
 
-    for (let i = messages.length - LOOP_DECREMENT; i >= MIN_TOKEN_COUNT; i -= LOOP_DECREMENT) {
+    for (let i = messages.length - LOOP_DECREMENT; i >= 0; i -= LOOP_DECREMENT) {
       const msg = messages[i];
       const msgTokens = this.countTokens(msg.text);
 
-      if (tokenCount + msgTokens > maxTokens && kept.length > MIN_TOKEN_COUNT) {
+      if (tokenCount + msgTokens > maxTokens && kept.length > 0) {
         continue;
       }
 
@@ -120,7 +119,7 @@ export class TokenManager {
     kept.reverse();
     const removedCount = messages.length - kept.length;
 
-    if (kept.length === MIN_TOKEN_COUNT && messages.length > MIN_TOKEN_COUNT) {
+    if (kept.length === 0 && messages.length > 0) {
       return {
         truncatedMessages: [messages[messages.length - LOOP_DECREMENT]],
         removedCount: messages.length - FALLBACK_MESSAGE_INDEX_OFFSET,

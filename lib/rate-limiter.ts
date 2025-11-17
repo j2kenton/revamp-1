@@ -4,12 +4,7 @@
  */
 
 import type { Redis } from 'ioredis';
-
-const MILLISECONDS_PER_SECOND = 1000;
-const ZRANGE_START_INDEX = 0;
-const ZRANGE_LIMIT_ONE = 0;
-const SCORE_INDEX_IN_RESULT = 1;
-const PARSE_INT_RADIX = 10;
+import { MILLISECONDS_PER_SECOND, PARSE_INT_RADIX } from '@/lib/constants/common';
 
 export interface RateLimitConfig {
   /**
@@ -51,16 +46,16 @@ export async function checkRateLimit(
 
   try {
     // Remove old entries outside the current window
-    await redis.zremrangebyscore(key, ZRANGE_START_INDEX, windowStart);
+    await redis.zremrangebyscore(key, 0, windowStart);
 
     // Count requests in the current window
     const requestCount = await redis.zcard(key);
 
     if (requestCount >= maxRequests) {
       // Get the oldest request timestamp to calculate reset time
-      const oldestTimestamps = await redis.zrange(key, ZRANGE_START_INDEX, ZRANGE_LIMIT_ONE, 'WITHSCORES');
+      const oldestTimestamps = await redis.zrange(key, 0, 0, 'WITHSCORES');
       const oldestTimestamp =
-        oldestTimestamps.length > SCORE_INDEX_IN_RESULT ? parseInt(oldestTimestamps[SCORE_INDEX_IN_RESULT], PARSE_INT_RADIX) : now;
+        oldestTimestamps.length > 1 ? parseInt(oldestTimestamps[1], PARSE_INT_RADIX) : now;
 
       const resetAt = new Date(oldestTimestamp + windowSeconds * MILLISECONDS_PER_SECOND);
 

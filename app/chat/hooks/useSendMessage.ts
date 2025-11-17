@@ -10,17 +10,11 @@ import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
 import { reconcileMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO } from '@/types/models';
+import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START, PARSE_INT_RADIX } from '@/lib/constants/common';
+import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@/lib/constants/http-status';
+import { MAX_RETRY_COUNT, RETRY_DELAY_BASE_MS, BACKOFF_EXPONENT, MAX_RETRY_DELAY_MS } from '@/lib/constants/retry';
 
-const RANDOM_STRING_BASE = 36;
-const RANDOM_STRING_SLICE_START = 2;
-const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
-const PARSE_INT_RADIX = 10;
-const MIN_RETRY_AFTER = 0;
 const MIN_RETRY_AFTER_FALLBACK = 1;
-const MAX_RETRY_COUNT = 3;
-const RETRY_DELAY_BASE_MS = 1000;
-const BACKOFF_EXPONENT = 2;
-const MAX_RETRY_DELAY_MS = 4000;
 
 export interface SendMessageInput {
   content: string;
@@ -104,7 +98,7 @@ async function sendMessageToAPI(
           ? errorBody.error.details.retryAfter
           : retryHeader
             ? parseInt(retryHeader, PARSE_INT_RADIX)
-            : MIN_RETRY_AFTER;
+            : 0;
 
       throw new RateLimitError(errorMessage, Math.max(retryAfter, MIN_RETRY_AFTER_FALLBACK));
     }

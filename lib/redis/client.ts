@@ -5,15 +5,14 @@
 
 import Redis from 'ioredis';
 import { logError, logInfo } from '@/utils/logger';
+import { PARSE_INT_RADIX } from '@/lib/constants/common';
+import { DEFAULT_REDIS_PORT, IP_VERSION_IPV4 } from '@/lib/constants/network';
 
-const DEFAULT_REDIS_PORT = 6379;
-const PARSE_INT_RADIX = 10;
 const RETRY_DELAY_BASE_MS = 100;
 const RETRY_DELAY_MAX_MS = 5000;
 const MAX_RETRIES_PER_REQUEST = 3;
 const CONNECTION_TIMEOUT_MS = 10000;
 const KEEP_ALIVE_MS = 30000;
-const IP_VERSION_IPV4 = 4;
 const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30000;
 
 let redisClient: Redis | null = null;
