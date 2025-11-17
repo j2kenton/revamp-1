@@ -1,20 +1,14 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { loginAsTestUser } from './utils/testAuth';
 
 test.describe('Chat Functionality E2E', () => {
   test.beforeEach(async ({ page }) => {
-    // Login first
-    await page.goto('/login');
-    await page.fill('[name="email"]', 'test@example.com');
-    await page.fill('[name="password"]', 'testpassword');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('/dashboard');
+    await loginAsTestUser(page);
   });
 
   test('complete chat flow - send message and receive response', async ({
     page,
   }) => {
-    await page.goto('/chat');
-
     // Check accessibility
     await expect(page.getByRole('textbox', { name: /message/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /send/i })).toBeVisible();
@@ -40,7 +34,6 @@ test.describe('Chat Functionality E2E', () => {
     // Simulate offline mode
     await page.route('**/api/chat', (route) => route.abort());
 
-    await page.goto('/chat');
     await page.fill('[aria-label="Chat message input"]', 'Test message');
     await page.keyboard.press('Enter');
 
@@ -52,8 +45,6 @@ test.describe('Chat Functionality E2E', () => {
   });
 
   test('supports keyboard navigation', async ({ page }) => {
-    await page.goto('/chat');
-
     // Tab through interface
     await page.keyboard.press('Tab');
     await expect(
@@ -72,8 +63,6 @@ test.describe('Chat Functionality E2E', () => {
   });
 
   test('prevents XSS attacks', async ({ page }) => {
-    await page.goto('/chat');
-
     const xssPayload = '<img src=x onerror="alert(\'XSS\')">';
     await page.fill('[aria-label="Chat message input"]', xssPayload);
     await page.keyboard.press('Enter');
@@ -109,8 +98,6 @@ test.describe('Chat Functionality E2E', () => {
   });
 
   test('chat history persists across sessions', async ({ page, context }) => {
-    await page.goto('/chat');
-
     // Send first message
     await page.fill('[aria-label="Chat message input"]', 'First message');
     await page.keyboard.press('Enter');
@@ -127,8 +114,6 @@ test.describe('Chat Functionality E2E', () => {
   });
 
   test('respects rate limiting', async ({ page }) => {
-    await page.goto('/chat');
-
     // Send multiple messages quickly
     for (let i = 0; i < 10; i++) {
       await page.fill('[aria-label="Chat message input"]', `Message ${i}`);
@@ -159,8 +144,6 @@ test.describe('Chat Functionality E2E', () => {
   });
 
   test('dark mode support', async ({ page }) => {
-    await page.goto('/chat');
-
     // Toggle dark mode
     await page.click('[aria-label="Toggle theme"]');
 

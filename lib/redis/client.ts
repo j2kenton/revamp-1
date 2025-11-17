@@ -4,6 +4,7 @@
  */
 
 import Redis from 'ioredis';
+import RedisMock from 'ioredis-mock';
 import { logError, logInfo } from '@/utils/logger';
 import { PARSE_INT_RADIX } from '@/lib/constants/common';
 import { DEFAULT_REDIS_PORT, IP_VERSION_IPV4 } from '@/lib/constants/network';
@@ -14,6 +15,7 @@ const MAX_RETRIES_PER_REQUEST = 3;
 const CONNECTION_TIMEOUT_MS = 10000;
 const KEEP_ALIVE_MS = 30000;
 const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30000;
+const useMockRedis = process.env.MOCK_REDIS === 'true';
 
 let redisClient: Redis | null = null;
 
@@ -49,6 +51,12 @@ function getRedisConfig(): {
  * Create and configure Redis client with connection pooling
  */
 export function createRedisClient(): Redis {
+  if (useMockRedis) {
+    const mockClient = new (RedisMock as unknown as typeof Redis)();
+    logInfo('Initialized in-memory Redis mock client');
+    return mockClient as unknown as Redis;
+  }
+
   const config = getRedisConfig();
 
   const client = new Redis({

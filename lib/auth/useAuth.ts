@@ -13,6 +13,7 @@ import {
   SilentRequest,
   AuthenticationResult
 } from '@azure/msal-browser';
+import { BYPASS_ACCESS_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
 import { loginRequest, silentRequest } from './msalConfig';
 
 interface UseAuthReturn {
@@ -31,13 +32,19 @@ interface UseAuthReturn {
 }
 
 const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes in milliseconds
-
 export function useAuth(): UseAuthReturn {
-  const { instance, accounts, inProgress } = useMsal();
+  const msalContext = useMsal();
+  const { instance, accounts, inProgress } = msalContext;
+  const bypassAuth = isBypassAuthEnabled();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [tokenExpiresAt, setTokenExpiresAt] = useState<number | null>(null);
+  const bypassUser = {
+    id: 'bypass-user',
+    email: 'test-user@example.com',
+    name: 'Test User',
+  } as const;
 
   const isAuthenticated = accounts.length > 0;
   const user = isAuthenticated && accounts[0]
@@ -52,6 +59,10 @@ export function useAuth(): UseAuthReturn {
    * Acquire access token silently with automatic retry
    */
   const acquireToken = useCallback(async (retryCount = 0): Promise<string | null> => {
+    if (bypassAuth) {
+      return BYPASS_ACCESS_TOKEN;
+    }
+
     if (inProgress !== InteractionStatus.None) {
       return null;
     }
@@ -106,12 +117,16 @@ export function useAuth(): UseAuthReturn {
         return null;
       }
     }
-  }, [instance, inProgress]);
+  }, [instance, inProgress, bypassAuth]);
 
   /**
    * Login with popup
    */
   const login = useCallback(async () => {
+    if (bypassAuth) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -129,12 +144,16 @@ export function useAuth(): UseAuthReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [instance]);
+  }, [instance, bypassAuth]);
 
   /**
    * Logout
    */
   const logout = useCallback(async () => {
+    if (bypassAuth) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -153,13 +172,13 @@ export function useAuth(): UseAuthReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [instance]);
+  }, [instance, bypassAuth]);
 
   /**
    * Proactive token refresh before expiration
    */
   useEffect(() => {
-    if (!isAuthenticated || !tokenExpiresAt) {
+    if (bypassAuth || !isAuthenticated || !tokenExpiresAt) {
       return;
     }
 
@@ -178,16 +197,34 @@ export function useAuth(): UseAuthReturn {
     checkAndRefresh();
 
     return () => clearInterval(interval);
-  }, [isAuthenticated, tokenExpiresAt, acquireToken]);
+  }, [bypassAuth, isAuthenticated, tokenExpiresAt, acquireToken]);
 
   /**
    * Acquire initial token on mount
    */
   useEffect(() => {
+    if (bypassAuth) {
+      return;
+    }
+
     if (isAuthenticated && !accessToken && inProgress === InteractionStatus.None) {
       acquireToken();
     }
-  }, [isAuthenticated, accessToken, inProgress, acquireToken]);
+  }, [bypassAuth, isAuthenticated, accessToken, inProgress, acquireToken]);
+
+  if (bypassAuth) {
+    const noop = async () => {};
+    return {
+      isAuthenticated: true,
+      user: bypassUser,
+      accessToken: BYPASS_ACCESS_TOKEN,
+      login: noop,
+      logout: noop,
+      acquireToken: async () => BYPASS_ACCESS_TOKEN,
+      isLoading: false,
+      error: null,
+    };
+  }
 
   return {
     isAuthenticated,

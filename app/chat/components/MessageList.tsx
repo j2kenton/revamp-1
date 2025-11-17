@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { MessageDTO } from '@/types/models';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
@@ -62,6 +62,17 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
     estimateSize: () => 120, // Estimated height of each message
     overscan: 5, // Number of items to render outside visible area
   });
+
+  // Provide a stable ref callback to avoid invoking undefined TanStack helpers
+  const measureElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      const measure = rowVirtualizer.measureElement;
+      if (typeof measure === 'function') {
+        measure(node);
+      }
+    },
+    [rowVirtualizer],
+  );
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -175,7 +186,7 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
-                ref={rowVirtualizer.measureElement}
+                ref={measureElementRef}
                 style={{
                   position: 'absolute',
                   top: 0,

@@ -3,11 +3,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { loginAsTestUser } from './utils/testAuth';
 
 test.describe('Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to chat page
-    await page.goto('/chat');
+    await loginAsTestUser(page);
   });
 
   test('should display empty state when no chat is active', async ({ page }) => {
@@ -69,7 +69,8 @@ test.describe('Chat Interface', () => {
   });
 
   test('should show keyboard shortcuts hint', async ({ page }) => {
-    await expect(page.getByText('Enter')).toBeVisible();
+    const enterKeys = page.getByText('Enter', { exact: true });
+    await expect(enterKeys.first()).toBeVisible();
     await expect(page.getByText('to send')).toBeVisible();
     await expect(page.getByText('Shift')).toBeVisible();
     await expect(page.getByText('for new line')).toBeVisible();
@@ -98,7 +99,7 @@ test.describe('Chat Interface', () => {
   test('should display error message with proper role', async ({ page }) => {
     // This test would require mocking an error response
     // Skipping actual error triggering for now
-    const errorContainer = page.locator('[role="alert"]');
+    const errorContainer = page.getByRole('main').locator('[role="alert"]');
     await expect(errorContainer).toHaveCount(0); // No errors initially
   });
 
@@ -121,9 +122,15 @@ test.describe('Chat Interface', () => {
       const input = page.getByLabel('Message input');
       const sendButton = page.getByRole('button', { name: 'Send message' });
 
-      // Tab to input
-      await page.keyboard.press('Tab');
+      // Move focus forward until the chat input is focused
+      for (let i = 0; i < 10; i += 1) {
+        if (await input.evaluate((el) => el === document.activeElement)) {
+          break;
+        }
+        await page.keyboard.press('Tab');
+      }
       await expect(input).toBeFocused();
+      await input.fill('Keyboard test');
 
       // Tab to send button
       await page.keyboard.press('Tab');

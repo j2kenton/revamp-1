@@ -108,16 +108,16 @@ export const RATE_LIMITS = {
   CHAT_MESSAGE: {
     maxRequests: 10,
     windowSeconds: 60,
-    keyPrefix: 'ratelimit:chat',
+    keyPrefix: 'ratelimit:zset:chat',
   },
   API_DEFAULT: {
     maxRequests: 100,
     windowSeconds: 60,
-    keyPrefix: 'ratelimit:api',
+    keyPrefix: 'ratelimit:zset:api',
   },
   AUTH: {
     maxRequests: 5,
     windowSeconds: 300,
-    keyPrefix: 'ratelimit:auth',
+    keyPrefix: 'ratelimit:zset:auth',
   },
 } as const;

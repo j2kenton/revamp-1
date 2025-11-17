@@ -6,10 +6,11 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
-import { useQueryClient } from '@tanstack/react-query';
 import type { MessageDTO } from '@/types/models';
+import { BYPASS_ACCESS_TOKEN, BYPASS_CSRF_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
 
 interface StreamingMessage {
   id: string;
@@ -35,7 +36,9 @@ interface UseStreamingResponseOptions {
 export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const { chatId, onMessageCreated, onComplete, onError, onFallback } = options;
   const { accessToken } = useAuth();
+  const bypassAuth = isBypassAuthEnabled();
   const queryClient = useQueryClient();
+  const isAutomatedTestMode = process.env.NEXT_PUBLIC_TEST_AUTH_MODE === 'true';
 
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -69,9 +72,104 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   /**
    * Send message and start streaming response
    */
+  const simulateTestStream = useCallback(
+    async (content: string, parentMessageId?: string) => {
+      setError(null);
+      setIsStreaming(true);
+      setStreamingMessage(null);
+      setRateLimitSeconds(null);
+      setContextTruncated(false);
+      setMessagesRemoved(0);
+      contextTruncatedRef.current = false;
+      messagesRemovedRef.current = 0;
+
+      const resolvedChatId =
+        activeChatIdRef.current || chatId || `test-chat-${Date.now()}`;
+      activeChatIdRef.current = resolvedChatId;
+
+      const userMessageId = `test-user-${Date.now()}`;
+      const assistantMessageId = `test-assistant-${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      const userMessage: MessageDTO = {
+        id: userMessageId,
+        chatId: resolvedChatId,
+        role: 'user',
+        content,
+        status: 'sent',
+        parentMessageId: parentMessageId ?? null,
+        metadata: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      onMessageCreated?.(userMessageId, resolvedChatId, false, 0);
+      queryClient.setQueryData(
+        ['chat', resolvedChatId],
+        (old: { messages?: MessageDTO[] } | undefined) => ({
+          ...old,
+          messages: [...(old?.messages || []), userMessage],
+        }),
+      );
+
+      const simulatedChunks = [
+        `Thanks for your message: "${content}".`,
+        'This automated test response simulates streaming output.',
+      ];
+
+      let accumulated = '';
+      for (const chunk of simulatedChunks) {
+        accumulated = accumulated ? `${accumulated} ${chunk}` : chunk;
+        setStreamingMessage({
+          id: assistantMessageId,
+          content: accumulated,
+          isComplete: false,
+        });
+        // Small delay to mimic streaming without slowing tests noticeably
+        await new Promise((resolve) => setTimeout(resolve, 15));
+      }
+
+      const assistantMessage: MessageDTO = {
+        id: assistantMessageId,
+        chatId: resolvedChatId,
+        role: 'assistant',
+        content: accumulated,
+        status: 'sent',
+        parentMessageId: userMessageId,
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setStreamingMessage({
+        id: assistantMessageId,
+        content: assistantMessage.content,
+        isComplete: true,
+      });
+
+      queryClient.setQueryData(
+        ['chat', resolvedChatId],
+        (old: { messages?: MessageDTO[] } | undefined) => ({
+          ...old,
+          messages: [...(old?.messages || []), assistantMessage],
+        }),
+      );
+
+      onComplete?.(assistantMessage);
+      setIsStreaming(false);
+    },
+    [chatId, onComplete, onMessageCreated, queryClient],
+  );
+
   const sendStreamingMessage = useCallback(
     async (content: string, parentMessageId?: string) => {
-      if (!accessToken) {
+      if (isAutomatedTestMode) {
+        await simulateTestStream(content, parentMessageId);
+        return;
+      }
+
+      const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
+      if (!token) {
         const authError = new Error('Not authenticated');
         setError(authError);
         onError?.(authError);
@@ -95,14 +193,16 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           parentMessageId,
         };
 
-        const csrfToken = await deriveCsrfToken(accessToken);
+        const csrfToken = bypassAuth
+          ? BYPASS_CSRF_TOKEN
+          : await deriveCsrfToken(token);
 
         // Initiate streaming request
         const response = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${token}`,
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
           },
           body: JSON.stringify(payload),
@@ -382,7 +482,18 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         setIsStreaming(false);
       }
     },
-    [accessToken, chatId, onMessageCreated, onComplete, onError, onFallback, queryClient]
+    [
+      accessToken,
+      bypassAuth,
+      chatId,
+      isAutomatedTestMode,
+      onMessageCreated,
+      onComplete,
+      onError,
+      onFallback,
+      queryClient,
+      simulateTestStream,
+    ]
   );
 
   /**

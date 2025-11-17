@@ -36,6 +36,9 @@ if (!process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID) {
 if (!process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID) {
   process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID = 'test-tenant';
 }
+if (!process.env.MOCK_REDIS) {
+  process.env.MOCK_REDIS = 'true';
+}
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({

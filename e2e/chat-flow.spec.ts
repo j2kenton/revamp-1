@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { loginAsTestUser } from './utils/testAuth';
 
 test.describe('Chat E2E', () => {
   test('send and receive flow', async ({ page }) => {
-    await page.goto('/chat');
+    await loginAsTestUser(page);
     await expect(page).toHaveURL(/\/chat/);
 
     // Adjust selectors to your UI

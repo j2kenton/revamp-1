@@ -13,6 +13,7 @@ import type { MessageDTO } from '@/types/models';
 import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START, PARSE_INT_RADIX } from '@/lib/constants/common';
 import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@/lib/constants/http-status';
 import { MAX_RETRY_COUNT, RETRY_DELAY_BASE_MS, BACKOFF_EXPONENT, MAX_RETRY_DELAY_MS } from '@/lib/constants/retry';
+import { BYPASS_ACCESS_TOKEN, BYPASS_CSRF_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
 
 const MIN_RETRY_AFTER_FALLBACK = 1;
 
@@ -63,11 +64,20 @@ async function sendMessageToAPI(
   input: InternalSendMessageInput,
   accessToken: string | null,
 ): Promise<SendMessageResponse> {
-  const csrfToken = await deriveCsrfToken(accessToken);
+  const bypassAuth = isBypassAuthEnabled();
+  const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
+
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const csrfToken = bypassAuth
+    ? BYPASS_CSRF_TOKEN
+    : await deriveCsrfToken(token);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: accessToken ? `Bearer ${accessToken}` : '',
+    Authorization: `Bearer ${token}`,
     'X-Idempotency-Key': input.idempotencyKey,
   };
 

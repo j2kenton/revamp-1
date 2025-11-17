@@ -44,7 +44,7 @@ describe('POST /api/chat', () => {
 
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: 'Hello' }),
+        body: JSON.stringify({ content: 'Hello' }),
       });
 
       const response = await POST(request);
@@ -59,7 +59,7 @@ describe('POST /api/chat', () => {
     it('returns 400 for empty message', async () => {
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: '' }),
+        body: JSON.stringify({ content: '' }),
       });
 
       const response = await POST(request);
@@ -72,7 +72,7 @@ describe('POST /api/chat', () => {
     it('returns 400 for whitespace-only message', async () => {
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: '   \n\t  ' }),
+        body: JSON.stringify({ content: '   \n\t  ' }),
       });
 
       const response = await POST(request);
@@ -83,7 +83,7 @@ describe('POST /api/chat', () => {
       const longMessage = 'a'.repeat(10001);
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: longMessage }),
+        body: JSON.stringify({ content: longMessage }),
       });
 
       const response = await POST(request);
@@ -97,7 +97,7 @@ describe('POST /api/chat', () => {
       const xssMessage = '<script>alert("xss")</script>Hello';
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: xssMessage }),
+        body: JSON.stringify({ content: xssMessage }),
       });
 
       const response = await POST(request);
@@ -123,7 +123,7 @@ describe('POST /api/chat', () => {
 
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: 'Hello AI' }),
+        body: JSON.stringify({ content: 'Hello AI' }),
       });
 
       const response = await POST(request);
@@ -147,7 +147,7 @@ describe('POST /api/chat', () => {
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
         body: JSON.stringify({
-          message: 'Follow-up message',
+          content: 'Follow-up message',
           chatId: 'existing-chat',
         }),
       });
@@ -164,7 +164,7 @@ describe('POST /api/chat', () => {
 
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: 'Hello' }),
+        body: JSON.stringify({ content: 'Hello' }),
       });
 
       const response = await POST(request);
@@ -182,7 +182,7 @@ describe('POST /api/chat', () => {
 
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: 'Hello' }),
+        body: JSON.stringify({ content: 'Hello' }),
       });
 
       const response = await POST(request);
@@ -196,7 +196,7 @@ describe('POST /api/chat', () => {
       for (let i = 0; i < 10; i++) {
         const request = new NextRequest('http://localhost:3000/api/chat', {
           method: 'POST',
-          body: JSON.stringify({ message: `Message ${i}` }),
+        body: JSON.stringify({ content: `Message ${i}` }),
           headers: { 'X-Forwarded-For': '192.168.1.1' },
         });
         await POST(request);
@@ -204,7 +204,7 @@ describe('POST /api/chat', () => {
 
       const request = new NextRequest('http://localhost:3000/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message: 'Too many requests' }),
+        body: JSON.stringify({ content: 'Too many requests' }),
         headers: { 'X-Forwarded-For': '192.168.1.1' },
       });
 

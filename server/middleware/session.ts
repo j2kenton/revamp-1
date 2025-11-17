@@ -14,6 +14,7 @@ import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
 import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
+import { shouldBypassAuth } from '@/server/utils/test-auth';
 
 const SESSION_COOKIE_NAME = 'session_id';
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
@@ -27,6 +28,8 @@ const SESSION_COOKIE_OPTIONS = {
 };
 
 export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
+const BYPASS_SESSION_ID = `${JWT_FALLBACK_PREFIX}:bypass-user`;
+const BYPASS_CSRF_TOKEN = 'bypass-csrf-token';
 
 function getClientIp(request: NextRequest): string | undefined {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -36,6 +39,26 @@ function getClientIp(request: NextRequest): string | undefined {
 
   const realIp = request.headers.get('x-real-ip');
   return realIp ?? undefined;
+}
+
+function createBypassSession(request: NextRequest): SessionModel {
+  const now = new Date();
+  return {
+    id: BYPASS_SESSION_ID,
+    userId: 'bypass-user',
+    csrfToken: BYPASS_CSRF_TOKEN,
+    data: {
+      userAgent: request.headers.get('user-agent') ?? undefined,
+      ipAddress: getClientIp(request),
+      email: 'test-user@example.com',
+      name: 'Test User',
+      lastActivityAt: now,
+      source: 'bypass-auth',
+    },
+    expiresAt: new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * MILLISECONDS_PER_SECOND),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 async function getSessionFromJwtFallback(
@@ -85,6 +108,10 @@ async function getSessionFromJwtFallback(
 export async function getSessionFromRequest(
   request: NextRequest,
 ): Promise<SessionModel | null> {
+  if (shouldBypassAuth(request)) {
+    return createBypassSession(request);
+  }
+
   const sessionId = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   if (!sessionId) {

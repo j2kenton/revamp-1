@@ -24,9 +24,10 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: 'pnpm dev',
+    command:
+      'npx cross-env MOCK_REDIS=true TEST_AUTH_MODE=true NEXT_PUBLIC_TEST_AUTH_MODE=true NEXT_PUBLIC_AZURE_AD_CLIENT_ID=playwright-test-client pnpm dev',
     url: `http://localhost:${DEFAULT_PORT}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: WEB_SERVER_TIMEOUT_MS,
   },
 });

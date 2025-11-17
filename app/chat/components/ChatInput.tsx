@@ -165,7 +165,6 @@ export function ChatInput({ onSendMessage, isStreaming, error, rateLimitSeconds 
             }
           )}
           rows={1}
-          maxLength={MAX_LENGTH}
           aria-label="Message input"
           aria-invalid={isOverLimit}
           aria-describedby="char-counter"

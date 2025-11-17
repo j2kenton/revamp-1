@@ -16,6 +16,7 @@ import {
 import { getMsalTokenFromRequest } from '@/server/middleware/msal-auth';
 import { unauthorized } from '@/server/api-response';
 import { logWarn } from '@/utils/logger';
+import { isTestAuthRequest } from '@/server/utils/test-auth';
 
 /**
  * CSRF protection middleware
@@ -24,6 +25,10 @@ import { logWarn } from '@/utils/logger';
 export async function withCsrfProtection(
   request: NextRequest,
 ): Promise<{ valid: boolean; error?: Response }> {
+  if (process.env.BYPASS_AUTH === 'true' || isTestAuthRequest(request)) {
+    return { valid: true };
+  }
+
   // Skip CSRF check for safe methods
   if (!requiresCsrfProtection(request.method)) {
     return { valid: true };

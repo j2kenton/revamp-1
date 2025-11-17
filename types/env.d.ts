@@ -24,6 +24,11 @@ declare namespace NodeJS {
     REDIS_PORT?: string;
     REDIS_PASSWORD?: string;
     REDIS_TLS?: string;
+    MOCK_REDIS?: string;
+    BYPASS_AUTH?: string;
+    NEXT_PUBLIC_BYPASS_AUTH?: string;
+    TEST_AUTH_MODE?: string;
+    NEXT_PUBLIC_TEST_AUTH_MODE?: string;
 
     // Node Environment
     NODE_ENV: 'development' | 'production' | 'test';
