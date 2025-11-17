@@ -8,7 +8,6 @@
 'use client';
 
 import { useState } from 'react';
-
 import { useSearch } from '@/lib/swr/hooks';
 import type { Post } from '@/lib/swr/types';
 

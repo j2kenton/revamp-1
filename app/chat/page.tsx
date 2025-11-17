@@ -6,11 +6,9 @@
 'use client';
 
 import { useState } from 'react';
-
 import type { MessageDTO } from '@/types/models';
 import { useAuth } from '@/lib/auth/useAuth';
 import { ThemeToggle } from '@/components/ThemeToggle';
-
 import { MessageList } from './components/MessageList';
 import { ChatInput } from './components/ChatInput';
 import { ConnectionStatus } from './components/ConnectionStatus';

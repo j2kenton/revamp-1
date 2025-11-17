@@ -1,14 +1,12 @@
 import { type ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-
 import { ReduxProvider } from '@/lib/redux/ReduxProvider';
 import { SessionProvider } from '@/lib/auth/SessionProvider';
 import { MsalProvider } from '@/lib/auth/MsalProvider';
 import { TanStackQueryProvider } from '@/lib/tanstack-query/provider';
 import { WebVitalsReporter } from '@/components/WebVitalsReporter';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
-
 import './globals.css';
 
 const geistSans = Geist({

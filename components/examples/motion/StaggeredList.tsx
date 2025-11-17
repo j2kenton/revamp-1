@@ -8,9 +8,7 @@
 'use client';
 
 import { type Key, type ReactNode } from 'react';
-
 import { motion, useReducedMotion, MotionConfig } from 'framer-motion';
-
 import { staggerContainer, fadeInUp } from '@/lib/motion/variants';
 
 export interface StaggeredListProps<T> {

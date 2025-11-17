@@ -1,9 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-
 import { useSession } from 'next-auth/react';
-
 import { AuthStatus } from '@/components/AuthStatus';
 
 export default function Home() {

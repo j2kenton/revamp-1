@@ -6,7 +6,6 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-
 import clsx from 'clsx';
 
 const MAX_LENGTH = 4000;

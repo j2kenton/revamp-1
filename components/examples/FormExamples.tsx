@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-
 import type { LoginFormData } from '@/lib/forms/schemas/auth.schema';
 import type { RegisterFormData } from '@/lib/forms/schemas/auth.schema';
 import type { ContactFormData } from '@/lib/forms/schemas/user.schema';
 import type { UserProfileFormData } from '@/lib/forms/schemas/user.schema';
-
 import { LoginForm } from './forms/LoginForm';
 import { RegisterForm } from './forms/RegisterForm';
 import { ContactForm } from './forms/ContactForm';

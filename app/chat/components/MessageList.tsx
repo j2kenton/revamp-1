@@ -6,12 +6,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-
 import { useVirtualizer } from '@tanstack/react-virtual';
-
 import type { MessageDTO } from '@/types/models';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
-
 import { ChatMessage } from './ChatMessage';
 import { MessageSkeleton } from './MessageSkeleton';
 

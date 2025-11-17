@@ -7,14 +7,12 @@
 'use client';
 
 import { useState } from 'react';
-
 import {
   AnimatePresence,
   motion,
   MotionConfig,
   useReducedMotion,
 } from 'framer-motion';
-
 import { scaleIn } from '@/lib/motion/variants';
 
 export function PresenceToggle() {

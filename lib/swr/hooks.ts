@@ -6,7 +6,6 @@
 
 import useSWR, { type SWRConfiguration, type SWRResponse } from 'swr';
 import useSWRMutation, { type SWRMutationResponse } from 'swr/mutation';
-
 import { fetcher, fetcherWithAuth, fetcherPost } from './fetcher';
 import type { User, Post, Todo, PaginatedResponse } from './types';
 

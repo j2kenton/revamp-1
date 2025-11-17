@@ -6,7 +6,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
 import clsx from 'clsx';
 
 type ConnectionState = 'connected' | 'connecting' | 'disconnected';

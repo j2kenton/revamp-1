@@ -8,7 +8,6 @@ import {
 } from 'redux';
 import { persistStore, persistReducer, Persistor } from 'redux-persist';
 import storage from 'redux-persist/lib/storage'; // defaults to localStorage for web
-
 import { rootReducer, RootState } from './rootReducer';
 
 // Extend Window interface for Redux DevTools

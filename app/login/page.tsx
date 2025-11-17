@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-
 import { useAuth } from '@/lib/auth/useAuth';
 
 export default function LoginPage() {

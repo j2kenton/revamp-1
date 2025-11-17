@@ -8,7 +8,6 @@
 'use client';
 
 import Image from 'next/image';
-
 import { useUser } from '@/lib/swr/hooks';
 
 interface UserProfileProps {
