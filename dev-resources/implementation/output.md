@@ -290,3 +290,188 @@ This section documents the resolution of findings from the high-level architectu
 ### Testing Gaps: Resolved
 
 * ✅ **Test Coverage for Critical Paths**: Unit and E2E tests have been added for core logic, including CSRF, message reconciliation, sanitization, and the chat UI.
+
+## Test Coverage Implementation Plan - Progress Update
+
+## Current Status: 40.84% Coverage (Target: 70%)
+
+### ✅ Completed (High Coverage > 80%)
+
+* Chat components: 94.29%
+
+* Message reconciler: 98.19%
+* Web vitals route: 97.99%
+* Rate limiter: 98.37%
+* Sanitizer: 100%
+* CSRF middleware: 81.65%
+* Idempotency: 97.5%
+* Session hydrator: 96.77%
+* Redis chat operations: 62.91%
+* Redis session operations: 47.93%
+* LLM service: 67.78%
+
+### 🔴 Critical Gaps - Priority 1 (0-40% coverage)
+
+#### 1. Core Application Pages (0% coverage)
+
+**Impact: High** - User-facing pages need UI/UX validation
+
+Files to test:
+
+* `app/layout.tsx` - Root layout (0%)
+* `app/error.tsx` - Error boundary (0%)
+* `app/not-found.tsx` - 404 page (0%)
+* `app/loading.tsx` - Loading state (0%)
+* `app/dashboard/page.tsx` - Dashboard (0%)
+* `app/login/page.tsx` - Login page (0%)
+
+#### 2. Redux State Management (0% coverage)
+
+**Impact: High** - Core state management layer
+
+Files to test:
+
+* `lib/redux/store.ts` - Store configuration (0%)
+* `lib/redux/features/auth/reducer.ts` - Auth state (0%)
+* `lib/redux/features/chat/reducer.ts` - Chat state (33.33%)
+* `lib/redux/features/counter/reducer.ts` - Example reducer (0%)
+
+#### 3. API Routes (0% coverage)
+
+**Impact: Medium** - Backend functionality
+
+Files to test:
+
+* `app/api/todos/route.ts` (0%)
+* `app/api/todos/[todoId]/route.ts` (0%)
+* `app/api/users/[userId]/route.ts` (0%)
+* `app/api/auth/[...nextauth]/route.ts` (0%)
+
+#### 4. Component Library (0% coverage)
+
+**Impact: Medium** - Reusable UI components
+
+Files to test:
+
+* `components/ui/button.tsx` (0%)
+* `components/ui/card.tsx` (0%)
+* `components/ui/input.tsx` (0%)
+* `components/ThemeToggle.tsx` (0%)
+* `components/AuthStatus.tsx` (0%)
+
+### 🟡 Moderate Gaps - Priority 2 (40-70% coverage)
+
+#### 1. Auth System (41.26% coverage)
+
+* `lib/auth/useAuth.ts` - 75.31% (improve edge cases)
+
+* `lib/auth/msalConfig.ts` - 70% (improve config validation)
+* `lib/auth/csrf.ts` - 0% (critical gap)
+* `lib/auth/bypass.ts` - 0% (test support)
+* `lib/auth/tokenStorage.ts` - 0% (storage layer)
+
+#### 2. Redis Layer (48.99% coverage)
+
+* `lib/redis/client.ts` - 33.98% (connection management)
+
+* `lib/redis/transactions.ts` - 48.46% (transaction logic)
+* `lib/redis/circuit-breaker.ts` - 41.42% (resilience)
+* `lib/redis/session.ts` - 47.93% (session operations)
+
+#### 3. Middleware (36.12% coverage)
+
+* `server/middleware/msal-auth.ts` - 52.87% (improve auth scenarios)
+
+* `server/middleware/rate-limit.ts` - 66.87% (improve edge cases)
+* `server/middleware/enhanced-rate-limit.ts` - 25.59% (critical gap)
+* `server/middleware/session.ts` - 0% (session management)
+* `server/middleware/validation.ts` - 0% (input validation)
+* `server/middleware/error-handler.ts` - 0% (error handling)
+
+### 🟢 Good Coverage - Priority 3 (>70% - optimization)
+
+Files with good coverage that could use edge case improvements:
+
+* Chat API routes: 74.21% → add error scenarios
+* Stream route: 73.28% → add connection failure tests
+* Health route: 84.66% → add degraded state tests
+
+## Next Action Items (To reach 70% coverage)
+
+### Week 1: Core Pages & Redux (Est. +15% coverage)
+
+```bash
+# Create these test files:
+__tests__/app/layout.test.tsx
+__tests__/app/error.test.tsx
+__tests__/app/not-found.test.tsx
+__tests__/app/loading.test.tsx
+__tests__/app/dashboard/page.test.tsx
+__tests__/app/login/page.test.tsx
+__tests__/lib/redux/store.test.ts
+__tests__/lib/redux/features/auth/reducer.test.ts
+__tests__/lib/redux/features/chat/reducer.test.ts
+```
+
+### Week 2: Components & UI (Est. +10% coverage)
+
+```bash
+# Create these test files:
+__tests__/components/ui/button.test.tsx
+__tests__/components/ui/card.test.tsx
+__tests__/components/ui/input.test.tsx
+__tests__/components/ThemeToggle.test.tsx
+__tests__/components/AuthStatus.test.tsx
+__tests__/components/WebVitalsReporter.test.tsx
+```
+
+### Week 3: Middleware & Auth (Est. +8% coverage)
+
+```bash
+# Create these test files:
+__tests__/lib/auth/csrf.test.ts
+__tests__/lib/auth/bypass.test.ts
+__tests__/lib/auth/tokenStorage.test.ts
+__tests__/server/middleware/enhanced-rate-limit.test.ts
+__tests__/server/middleware/session.test.ts
+__tests__/server/middleware/validation.test.ts
+__tests__/server/middleware/error-handler.test.ts
+```
+
+### Week 4: Redis & API Routes (Est. +7% coverage)
+
+```bash
+# Improve existing tests and add:
+__tests__/lib/redis/client.test.ts
+__tests__/lib/redis/circuit-breaker.test.ts
+__tests__/app/api/todos/route.test.ts
+__tests__/app/api/todos/[todoId]/route.test.ts
+__tests__/app/api/users/[userId]/route.test.ts
+```
+
+## Coverage Milestones
+
+| Week | Target Coverage | Key Areas                          |
+|------|-----------------|-----------------------------------|
+| 1    | 55%            | Core pages, Redux state           |
+| 2    | 65%            | UI components, utilities          |
+| 3    | 73%            | Middleware, auth layer            |
+| 4    | 78%+           | Redis layer, remaining API routes |
+
+## Test Quality Metrics
+
+Beyond line coverage, ensure:
+
+* ✅ All happy paths covered
+* ✅ Error scenarios tested
+* ✅ Edge cases included
+* ✅ Integration points validated
+* ✅ User workflows tested end-to-end
+
+## Notes
+
+* Current blockers: None
+
+* Test execution time: 9.332s (good performance)
+* All 201 tests passing
+* Console warnings are expected (logging tests)
