@@ -8,7 +8,12 @@ describe('MSAL configuration', () => {
 
   it('defines default scopes for login and silent requests', () => {
     expect(loginRequest.scopes).toEqual(
-      expect.arrayContaining(['User.Read', 'openid', 'profile', 'email']),
+      expect.arrayContaining([
+        'api://test-client/chat.Access',
+        'openid',
+        'profile',
+        'email',
+      ]),
     );
     expect(silentRequest.forceRefresh).toBe(false);
   });

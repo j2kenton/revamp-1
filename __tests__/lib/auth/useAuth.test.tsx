@@ -51,7 +51,9 @@ const mockLogger = {
 
 const mockUseMsal = useMsal as jest.MockedFunction<typeof useMsal>;
 
-const createMockAccount = (overrides: Partial<AccountInfo> = {}): AccountInfo => ({
+const createMockAccount = (
+  overrides: Partial<AccountInfo> = {},
+): AccountInfo => ({
   homeAccountId: 'home-account',
   environment: 'login.microsoftonline.com',
   tenantId: 'tenant-id',
@@ -69,7 +71,7 @@ const createAuthResult = (
   authority: 'https://login.microsoftonline.com/common',
   uniqueId: 'unique',
   tenantId: account.tenantId,
-  scopes: ['User.Read'],
+  scopes: ['api://test-client/chat.Access'],
   account,
   idToken: 'id-token',
   idTokenClaims: {},
@@ -120,7 +122,9 @@ describe('useAuth', () => {
 
   it('handles login successfully', async () => {
     const mockAccount = createMockAccount();
-    const authResult = createAuthResult(mockAccount, { accessToken: 'login-token' });
+    const authResult = createAuthResult(mockAccount, {
+      accessToken: 'login-token',
+    });
     mockMsalInstance.loginPopup.mockResolvedValue(authResult);
 
     const { result } = renderHook(() => useAuth());
@@ -168,7 +172,10 @@ describe('useAuth', () => {
     const mockAccount = createMockAccount();
     mockMsalInstance.getActiveAccount.mockReturnValue(mockAccount);
     mockMsalInstance.acquireTokenSilent.mockRejectedValue(
-      new InteractionRequiredAuthError('interaction_required', 'Silent failure'),
+      new InteractionRequiredAuthError(
+        'interaction_required',
+        'Silent failure',
+      ),
     );
     mockMsalInstance.acquireTokenPopup.mockResolvedValue(
       createAuthResult(mockAccount, { accessToken: 'interactive-token' }),
