@@ -74,8 +74,28 @@ export function ChatInput({
   }, []);
 
   useEffect(() => {
-    // TODO: FIX THIS HOOK RULE VIOLATION
-    setCountdown(rateLimitSeconds ?? null);
+    const nextCountdown =
+      typeof rateLimitSeconds === 'number' ? rateLimitSeconds : null;
+
+    let frameId: number | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    if (typeof window === 'undefined') {
+      timeoutId = setTimeout(() => setCountdown(nextCountdown), 0);
+    } else {
+      frameId = window.requestAnimationFrame(() => {
+        setCountdown(nextCountdown);
+      });
+    }
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [rateLimitSeconds]);
 
   useEffect(() => {
