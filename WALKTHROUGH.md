@@ -259,6 +259,7 @@ Real-time performance metrics tracked and reported:
 Metrics are automatically sent to `/api/analytics/web-vitals` for analysis and aggregation.
 
 **Implementation**:
+
 - `lib/monitoring/web-vitals.ts` - Metric collection
 - `components/WebVitalsReporter.tsx` - Client-side integration
 - `app/api/analytics/web-vitals/route.ts` - Endpoint for receiving metrics
@@ -397,8 +398,11 @@ REDIS_TLS=false
 NEXTAUTH_SECRET=generate_with_openssl_rand_base64_32
 NEXTAUTH_URL=http://localhost:3000
 
-# Optional: LLM API (when ready)
+# Don't hardcode this key!!! Always store credentials in a safe location and access them securely!!!
 OPENAI_API_KEY=
+OPENAI_CHAT_MODEL=gpt-4o-mini
+OPENAI_ORGANIZATION_ID=
+OPENAI_PROJECT_ID=
 ANTHROPIC_API_KEY=
 ```
 

@@ -54,5 +54,9 @@ declare namespace NodeJS {
     // External Services
     SENTRY_DSN?: string;
     VERCEL_ANALYTICS_ID?: string;
+    OPENAI_API_KEY?: string;
+    OPENAI_ORGANIZATION_ID?: string;
+    OPENAI_PROJECT_ID?: string;
+    OPENAI_CHAT_MODEL?: string;
   }
 }
