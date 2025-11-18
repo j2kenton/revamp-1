@@ -42,14 +42,17 @@ describe('LLM service', () => {
       .fn()
       .mockRejectedValueOnce(retryableError)
       .mockResolvedValueOnce(mockResponse);
-    const replacement = jest.replaceProperty(llmService, 'callLLM', callMock);
+    const original = llmService.callLLM;
+    (llmService as { callLLM: typeof original }).callLLM = callMock as typeof original;
 
-    const result = await llmService.callLLMWithRetry(baseMessages, {}, 2);
+    try {
+      const result = await llmService.callLLMWithRetry(baseMessages, {}, 2);
 
-    expect(result).toEqual(mockResponse);
-    expect(callMock).toHaveBeenCalledTimes(2);
-
-    replacement.restore();
+      expect(result).toEqual(mockResponse);
+      expect(callMock).toHaveBeenCalledTimes(2);
+    } finally {
+      (llmService as { callLLM: typeof original }).callLLM = original;
+    }
   });
 
   it('streams chunks via callLLMStream', async () => {
@@ -68,19 +71,22 @@ describe('LLM service', () => {
       .fn()
       .mockRejectedValueOnce(retryableError)
       .mockResolvedValueOnce(mockResponse);
-    const replacement = jest.replaceProperty(llmService, 'callLLMStream', streamMock);
+    const original = llmService.callLLMStream;
+    (llmService as { callLLMStream: typeof original }).callLLMStream = streamMock as typeof original;
 
-    const result = await llmService.callLLMStreamWithRetry(
-      baseMessages,
-      (chunk: string) => chunk,
-      { mockDelay: 0 },
-      2,
-    );
+    try {
+      const result = await llmService.callLLMStreamWithRetry(
+        baseMessages,
+        (chunk: string) => chunk,
+        { mockDelay: 0 },
+        2,
+      );
 
-    expect(result).toEqual(mockResponse);
-    expect(streamMock).toHaveBeenCalledTimes(2);
-
-    replacement.restore();
+      expect(result).toEqual(mockResponse);
+      expect(streamMock).toHaveBeenCalledTimes(2);
+    } finally {
+      (llmService as { callLLMStream: typeof original }).callLLMStream = original;
+    }
   });
 
   it('calculateTokenCount approximates based on length', () => {

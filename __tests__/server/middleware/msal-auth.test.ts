@@ -14,8 +14,9 @@ describe('MSAL Auth Middleware', () => {
       userId: 'user-abc',
     } as SessionModel;
 
-    const replacement = jest
-      .replaceProperty(msalAuth, 'requireMsalAuth', jest.fn().mockResolvedValue(session));
+    const authSpy = jest
+      .spyOn(msalAuth, 'requireMsalAuth')
+      .mockResolvedValue(session);
 
     const mockHandler = jest.fn(async (_request: NextRequest, receivedSession: SessionModel) => {
       expect(receivedSession).toBe(session);
@@ -27,17 +28,13 @@ describe('MSAL Auth Middleware', () => {
 
     expect(response.status).toBe(200);
     expect(mockHandler).toHaveBeenCalledTimes(1);
-    replacement.restore();
+    authSpy.mockRestore();
   });
 
   it('returns 401 when authentication fails', async () => {
-    const replacement = jest.replaceProperty(
-      msalAuth,
-      'requireMsalAuth',
-      jest
-        .fn()
-        .mockRejectedValue(new AuthError('Unauthorized - Valid MSAL token required')),
-    );
+    const authSpy = jest
+      .spyOn(msalAuth, 'requireMsalAuth')
+      .mockRejectedValue(new AuthError('Unauthorized - Valid MSAL token required'));
 
     const mockHandler = jest.fn();
     const wrappedHandler = msalAuth.withMsalAuth(mockHandler);
@@ -45,6 +42,6 @@ describe('MSAL Auth Middleware', () => {
 
     expect(response.status).toBe(401);
     expect(mockHandler).not.toHaveBeenCalled();
-    replacement.restore();
+    authSpy.mockRestore();
   });
 });
