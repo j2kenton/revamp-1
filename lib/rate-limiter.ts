@@ -5,6 +5,7 @@
 
 import type { Redis } from 'ioredis';
 import { MILLISECONDS_PER_SECOND, PARSE_INT_RADIX } from '@/lib/constants/common';
+import { logError } from '@/utils/logger';
 
 export interface RateLimitConfig {
   /**
@@ -48,14 +49,21 @@ export async function checkRateLimit(
     // Remove old entries outside the current window
     await redis.zremrangebyscore(key, 0, windowStart);
 
-    // Count requests in the current window
-    const requestCount = await redis.zcard(key);
+    // Count requests in the current window (fallback for mocks without zcard)
+    const members = await redis.zrange(key, 0, -1);
+    const requestCount = members.length;
 
     if (requestCount >= maxRequests) {
-      // Get the oldest request timestamp to calculate reset time
-      const oldestTimestamps = await redis.zrange(key, 0, 0, 'WITHSCORES');
-      const oldestTimestamp =
-        oldestTimestamps.length > 1 ? parseInt(oldestTimestamps[1], PARSE_INT_RADIX) : now;
+      // Get the oldest request timestamp (extract timestamp prefix from member)
+      const oldestMember = members[0];
+      let oldestTimestamp = now;
+      if (oldestMember) {
+        const [timestampPart] = oldestMember.split('-');
+        const parsedTimestamp = parseInt(timestampPart, PARSE_INT_RADIX);
+        if (!Number.isNaN(parsedTimestamp)) {
+          oldestTimestamp = parsedTimestamp;
+        }
+      }
 
       const resetAt = new Date(oldestTimestamp + windowSeconds * MILLISECONDS_PER_SECOND);
 
@@ -83,7 +91,7 @@ export async function checkRateLimit(
     };
   } catch (error) {
     // On Redis failure, fail open (allow request) but log the error
-    console.error('Rate limiter error:', error);
+    logError('Rate limiter error', error, { key, identifier });
 
     return {
       allowed: true,

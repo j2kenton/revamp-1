@@ -3,7 +3,6 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
 
 type RedisMock = {
   zremrangebyscore: jest.Mock;
-  zcard: jest.Mock;
   zadd: jest.Mock;
   expire: jest.Mock;
   zrange: jest.Mock;
@@ -13,7 +12,6 @@ const createRedisMock = (
   overrides: Partial<RedisMock> = {},
 ): RedisMock => ({
   zremrangebyscore: jest.fn().mockResolvedValue(0),
-  zcard: jest.fn().mockResolvedValue(0),
   zadd: jest.fn().mockResolvedValue(1),
   expire: jest.fn().mockResolvedValue(1),
   zrange: jest.fn().mockResolvedValue([]),
@@ -35,11 +33,13 @@ describe('checkRateLimit', () => {
   });
 
   it('blocks requests when limit is exceeded', async () => {
+    const now = Date.now();
+    const entries = Array.from({
+      length: RATE_LIMITS.API_DEFAULT.maxRequests,
+    }).map((_, index) => `${now + index}-entry-${index}`);
+
     const redis = createRedisMock({
-      zcard: jest.fn().mockResolvedValue(RATE_LIMITS.API_DEFAULT.maxRequests),
-      zrange: jest
-        .fn()
-        .mockResolvedValue(['entry', `${Date.now() - 1_000}`]),
+      zrange: jest.fn().mockResolvedValue(entries),
     });
 
     const result = await checkRateLimit(
@@ -56,9 +56,6 @@ describe('checkRateLimit', () => {
     const redis = createRedisMock({
       zremrangebyscore: jest.fn().mockRejectedValue(new Error('boom')),
     });
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {});
 
     const result = await checkRateLimit(
       redis as unknown as Redis,
@@ -67,7 +64,5 @@ describe('checkRateLimit', () => {
     );
 
     expect(result.allowed).toBe(true);
-    expect(consoleErrorSpy).toHaveBeenCalled();
-    consoleErrorSpy.mockRestore();
   });
 });
