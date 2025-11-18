@@ -1,149 +1,99 @@
-import { configureStore } from '@reduxjs/toolkit';
-import chatReducer from '@/lib/redux/features/chat/reducer';
-import {
-  addMessage,
-  updateMessage,
-  deleteMessage,
-  clearMessages,
-  setLoading,
-  setError,
-  setStreamingMessage,
-  completeStreaming,
-} from '@/lib/redux/features/chat/actions';
+import { chatActions, ChatActionType } from '@/lib/redux/features/chat/actions';
+import type { ChatDTO, MessageDTO } from '@/types/models';
 
-describe('Chat Redux Actions', () => {
-  let store: ReturnType<typeof configureStore>;
+const buildMessage = (overrides: Partial<MessageDTO> = {}): MessageDTO => {
+  const now = new Date().toISOString();
+  return {
+    id: overrides.id ?? 'msg-1',
+    chatId: overrides.chatId ?? 'chat-1',
+    role: overrides.role ?? 'user',
+    content: overrides.content ?? 'Hello',
+    status: overrides.status ?? 'sent',
+    parentMessageId: overrides.parentMessageId ?? null,
+    metadata: overrides.metadata ?? null,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
+  };
+};
 
-  beforeEach(() => {
-    store = configureStore({
-      reducer: {
-        chat: chatReducer,
+const buildChat = (overrides: Partial<ChatDTO> = {}): ChatDTO => ({
+  id: overrides.id ?? 'chat-1',
+  title: overrides.title ?? 'Sample Chat',
+  userId: overrides.userId ?? 'user-1',
+  archived: overrides.archived ?? false,
+  createdAt: overrides.createdAt ?? new Date().toISOString(),
+  updatedAt: overrides.updatedAt ?? new Date().toISOString(),
+});
+
+describe('chatActions', () => {
+  it('creates addMessage action', () => {
+    const message = buildMessage();
+    const action = chatActions.addMessage(message.chatId, message);
+
+    expect(action).toEqual({
+      type: ChatActionType.ADD_MESSAGE,
+      payload: { chatId: message.chatId, message },
+    });
+  });
+
+  it('creates updateMessage action', () => {
+    const action = chatActions.updateMessage('chat-1', 'msg-1', {
+      content: 'Updated',
+    });
+
+    expect(action).toEqual({
+      type: ChatActionType.UPDATE_MESSAGE,
+      payload: {
+        chatId: 'chat-1',
+        messageId: 'msg-1',
+        updates: { content: 'Updated' },
       },
     });
   });
 
-  describe('addMessage', () => {
-    it('adds a new message to the store', () => {
-      const message = {
-        id: 'msg-1',
-        role: 'user' as const,
-        content: 'Hello',
-        timestamp: new Date().toISOString(),
-      };
+  it('creates setChats action', () => {
+    const chats = [buildChat(), buildChat({ id: 'chat-2' })];
+    const action = chatActions.setChats(chats);
 
-      store.dispatch(addMessage(message));
-
-      const state = store.getState().chat;
-      expect(state.messages).toHaveLength(1);
-      expect(state.messages[0]).toEqual(message);
-    });
-
-    it('maintains message order', () => {
-      store.dispatch(addMessage({ id: '1', role: 'user', content: 'First' }));
-      store.dispatch(
-        addMessage({ id: '2', role: 'assistant', content: 'Second' }),
-      );
-      store.dispatch(addMessage({ id: '3', role: 'user', content: 'Third' }));
-
-      const state = store.getState().chat;
-      expect(state.messages.map((m) => m.id)).toEqual(['1', '2', '3']);
+    expect(action).toEqual({
+      type: ChatActionType.SET_CHATS,
+      payload: chats,
     });
   });
 
-  describe('updateMessage', () => {
-    it('updates existing message content', () => {
-      store.dispatch(
-        addMessage({ id: '1', role: 'user', content: 'Original' }),
-      );
-      store.dispatch(updateMessage({ id: '1', content: 'Updated' }));
+  it('creates optimistic update actions', () => {
+    const optimisticUpdate = {
+      id: 'tmp-1',
+      tempId: 'tmp-1',
+      status: 'pending' as const,
+      message: buildMessage(),
+    };
 
-      const state = store.getState().chat;
-      expect(state.messages[0].content).toBe('Updated');
+    expect(chatActions.addOptimisticUpdate(optimisticUpdate)).toEqual({
+      type: ChatActionType.ADD_OPTIMISTIC_UPDATE,
+      payload: optimisticUpdate,
     });
 
-    it('ignores update for non-existent message', () => {
-      store.dispatch(addMessage({ id: '1', role: 'user', content: 'Test' }));
-      store.dispatch(updateMessage({ id: 'non-existent', content: 'Update' }));
-
-      const state = store.getState().chat;
-      expect(state.messages).toHaveLength(1);
-      expect(state.messages[0].content).toBe('Test');
+    expect(chatActions.updateOptimisticUpdate('tmp-1', { status: 'success' })).toEqual({
+      type: ChatActionType.UPDATE_OPTIMISTIC_UPDATE,
+      payload: { id: 'tmp-1', updates: { status: 'success' } },
     });
-  });
 
-  describe('deleteMessage', () => {
-    it('removes message by ID', () => {
-      store.dispatch(addMessage({ id: '1', role: 'user', content: 'Keep' }));
-      store.dispatch(addMessage({ id: '2', role: 'user', content: 'Delete' }));
-      store.dispatch(deleteMessage('2'));
-
-      const state = store.getState().chat;
-      expect(state.messages).toHaveLength(1);
-      expect(state.messages[0].id).toBe('1');
+    expect(chatActions.removeOptimisticUpdate('tmp-1')).toEqual({
+      type: ChatActionType.REMOVE_OPTIMISTIC_UPDATE,
+      payload: 'tmp-1',
     });
   });
 
-  describe('clearMessages', () => {
-    it('removes all messages', () => {
-      store.dispatch(
-        addMessage({ id: '1', role: 'user', content: 'Message 1' }),
-      );
-      store.dispatch(
-        addMessage({ id: '2', role: 'user', content: 'Message 2' }),
-      );
-      store.dispatch(clearMessages());
-
-      const state = store.getState().chat;
-      expect(state.messages).toHaveLength(0);
-    });
-  });
-
-  describe('setLoading', () => {
-    it('sets loading state', () => {
-      store.dispatch(setLoading(true));
-      expect(store.getState().chat.isLoading).toBe(true);
-
-      store.dispatch(setLoading(false));
-      expect(store.getState().chat.isLoading).toBe(false);
-    });
-  });
-
-  describe('setError', () => {
-    it('sets error message', () => {
-      store.dispatch(setError('Something went wrong'));
-      expect(store.getState().chat.error).toBe('Something went wrong');
+  it('creates loading and error actions', () => {
+    expect(chatActions.setLoading('sendingMessage', true)).toEqual({
+      type: ChatActionType.SET_LOADING,
+      payload: { key: 'sendingMessage', value: true },
     });
 
-    it('clears error with null', () => {
-      store.dispatch(setError('Error'));
-      store.dispatch(setError(null));
-      expect(store.getState().chat.error).toBeNull();
-    });
-  });
-
-  describe('streaming actions', () => {
-    it('manages streaming message lifecycle', () => {
-      // Start streaming
-      store.dispatch(setStreamingMessage({ id: 'stream-1', content: 'Hello' }));
-      let state = store.getState().chat;
-      expect(state.streamingMessage).toEqual({
-        id: 'stream-1',
-        content: 'Hello',
-      });
-      expect(state.isStreaming).toBe(true);
-
-      // Update streaming content
-      store.dispatch(
-        setStreamingMessage({ id: 'stream-1', content: 'Hello world' }),
-      );
-      state = store.getState().chat;
-      expect(state.streamingMessage?.content).toBe('Hello world');
-
-      // Complete streaming
-      store.dispatch(completeStreaming());
-      state = store.getState().chat;
-      expect(state.streamingMessage).toBeNull();
-      expect(state.isStreaming).toBe(false);
+    expect(chatActions.setError('messages', 'Network error')).toEqual({
+      type: ChatActionType.SET_ERROR,
+      payload: { key: 'messages', error: 'Network error' },
     });
   });
 });

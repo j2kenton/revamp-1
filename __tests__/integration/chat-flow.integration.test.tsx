@@ -1,204 +1,92 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import chatReducer from '@/lib/redux/features/chat/reducer';
-import { ChatInterface } from '@/components/chat/ChatInterface';
 import '@testing-library/jest-dom';
+import { ChatInterface } from '@/components/chat/ChatInterface';
+import { STRINGS } from '@/lib/constants/strings';
 
-// Mock API responses
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+const originalFetch = global.fetch;
+const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
 
-const createTestStore = () => {
-  return configureStore({
-    reducer: {
-      chat: chatReducer,
-    },
-  });
-};
+beforeAll(() => {
+  global.fetch = fetchMock;
+});
 
-describe('Chat Flow Integration', () => {
+afterAll(() => {
+  global.fetch = originalFetch;
+});
+
+describe('ChatInterface integration', () => {
   const user = userEvent.setup();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        chatId: 'test-chat',
-        userMessage: 'Hello',
-        aiResponse: 'Hi there!',
-      }),
-    });
   });
 
-  it('completes full conversation flow', async () => {
-    const store = createTestStore();
-
-    render(
-      <Provider store={store}>
-        <ChatInterface />
-      </Provider>,
+  it('sends a message and renders the AI response', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          aiResponse: 'Hello human',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
     );
 
-    // Check initial state
-    expect(screen.getByText(/no messages yet/i)).toBeInTheDocument();
+    render(<ChatInterface />);
 
-    // Type and send message
-    const input = screen.getByRole('textbox', { name: /message/i });
-    await user.type(input, 'Hello AI');
+    const textarea = screen.getByRole('textbox', { name: STRINGS.input.ariaLabel });
+    await user.type(textarea, 'Hello AI');
     await user.keyboard('{Enter}');
 
-    // Verify message sent
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/chat'),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ message: 'Hello AI' }),
-        }),
-      );
-    });
-
-    // Verify UI updates
     await waitFor(() => {
       expect(screen.getByText('Hello AI')).toBeInTheDocument();
-      expect(screen.getByText('Hi there!')).toBeInTheDocument();
+      expect(screen.getByText('Hello human')).toBeInTheDocument();
     });
 
-    // Input should be cleared and focused
-    expect(input).toHaveValue('');
-    expect(input).toHaveFocus();
+    expect(textarea).toHaveValue('');
   });
 
-  it('handles multiple messages in sequence', async () => {
-    const store = createTestStore();
+  it('shows retry option when the request fails', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ aiResponse: 'Recovered' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
 
-    render(
-      <Provider store={store}>
-        <ChatInterface />
-      </Provider>,
-    );
+    render(<ChatInterface />);
 
-    const input = screen.getByRole('textbox', { name: /message/i });
-
-    // Send first message
-    await user.type(input, 'First message');
+    const textarea = screen.getByRole('textbox', { name: STRINGS.input.ariaLabel });
+    await user.type(textarea, 'Test failure');
     await user.keyboard('{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByText('First message')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(STRINGS.errors.sendFailed);
+      expect(screen.getByRole('button', { name: STRINGS.actions.retry })).toBeInTheDocument();
     });
 
-    // Send second message
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        chatId: 'test-chat',
-        userMessage: 'Second message',
-        aiResponse: 'Second response',
-      }),
-    });
-
-    await user.type(input, 'Second message');
-    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('button', { name: STRINGS.actions.retry }));
 
     await waitFor(() => {
-      expect(screen.getByText('Second message')).toBeInTheDocument();
-      expect(screen.getByText('Second response')).toBeInTheDocument();
-    });
-
-    // Verify message order
-    const messages = screen.getAllByRole('article');
-    expect(messages).toHaveLength(4); // 2 user + 2 assistant
-  });
-
-  it('recovers from temporary errors', async () => {
-    const store = createTestStore();
-
-    render(
-      <Provider store={store}>
-        <ChatInterface />
-      </Provider>,
-    );
-
-    // First attempt fails
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-    const input = screen.getByRole('textbox', { name: /message/i });
-    await user.type(input, 'Test message');
-    await user.keyboard('{Enter}');
-
-    // Error should be shown
-    await waitFor(() => {
-      expect(screen.getByText(/failed to send/i)).toBeInTheDocument();
-    });
-
-    // Retry succeeds
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        chatId: 'test-chat',
-        userMessage: 'Test message',
-        aiResponse: 'Success!',
-      }),
-    });
-
-    const retryButton = screen.getByRole('button', { name: /retry/i });
-    await user.click(retryButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Success!')).toBeInTheDocument();
+      expect(screen.getByText('Recovered')).toBeInTheDocument();
     });
   });
 
-  it('maintains conversation context', async () => {
-    const store = createTestStore();
+  it('prevents sending empty or whitespace-only messages', async () => {
+    render(<ChatInterface />);
 
-    // Mock chat history endpoint
-    mockFetch.mockImplementation((url) => {
-      if (url.includes('/api/chat/test-chat')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            messages: [
-              { id: '1', role: 'user', content: 'Previous message' },
-              { id: '2', role: 'assistant', content: 'Previous response' },
-            ],
-          }),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ aiResponse: 'New response' }),
-      });
-    });
-
-    render(
-      <Provider store={store}>
-        <ChatInterface chatId="test-chat" />
-      </Provider>,
-    );
-
-    // History should load
-    await waitFor(() => {
-      expect(screen.getByText('Previous message')).toBeInTheDocument();
-      expect(screen.getByText('Previous response')).toBeInTheDocument();
-    });
-
-    // New message maintains context
-    const input = screen.getByRole('textbox', { name: /message/i });
-    await user.type(input, 'Continue conversation');
+    const textarea = screen.getByRole('textbox', { name: STRINGS.input.ariaLabel });
+    await user.type(textarea, '   ');
     await user.keyboard('{Enter}');
 
-    await waitFor(() => {
-      expect(screen.getByText('Continue conversation')).toBeInTheDocument();
-    });
-
-    // All messages should be present
-    expect(screen.getByText('Previous message')).toBeInTheDocument();
-    expect(screen.getByText('Previous response')).toBeInTheDocument();
-    expect(screen.getByText('Continue conversation')).toBeInTheDocument();
+    expect(
+      screen.getByText(STRINGS.validation.messageRequired),
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

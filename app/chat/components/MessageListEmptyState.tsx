@@ -9,18 +9,15 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ChatIcon } from '@/components/ui/icons';
 import { STRINGS } from '@/lib/constants/strings';
 
-enum Variant {
-  NO_CHAT = 'no-chat',
-  NO_MESSAGES = 'no-messages',
-}
+export type MessageListEmptyStateVariant = 'no-chat' | 'no-messages';
 
 interface MessageListEmptyStateProps {
-  variant?: Variant;
+  variant?: MessageListEmptyStateVariant;
 }
 
 export function MessageListEmptyState(props: MessageListEmptyStateProps) {
   const { variant } = props;
-  if (variant === Variant.NO_CHAT) {
+  if (variant === 'no-chat') {
     return (
       <EmptyState
         icon={<ChatIcon />}

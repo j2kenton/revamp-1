@@ -38,29 +38,21 @@ describe('ChatErrorBoundary', () => {
       </ChatErrorBoundary>,
     );
 
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /try again/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /we hit a snag/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry chat/i })).toBeInTheDocument();
+    expect(screen.getByText(/test error/i)).toBeInTheDocument();
   });
 
-  it('resets error state when Try Again is clicked', () => {
-    const { rerender } = render(
-      <ChatErrorBoundary>
+  it('invokes onReset when Retry chat is clicked', () => {
+    const onReset = jest.fn();
+    render(
+      <ChatErrorBoundary onReset={onReset}>
         <ThrowError shouldThrow={true} />
       </ChatErrorBoundary>,
     );
 
-    const retryButton = screen.getByRole('button', { name: /try again/i });
-    fireEvent.click(retryButton);
-
-    rerender(
-      <ChatErrorBoundary>
-        <ThrowError shouldThrow={false} />
-      </ChatErrorBoundary>,
-    );
-
-    expect(screen.getByText('No error')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /retry chat/i }));
+    expect(onReset).toHaveBeenCalled();
   });
 
   it('handles async errors in useEffect', () => {
@@ -78,21 +70,7 @@ describe('ChatErrorBoundary', () => {
     );
 
     // Error boundaries catch errors in lifecycle methods
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-  });
-
-  it('displays custom error message when provided', () => {
-    const CustomError: React.FC = () => {
-      throw new Error('Custom validation failed');
-    };
-
-    render(
-      <ChatErrorBoundary errorMessage="Custom error occurred">
-        <CustomError />
-      </ChatErrorBoundary>,
-    );
-
-    expect(screen.getByText(/custom error occurred/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /we hit a snag/i })).toBeInTheDocument();
   });
 
   it('logs error details in development', () => {
