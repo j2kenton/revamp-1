@@ -10,18 +10,19 @@ export default function LoginPage() {
   const router = useRouter();
   const { isAuthenticated, login, isLoading, error } = useAuth();
   const [authError, setAuthError] = useState<string | null>(null);
+  const postLoginRoute = '/chat';
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/dashboard');
+      router.push(postLoginRoute);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, postLoginRoute]);
 
   const handleLogin = async () => {
     setAuthError(null);
     try {
       await login();
-      router.push('/dashboard');
+      router.push(postLoginRoute);
     } catch (err) {
       console.error('Login failed:', err);
       setAuthError(
