@@ -36,6 +36,10 @@ if (!process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID) {
 if (!process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID) {
   process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID = 'test-tenant';
 }
+if (!process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE) {
+  process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE =
+    'api://test-client/chat.Access';
+}
 if (!process.env.MOCK_REDIS) {
   process.env.MOCK_REDIS = 'true';
 }

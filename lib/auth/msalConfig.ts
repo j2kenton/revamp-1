@@ -10,12 +10,21 @@ const azureTenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID ?? 'common';
 const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI ?? '/';
 const postLogoutRedirectUri =
   process.env.NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI ?? '/';
+const chatApiScope = process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE ?? '';
 
 if (!azureClientId) {
   throw new Error(
     'NEXT_PUBLIC_AZURE_AD_CLIENT_ID is not configured. Set NEXT_PUBLIC_AZURE_AD_CLIENT_ID (or AZURE_AD_CLIENT_ID) in your environment to enable Microsoft login.',
   );
 }
+
+if (!chatApiScope) {
+  throw new Error(
+    'NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE is not configured. Provide the custom API scope (e.g., api://<app-id>/chat.Access) so MSAL can request tokens for your backend.',
+  );
+}
+
+const baseScopes = ['openid', 'profile', 'email'] as const;
 
 // MSAL configuration
 export const msalConfig: Configuration = {
@@ -57,16 +66,16 @@ export const msalConfig: Configuration = {
 
 // Scopes for login request
 export const loginRequest: PopupRequest = {
-  scopes: ['User.Read', 'openid', 'profile', 'email'],
+  scopes: [...baseScopes, chatApiScope],
 };
 
 // Scopes for token request
 export const tokenRequest = {
-  scopes: ['User.Read'],
+  scopes: [chatApiScope],
 };
 
 // Silent request configuration
 export const silentRequest = {
-  scopes: ['User.Read', 'openid', 'profile', 'email'],
+  scopes: [...baseScopes, chatApiScope],
   forceRefresh: false,
 };

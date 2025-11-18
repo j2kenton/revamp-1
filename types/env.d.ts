@@ -33,10 +33,12 @@ declare namespace NodeJS {
     AZURE_AD_TENANT_ID?: string;
     AZURE_AD_REDIRECT_URI?: string;
     AZURE_AD_POST_LOGOUT_REDIRECT_URI?: string;
+    AZURE_AD_CHAT_SCOPE?: string;
     NEXT_PUBLIC_AZURE_AD_CLIENT_ID?: string;
     NEXT_PUBLIC_AZURE_AD_TENANT_ID?: string;
     NEXT_PUBLIC_REDIRECT_URI?: string;
     NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI?: string;
+    NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE?: string;
 
     // Node Environment
     NODE_ENV: 'development' | 'production' | 'test';

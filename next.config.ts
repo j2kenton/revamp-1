@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI ??
       process.env.AZURE_AD_POST_LOGOUT_REDIRECT_URI ??
       '',
+    NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE:
+      process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE ??
+      process.env.AZURE_AD_CHAT_SCOPE ??
+      '',
   },
 };
 
