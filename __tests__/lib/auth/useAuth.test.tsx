@@ -2,6 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth } from '@/lib/auth/useAuth';
 import {
   InteractionStatus,
+  InteractionRequiredAuthError,
   type AccountInfo,
   type AuthenticationResult,
   type SilentRequest,
@@ -166,7 +167,9 @@ describe('useAuth', () => {
   it('falls back to interactive login when silent fails', async () => {
     const mockAccount = createMockAccount();
     mockMsalInstance.getActiveAccount.mockReturnValue(mockAccount);
-    mockMsalInstance.acquireTokenSilent.mockRejectedValue(new Error('Silent failure'));
+    mockMsalInstance.acquireTokenSilent.mockRejectedValue(
+      new InteractionRequiredAuthError('interaction_required', 'Silent failure'),
+    );
     mockMsalInstance.acquireTokenPopup.mockResolvedValue(
       createAuthResult(mockAccount, { accessToken: 'interactive-token' }),
     );

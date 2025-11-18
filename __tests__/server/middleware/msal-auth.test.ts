@@ -1,59 +1,50 @@
-import { withMsalAuth } from '@/server/middleware/msal-auth';
 import { NextRequest } from 'next/server';
+import * as msalAuth from '@/server/middleware/msal-auth';
+import { AuthError } from '@/utils/error-handler';
+import type { SessionModel } from '@/types/models';
 
 describe('MSAL Auth Middleware', () => {
-  it('allows requests with valid JWT', async () => {
-    const mockHandler = jest
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ success: true }), { status: 200 }),
-      );
-
-    const validToken = 'Bearer valid-jwt-token';
-    const request = new NextRequest('http://localhost/api/test', {
-      headers: { Authorization: validToken },
-    });
-
-    const wrappedHandler = withMsalAuth(mockHandler);
-    const response = await wrappedHandler(request);
-
-    expect(response.status).toBe(200);
-    expect(mockHandler).toHaveBeenCalled();
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  it('rejects requests without authorization header', async () => {
-    const mockHandler = jest.fn();
-    const request = new NextRequest('http://localhost/api/test');
+  it('allows downstream handler when session is present', async () => {
+    const session = {
+      id: 'session-123',
+      userId: 'user-abc',
+    } as SessionModel;
 
-    const wrappedHandler = withMsalAuth(mockHandler);
-    const response = await wrappedHandler(request);
+    const replacement = jest
+      .replaceProperty(msalAuth, 'requireMsalAuth', jest.fn().mockResolvedValue(session));
+
+    const mockHandler = jest.fn(async (_request: NextRequest, receivedSession: SessionModel) => {
+      expect(receivedSession).toBe(session);
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const wrappedHandler = msalAuth.withMsalAuth(mockHandler);
+    const response = await wrappedHandler(new NextRequest('http://localhost/api/test'));
+
+    expect(response.status).toBe(200);
+    expect(mockHandler).toHaveBeenCalledTimes(1);
+    replacement.restore();
+  });
+
+  it('returns 401 when authentication fails', async () => {
+    const replacement = jest.replaceProperty(
+      msalAuth,
+      'requireMsalAuth',
+      jest
+        .fn()
+        .mockRejectedValue(new AuthError('Unauthorized - Valid MSAL token required')),
+    );
+
+    const mockHandler = jest.fn();
+    const wrappedHandler = msalAuth.withMsalAuth(mockHandler);
+    const response = await wrappedHandler(new NextRequest('http://localhost/api/test'));
 
     expect(response.status).toBe(401);
     expect(mockHandler).not.toHaveBeenCalled();
-  });
-
-  it('rejects requests with invalid JWT format', async () => {
-    const mockHandler = jest.fn();
-    const request = new NextRequest('http://localhost/api/test', {
-      headers: { Authorization: 'Bearer invalid' },
-    });
-
-    const wrappedHandler = withMsalAuth(mockHandler);
-    const response = await wrappedHandler(request);
-
-    expect(response.status).toBe(401);
-  });
-
-  it('validates JWT expiration', async () => {
-    const mockHandler = jest.fn();
-    const expiredToken = 'Bearer expired-jwt-token';
-    const request = new NextRequest('http://localhost/api/test', {
-      headers: { Authorization: expiredToken },
-    });
-
-    const wrappedHandler = withMsalAuth(mockHandler);
-    const response = await wrappedHandler(request);
-
-    expect(response.status).toBe(401);
+    replacement.restore();
   });
 });

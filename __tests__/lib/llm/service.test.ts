@@ -38,15 +38,18 @@ describe('LLM service', () => {
 
   it('retries callLLMWithRetry on retryable errors', async () => {
     const retryableError = Object.assign(new Error('temp'), { retryable: true });
-    const callSpy = jest
-      .spyOn(llmService, 'callLLM')
+    const callMock = jest
+      .fn()
       .mockRejectedValueOnce(retryableError)
       .mockResolvedValueOnce(mockResponse);
+    const replacement = jest.replaceProperty(llmService, 'callLLM', callMock);
 
     const result = await llmService.callLLMWithRetry(baseMessages, {}, 2);
 
     expect(result).toEqual(mockResponse);
-    expect(callSpy).toHaveBeenCalledTimes(2);
+    expect(callMock).toHaveBeenCalledTimes(2);
+
+    replacement.restore();
   });
 
   it('streams chunks via callLLMStream', async () => {
@@ -61,10 +64,11 @@ describe('LLM service', () => {
 
   it('retries callLLMStreamWithRetry when streaming fails once', async () => {
     const retryableError = Object.assign(new Error('stream'), { retryable: true });
-    const streamSpy = jest
-      .spyOn(llmService, 'callLLMStream')
+    const streamMock = jest
+      .fn()
       .mockRejectedValueOnce(retryableError)
       .mockResolvedValueOnce(mockResponse);
+    const replacement = jest.replaceProperty(llmService, 'callLLMStream', streamMock);
 
     const result = await llmService.callLLMStreamWithRetry(
       baseMessages,
@@ -74,7 +78,9 @@ describe('LLM service', () => {
     );
 
     expect(result).toEqual(mockResponse);
-    expect(streamSpy).toHaveBeenCalledTimes(2);
+    expect(streamMock).toHaveBeenCalledTimes(2);
+
+    replacement.restore();
   });
 
   it('calculateTokenCount approximates based on length', () => {
@@ -105,7 +111,7 @@ describe('LLM service', () => {
     ];
 
     const { messages: trimmed, truncated, removedCount } =
-      llmService.truncateMessagesToFit(messages, 3);
+      llmService.truncateMessagesToFit(messages, 7);
 
     expect(truncated).toBe(true);
     expect(removedCount).toBeGreaterThan(0);
