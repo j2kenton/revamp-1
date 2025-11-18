@@ -33,10 +33,18 @@ export interface MsalTokenPayload extends JWTPayload {
 // rather than 'common'. The 'common' endpoint cannot be used for JWKS validation.
 // If you need to support multiple tenants, the token's 'tid' claim should be used
 // to construct the JWKS URI dynamically.
-const TENANT_ID = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || 'common';
-const CLIENT_ID = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
+const TENANT_ID =
+  process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID ??
+  process.env.AZURE_AD_TENANT_ID ??
+  'common';
+const CLIENT_ID =
+  process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID ??
+  process.env.AZURE_AD_CLIENT_ID ??
+  '';
 if (!CLIENT_ID) {
-  throw new Error('NEXT_PUBLIC_AZURE_AD_CLIENT_ID environment variable is required');
+  throw new Error(
+    'NEXT_PUBLIC_AZURE_AD_CLIENT_ID (or AZURE_AD_CLIENT_ID) environment variable is required',
+  );
 }
 
 // Validate configuration at module load time
