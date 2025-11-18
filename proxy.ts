@@ -37,9 +37,6 @@ export default withAuth(
  */
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    // Add other protected routes here
-    // '/admin/:path*',
-    // '/api/protected/:path*',
+    // '/secure-route/:path*',
   ],
 };
