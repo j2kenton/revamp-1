@@ -53,8 +53,10 @@ export function ChatMessage({
         className={clsx('flex max-w-3xl flex-col gap-2 rounded-lg px-4 py-3', {
           // User bubble: slightly darker in dark mode for better separation from assistant
           'bg-blue-600 text-white dark:bg-blue-700': isUser,
-          // Assistant bubble: increase contrast vs page (dark:bg-gray-900) by lightening slightly & add subtle border
-          'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100 dark:border dark:border-gray-600 dark:shadow-none':
+          // Assistant bubble:
+          // Light mode: use a subtle tinted surface (gray-100) + border for clearer separation from page bg (gray-50)
+          // Dark mode: maintain contrast with gray-700 + border
+          'bg-gray-100 text-gray-900 border border-gray-200 shadow-sm dark:bg-gray-700 dark:text-gray-100 dark:border dark:border-gray-600 dark:shadow-none':
             isAssistant,
         })}
       >
