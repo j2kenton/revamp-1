@@ -43,12 +43,27 @@ const openAiProjectId = process.env.OPENAI_PROJECT_ID;
 
 let openAiClient: OpenAI | null = null;
 let hasLoggedMissingOpenAIKey = false;
+let hasLoggedBrowserEnvironmentFallback = false;
 
 function isOpenAIConfigured(): boolean {
   return Boolean(openAiApiKey);
 }
 
+function isBrowserLikeEnvironment(): boolean {
+  return typeof window !== 'undefined';
+}
+
 function shouldUseMockLLM(): boolean {
+  if (isBrowserLikeEnvironment()) {
+    if (!hasLoggedBrowserEnvironmentFallback && process.env.NODE_ENV !== 'test') {
+      logWarn(
+        'LLM service was invoked in a browser-like environment. Using mock responses to avoid exposing sensitive credentials.',
+      );
+      hasLoggedBrowserEnvironmentFallback = true;
+    }
+    return true;
+  }
+
   if (isOpenAIConfigured()) {
     return false;
   }
