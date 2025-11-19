@@ -174,51 +174,46 @@ export function ChatInput({
         </div>
       )}
 
-      <div className="relative">
-        <textarea
-          ref={textareaRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onCompositionStart={() => setIsComposing(true)}
-          onCompositionEnd={() => setIsComposing(false)}
-          placeholder={STRINGS.input.placeholder}
-          disabled={isStreaming || countdown !== null}
-          className={clsx(
-            'w-full resize-none rounded-lg border px-4 py-3 pr-32 focus:outline-none focus:ring-2',
-            {
-              'border-gray-300 focus:border-blue-500 focus:ring-blue-500':
-                !isOverLimit,
-              'border-red-300 focus:border-red-500 focus:ring-red-500':
-                isOverLimit,
-              'cursor-not-allowed opacity-50':
-                isStreaming || countdown !== null,
-            },
-          )}
-          rows={1}
-          aria-label={STRINGS.input.ariaLabel}
-          aria-invalid={isOverLimit}
-          aria-describedby="char-counter"
-        />
-
-        <div className="absolute bottom-3 right-3 flex items-center gap-2">
-          <span
-            id="char-counter"
-            className={clsx('text-xs font-medium', {
-              'text-gray-400': !isNearLimit,
-              'text-orange-500': isNearLimit && !isOverLimit,
-              'text-red-500': isOverLimit,
-            })}
-            aria-live="polite"
-          >
-            {STRINGS.input.characterCount(debouncedLength, MAX_MESSAGE_LENGTH)}
-          </span>
-
+      <div
+        className="flex items-end gap-3"
+        style={{
+          flexDirection: 'column',
+        }}
+      >
+        <div className="flex w-full gap-3">
+          <div className="flex-1">
+            <textarea
+              id="chat-input"
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              placeholder={STRINGS.input.placeholder}
+              disabled={isStreaming || countdown !== null}
+              className={clsx(
+                'w-full resize-none rounded-lg border px-4 py-3 focus:outline-none focus:ring-2',
+                {
+                  'border-gray-300 focus:border-blue-500 focus:ring-blue-500':
+                    !isOverLimit,
+                  'border-red-300 focus:border-red-500 focus:ring-red-500':
+                    isOverLimit,
+                  'cursor-not-allowed opacity-50':
+                    isStreaming || countdown !== null,
+                },
+              )}
+              rows={10}
+              aria-label={STRINGS.input.ariaLabel}
+              aria-invalid={isOverLimit}
+              aria-describedby="char-counter"
+            />
+          </div>
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
             className={clsx(
-              'rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+              'rounded-md px-6 py-3 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
               {
                 'bg-blue-600 text-white hover:bg-blue-700': canSubmit,
                 'cursor-not-allowed bg-gray-300 text-gray-500': !canSubmit,
@@ -237,22 +232,19 @@ export function ChatInput({
             )}
           </button>
         </div>
-      </div>
-
-      <div className="mt-2 text-xs text-gray-500">
-        <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5">
-          {STRINGS.input.keyboardHints.enter}
-        </kbd>{' '}
-        {STRINGS.input.keyboardHints.toSend}{' '}
-        {STRINGS.input.keyboardHints.separator}{' '}
-        <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5">
-          {STRINGS.input.keyboardHints.shift}
-        </kbd>
-        {' + '}
-        <kbd className="rounded border border-gray-300 bg-gray-100 px-1 py-0.5">
-          {STRINGS.input.keyboardHints.enter}
-        </kbd>{' '}
-        {STRINGS.input.keyboardHints.forNewLine}
+        <div className="mt-2 flex justify-between text-xs font-medium">
+          <span
+            id="char-counter"
+            className={clsx({
+              'text-gray-400': !isNearLimit,
+              'text-orange-500': isNearLimit && !isOverLimit,
+              'text-red-500': isOverLimit,
+            })}
+            aria-live="polite"
+          >
+            {STRINGS.input.characterCount(debouncedLength, MAX_MESSAGE_LENGTH)}
+          </span>
+        </div>
       </div>
     </div>
   );
