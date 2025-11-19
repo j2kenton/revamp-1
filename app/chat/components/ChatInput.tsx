@@ -23,6 +23,7 @@ interface ChatInputProps {
   isStreaming: boolean;
   error?: Error | null;
   rateLimitSeconds?: number | null;
+  userDisplayName?: string;
 }
 
 export function ChatInput({
@@ -30,6 +31,7 @@ export function ChatInput({
   isStreaming,
   error,
   rateLimitSeconds,
+  userDisplayName,
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isComposing, setIsComposing] = useState(false);
@@ -152,6 +154,8 @@ export function ChatInput({
     !isDebounced &&
     countdown === null;
   const errorMessage = error?.message || STRINGS.errors.sendFailed;
+  const normalizedUserDisplayName = userDisplayName?.trim();
+  const hasUserDisplayName = Boolean(normalizedUserDisplayName);
 
   return (
     <div className="p-4">
@@ -232,10 +236,25 @@ export function ChatInput({
             )}
           </button>
         </div>
-        <div className="mt-2 flex justify-between text-xs font-medium">
+        <div
+          className={clsx(
+            'mt-2 flex flex-wrap text-xs font-medium',
+            hasUserDisplayName
+              ? 'items-center justify-between gap-y-1'
+              : 'justify-end',
+          )}
+        >
+          {hasUserDisplayName ? (
+            <span className="text-gray-500 dark:text-gray-400">
+              Signed in as{' '}
+              <span className="font-semibold text-gray-700 dark:text-gray-200">
+                {normalizedUserDisplayName}
+              </span>
+            </span>
+          ) : null}
           <span
             id="char-counter"
-            className={clsx({
+            className={clsx('whitespace-nowrap', {
               'text-gray-400': !isNearLimit,
               'text-orange-500': isNearLimit && !isOverLimit,
               'text-red-500': isOverLimit,
