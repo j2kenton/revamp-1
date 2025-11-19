@@ -203,7 +203,7 @@ export function ChatInput({
                     isStreaming || countdown !== null,
                 },
               )}
-              rows={10}
+              rows={3}
               aria-label={STRINGS.input.ariaLabel}
               aria-invalid={isOverLimit}
               aria-describedby="char-counter"
