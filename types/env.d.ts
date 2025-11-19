@@ -34,6 +34,8 @@ declare namespace NodeJS {
     AZURE_AD_REDIRECT_URI?: string;
     AZURE_AD_POST_LOGOUT_REDIRECT_URI?: string;
     AZURE_AD_CHAT_SCOPE?: string;
+    AZURE_AD_API_AUDIENCE?: string;
+    AZURE_AD_RESOURCE_APP_ID?: string;
     NEXT_PUBLIC_AZURE_AD_CLIENT_ID?: string;
     NEXT_PUBLIC_AZURE_AD_TENANT_ID?: string;
     NEXT_PUBLIC_REDIRECT_URI?: string;

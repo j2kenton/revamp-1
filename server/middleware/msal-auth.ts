@@ -47,6 +47,51 @@ if (!CLIENT_ID) {
   );
 }
 
+const RAW_CHAT_SCOPE =
+  process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE ??
+  process.env.AZURE_AD_CHAT_SCOPE ??
+  '';
+
+const API_AUDIENCE_OVERRIDE =
+  process.env.AZURE_AD_API_AUDIENCE ?? process.env.AZURE_AD_RESOURCE_APP_ID ?? '';
+
+function deriveAudienceFromScope(scope: string | undefined): string | null {
+  if (!scope) {
+    return null;
+  }
+
+  const trimmedScope = scope.trim();
+  if (!trimmedScope) {
+    return null;
+  }
+
+  if (trimmedScope.startsWith('api://')) {
+    const secondSlashIndex = trimmedScope.indexOf('/', 'api://'.length);
+    if (secondSlashIndex === -1) {
+      return trimmedScope;
+    }
+    return trimmedScope.slice(0, secondSlashIndex);
+  }
+
+  const lastSlashIndex = trimmedScope.lastIndexOf('/');
+  if (lastSlashIndex > 0) {
+    return trimmedScope.slice(0, lastSlashIndex);
+  }
+
+  return null;
+}
+const DERIVED_AUDIENCE = deriveAudienceFromScope(RAW_CHAT_SCOPE);
+const EXPECTED_AUDIENCE =
+  API_AUDIENCE_OVERRIDE || DERIVED_AUDIENCE || CLIENT_ID;
+
+if (!API_AUDIENCE_OVERRIDE && !DERIVED_AUDIENCE) {
+  logWarn(
+    'MSAL token audience defaults to the SPA client ID. ' +
+      'If your access tokens target a protected API (api://<app-id>/scope), ' +
+      'set AZURE_AD_API_AUDIENCE to that API resource so validation succeeds.',
+  );
+}
+
 // Validate configuration at module load time
 if (TENANT_ID === 'common') {
   logWarn(
@@ -128,7 +173,7 @@ export async function validateMsalToken(
       // Validate issuer with the tenant ID from the token
       issuer: `https://login.microsoftonline.com/${tokenTenantId}/v2.0`,
       // Validate audience (should be the client ID)
-      audience: CLIENT_ID,
+      audience: EXPECTED_AUDIENCE,
       // Additional security checks
       algorithms: ['RS256'], // Azure AD uses RS256
     });

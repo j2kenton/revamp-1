@@ -24,7 +24,9 @@ if (!chatApiScope) {
   );
 }
 
-const baseScopes = ['openid', 'profile', 'email', 'User.Read'] as const;
+// Limit base scopes to identity-only resources. Resource-specific scopes (e.g., Microsoft Graph)
+// must be requested separately to avoid mixing audiences in a single token.
+const baseScopes = ['openid', 'profile', 'email'] as const;
 
 // MSAL configuration
 export const msalConfig: Configuration = {
