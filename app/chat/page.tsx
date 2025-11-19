@@ -106,9 +106,16 @@ export default function ChatPage() {
           <ThemeToggle />
           {user ? (
             <div className="flex items-center gap-2">
-              <span className="hidden text-sm text-gray-600 dark:text-gray-300 md:block">
-                <span className="font-medium">{user.name ?? user.email}</span>
-              </span>
+              <div className="hidden flex-col items-end md:flex">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {user.name ?? user.email}
+                </span>
+                {user.name && user.email && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {user.email}
+                  </span>
+                )}
+              </div>
               {photoUrl ? (
                 <Image
                   src={photoUrl}
