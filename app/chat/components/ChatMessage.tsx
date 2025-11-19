@@ -51,8 +51,11 @@ export function ChatMessage({
         role="article"
         aria-label={STRINGS.a11y.messageFrom(roleLabel, timeLabel)}
         className={clsx('flex max-w-3xl flex-col gap-2 rounded-lg px-4 py-3', {
-          'bg-blue-600 text-white': isUser,
-          'bg-white text-gray-900 shadow-sm': isAssistant,
+          // User bubble: slightly darker in dark mode for better separation from assistant
+          'bg-blue-600 text-white dark:bg-blue-700': isUser,
+          // Assistant bubble: darker neutral background in dark mode
+          'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100 dark:shadow-none':
+            isAssistant,
         })}
       >
         {/* Context truncation indicator */}
