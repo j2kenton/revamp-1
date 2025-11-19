@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
 
+const distDir = process.env.NEXT_DIST_DIR || '.next';
+
 const nextConfig: NextConfig = {
+  distDir,
   reactCompiler: true,
   env: {
     NEXT_PUBLIC_BYPASS_AUTH:

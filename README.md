@@ -66,7 +66,7 @@ This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-opti
 - `pnpm format`: Formats the code using Prettier.
 - `pnpm test`: Runs both unit and end-to-end tests.
 - `pnpm test:unit`: Runs unit tests using Jest.
-- `pnpm test:e2e`: Runs end-to-end tests using Playwright.
+- `pnpm test:e2e`: Runs end-to-end tests using Playwright (spins up its own dev server on `PLAYWRIGHT_PORT`, default `3100`, with its own `.next-playwright` build output so you can keep `pnpm dev` running on `3000` simultaneously).
 - `pnpm type-check`: Checks for TypeScript errors.
 
 ## Folder Structure
