@@ -37,16 +37,30 @@ interface LLMStreamOptions extends LLMRequestOptions {
 
 const DEFAULT_TEMPERATURE = 0.7;
 const FALLBACK_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
-const openAiApiKey = process.env.OPENAI_API_KEY ?? '';
-const openAiOrganizationId = process.env.OPENAI_ORGANIZATION_ID;
-const openAiProjectId = process.env.OPENAI_PROJECT_ID;
 
 let openAiClient: OpenAI | null = null;
 let hasLoggedMissingOpenAIKey = false;
 let hasLoggedBrowserEnvironmentFallback = false;
 
+function getOpenAiApiKey(): string | undefined {
+  const rawKey = process.env.OPENAI_API_KEY;
+  if (!rawKey) {
+    return undefined;
+  }
+  const trimmed = rawKey.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getOpenAiOrganizationId(): string | undefined {
+  return process.env.OPENAI_ORGANIZATION_ID?.trim() || undefined;
+}
+
+function getOpenAiProjectId(): string | undefined {
+  return process.env.OPENAI_PROJECT_ID?.trim() || undefined;
+}
+
 function isOpenAIConfigured(): boolean {
-  return Boolean(openAiApiKey);
+  return Boolean(getOpenAiApiKey());
 }
 
 function isBrowserLikeEnvironment(): boolean {
@@ -77,14 +91,17 @@ function shouldUseMockLLM(): boolean {
 }
 
 function getOpenAIClient(): OpenAI {
-  if (!openAiApiKey) {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) {
     throw new Error('OPENAI_API_KEY environment variable is required.');
   }
   if (!openAiClient) {
+    const organizationId = getOpenAiOrganizationId();
+    const projectId = getOpenAiProjectId();
     openAiClient = new OpenAI({
-      apiKey: openAiApiKey,
-      ...(openAiOrganizationId ? { organization: openAiOrganizationId } : {}),
-      ...(openAiProjectId ? { project: openAiProjectId } : {}),
+      apiKey,
+      ...(organizationId ? { organization: organizationId } : {}),
+      ...(projectId ? { project: projectId } : {}),
     });
   }
   return openAiClient;

@@ -179,7 +179,6 @@ async function processChatStream(request: NextRequest) {
                 }
               },
               {
-                model: 'gpt-4',
                 maxTokens: 2000,
                 temperature: 0.7,
               }

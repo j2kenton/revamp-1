@@ -137,7 +137,6 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
         );
 
         const llmPromise = callLLMWithRetry(truncatedMessages, {
-          model: 'gpt-4', // Configure as needed
           maxTokens: LLM_MAX_TOKENS,
           temperature: LLM_TEMPERATURE,
         });
