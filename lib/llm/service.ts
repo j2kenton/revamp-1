@@ -3,13 +3,7 @@
  * Handles communication with Language Model APIs
  */
 
-import OpenAI, { type APIError } from 'openai';
-import type {
-  ChatCompletionCreateParams,
-  ChatCompletionCreateParamsStreaming,
-  ChatCompletionContentPart,
-  ChatCompletionMessageParam,
-} from 'openai/resources/chat/completions';
+import { GoogleGenAI } from '@google/genai';
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 
@@ -35,15 +29,15 @@ interface LLMStreamOptions extends LLMRequestOptions {
   mockDelay?: number;
 }
 
-const DEFAULT_TEMPERATURE = 0.7;
-const FALLBACK_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
+const DEFAULT_TEMPERATURE = 1;
+const FALLBACK_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
-let openAiClient: OpenAI | null = null;
-let hasLoggedMissingOpenAIKey = false;
+let geminiClient: GoogleGenAI | null = null;
+let hasLoggedMissingGeminiKey = false;
 let hasLoggedBrowserEnvironmentFallback = false;
 
-function getOpenAiApiKey(): string | undefined {
-  const rawKey = process.env.OPENAI_API_KEY;
+function getGeminiApiKey(): string | undefined {
+  const rawKey = process.env.GEMINI_API_KEY;
   if (!rawKey) {
     return undefined;
   }
@@ -51,16 +45,8 @@ function getOpenAiApiKey(): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function getOpenAiOrganizationId(): string | undefined {
-  return process.env.OPENAI_ORGANIZATION_ID?.trim() || undefined;
-}
-
-function getOpenAiProjectId(): string | undefined {
-  return process.env.OPENAI_PROJECT_ID?.trim() || undefined;
-}
-
-function isOpenAIConfigured(): boolean {
-  return Boolean(getOpenAiApiKey());
+function isGeminiConfigured(): boolean {
+  return Boolean(getGeminiApiKey());
 }
 
 function isBrowserLikeEnvironment(): boolean {
@@ -69,7 +55,10 @@ function isBrowserLikeEnvironment(): boolean {
 
 function shouldUseMockLLM(): boolean {
   if (isBrowserLikeEnvironment()) {
-    if (!hasLoggedBrowserEnvironmentFallback && process.env.NODE_ENV !== 'test') {
+    if (
+      !hasLoggedBrowserEnvironmentFallback &&
+      process.env.NODE_ENV !== 'test'
+    ) {
       logWarn(
         'LLM service was invoked in a browser-like environment. Using mock responses to avoid exposing sensitive credentials.',
       );
@@ -78,99 +67,60 @@ function shouldUseMockLLM(): boolean {
     return true;
   }
 
-  if (isOpenAIConfigured()) {
+  if (isGeminiConfigured()) {
     return false;
   }
-  if (!hasLoggedMissingOpenAIKey && process.env.NODE_ENV !== 'test') {
+  if (!hasLoggedMissingGeminiKey && process.env.NODE_ENV !== 'test') {
     logWarn(
-      'OPENAI_API_KEY is not configured. Falling back to mock LLM responses.',
+      'GEMINI_API_KEY is not configured. Falling back to mock LLM responses.',
     );
-    hasLoggedMissingOpenAIKey = true;
+    hasLoggedMissingGeminiKey = true;
   }
   return true;
 }
 
-function getOpenAIClient(): OpenAI {
-  const apiKey = getOpenAiApiKey();
+function getGeminiClient(): GoogleGenAI {
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required.');
+    throw new Error('GEMINI_API_KEY environment variable is required.');
   }
-  if (!openAiClient) {
-    const organizationId = getOpenAiOrganizationId();
-    const projectId = getOpenAiProjectId();
-    openAiClient = new OpenAI({
-      apiKey,
-      ...(organizationId ? { organization: organizationId } : {}),
-      ...(projectId ? { project: projectId } : {}),
-    });
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({ apiKey });
   }
-  return openAiClient;
+  return geminiClient;
 }
 
 function resolveModel(model?: string): string {
   return model?.trim() || FALLBACK_MODEL;
 }
 
-function normalizeMessagesForOpenAI(
+function normalizeMessagesForGemini(
   messages: Array<{ role: string; content: string }>,
-): ChatCompletionMessageParam[] {
+): Array<{ role: string; parts: Array<{ text: string }> }> {
   return messages.map((msg) => {
-    const role =
-      msg.role === 'system' || msg.role === 'assistant' || msg.role === 'user'
-        ? msg.role
-        : 'user';
+    // Gemini uses 'user' and 'model' roles
+    // Map 'assistant' to 'model', 'system' is handled differently usually but for chat 'user'/'model' is standard
+    // For now, we'll map 'system' to 'user' with a prefix or just 'user' if the API supports system instructions separately
+    // The new SDK might support system instructions in the config.
+    // For simplicity in this migration, we'll map roles.
+
+    let role = 'user';
+    if (msg.role === 'assistant') {
+      role = 'model';
+    } else if (msg.role === 'model') {
+      role = 'model';
+    }
+
     return {
       role,
-      content: msg.content,
+      parts: [{ text: msg.content }],
     };
   });
 }
 
-type MessageContent = ChatCompletionMessageParam['content'];
-
-function extractMessageContent(
-  content: MessageContent | string | null | undefined,
-): string {
-  if (!content) {
-    return '';
-  }
-
-  if (typeof content === 'string') {
-    return content;
-  }
-
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (!part) {
-          return '';
-        }
-        if (typeof part === 'string') {
-          return part;
-        }
-        const structuredPart = part as ChatCompletionContentPart;
-        if (
-          'text' in structuredPart &&
-          typeof structuredPart.text === 'string'
-        ) {
-          return structuredPart.text;
-        }
-        return '';
-      })
-      .join('');
-  }
-
-  return '';
-}
-
-function isRetryableApiError(error: unknown): boolean {
-  const apiError = error as Partial<APIError> | undefined;
-  if (apiError && typeof apiError.status === 'number') {
-    if (apiError.status === 429) {
-      return true;
-    }
-    return apiError.status >= 500;
-  }
+function isRetryableApiError(_error: unknown): boolean {
+  // TODO: Check specific Gemini error codes
+  // For now, assume standard HTTP status codes if available or generic error check
   return true;
 }
 
@@ -271,14 +221,6 @@ const llmCircuitBreaker = new CircuitBreaker();
 
 /**
  * Access the singleton circuit breaker instance.
- *
- * @remarks
- * This is provided for observability hooks (e.g., health dashboards) and unit tests
- * that need to inspect breaker state transitions. The returned object is the live,
- * shared instance, so mutating it (calling `reset`, `execute`, etc.) will affect all
- * LLM calls for every user. Prefer read-only access (e.g., `getState()`) unless you
- * are explicitly coordinating a controlled test. Never modify breaker thresholds at
- * runtime outside of test environments.
  */
 export function getCircuitBreaker(): CircuitBreaker {
   return llmCircuitBreaker;
@@ -304,13 +246,20 @@ export async function callLLM(
   const startTime = Date.now();
 
   try {
-    const client = getOpenAIClient();
-    const normalizedMessages = normalizeMessagesForOpenAI(messages);
-    const model = resolveModel(options.model);
+    const client = getGeminiClient();
+    const modelName = resolveModel(options.model);
 
-    const requestPayload: ChatCompletionCreateParams = {
-      model,
-      messages: normalizedMessages,
+    // Separate system message if present
+    const systemMessage = messages.find((m) => m.role === 'system');
+    const chatMessages = messages.filter((m) => m.role !== 'system');
+
+    const contents = normalizeMessagesForGemini(chatMessages);
+
+    const config: {
+      temperature?: number;
+      maxOutputTokens?: number;
+      systemInstruction?: string;
+    } = {
       temperature:
         typeof options.temperature === 'number'
           ? options.temperature
@@ -318,29 +267,38 @@ export async function callLLM(
     };
 
     if (typeof options.maxTokens === 'number') {
-      requestPayload.max_tokens = options.maxTokens;
+      config.maxOutputTokens = options.maxTokens;
     }
 
-    const response = await client.chat.completions.create(requestPayload);
-    const choice = response.choices?.[0];
-    const content = extractMessageContent(choice?.message?.content);
+    if (systemMessage) {
+      config.systemInstruction = systemMessage.content;
+    }
+
+    const response = await client.models.generateContent({
+      model: modelName,
+      contents,
+      config,
+    });
+
+    const content = response.text;
 
     if (!content) {
-      throw new Error('OpenAI response did not include any content.');
+      throw new Error('Gemini response did not include any content.');
     }
 
     const processingTime = Date.now() - startTime;
 
     logInfo('LLM request completed', {
-      model: response.model ?? model,
+      model: modelName,
       processingTime,
       messageCount: messages.length,
     });
 
     return {
       content,
-      model: response.model ?? model,
-      tokensUsed: response.usage?.total_tokens ?? calculateTokenCount(content),
+      model: modelName,
+      tokensUsed:
+        response.usageMetadata?.totalTokenCount ?? calculateTokenCount(content),
       processingTime,
     };
   } catch (error) {
@@ -373,62 +331,68 @@ export async function callLLMStream(
   const startTime = Date.now();
 
   try {
-    const client = getOpenAIClient();
-    const normalizedMessages = normalizeMessagesForOpenAI(messages);
-    const model = resolveModel(options.model);
+    const client = getGeminiClient();
+    const modelName = resolveModel(options.model);
 
-    const requestPayload: ChatCompletionCreateParamsStreaming = {
-      model,
-      messages: normalizedMessages,
+    // Separate system message if present
+    const systemMessage = messages.find((m) => m.role === 'system');
+    const chatMessages = messages.filter((m) => m.role !== 'system');
+
+    const contents = normalizeMessagesForGemini(chatMessages);
+
+    const config: {
+      temperature?: number;
+      maxOutputTokens?: number;
+      systemInstruction?: string;
+    } = {
       temperature:
         typeof options.temperature === 'number'
           ? options.temperature
           : DEFAULT_TEMPERATURE,
-      stream: true,
     };
 
     if (typeof options.maxTokens === 'number') {
-      requestPayload.max_tokens = options.maxTokens;
+      config.maxOutputTokens = options.maxTokens;
     }
 
-    const stream = await client.chat.completions.create(requestPayload);
+    if (systemMessage) {
+      config.systemInstruction = systemMessage.content;
+    }
+
+    const stream = await client.models.generateContentStream({
+      model: modelName,
+      contents,
+      config,
+    });
 
     let fullContent = '';
-    let observedModel = model;
 
     for await (const chunk of stream) {
-      if (chunk.model) {
-        observedModel = chunk.model;
-      }
-
-      const deltaContent = extractMessageContent(
-        chunk.choices?.[0]?.delta?.content ?? null,
-      );
-
-      if (deltaContent) {
-        fullContent += deltaContent;
-        onChunk(deltaContent);
+      const chunkText = chunk.text;
+      if (chunkText) {
+        fullContent += chunkText;
+        onChunk(chunkText);
       }
     }
 
     const finalContent = fullContent.trim();
 
     if (!finalContent) {
-      throw new Error('OpenAI streaming response returned no content.');
+      throw new Error('Gemini streaming response returned no content.');
     }
 
     const processingTime = Date.now() - startTime;
 
     logInfo('LLM streaming request completed', {
-      model: observedModel,
+      model: modelName,
       processingTime,
       messageCount: messages.length,
     });
 
     return {
       content: finalContent,
-      model: observedModel,
-      tokensUsed: calculateTokenCount(finalContent),
+      model: modelName,
+      tokensUsed: calculateTokenCount(finalContent), // Usage metadata might be available in the final chunk, but for now approx
       processingTime,
     };
   } catch (error) {
