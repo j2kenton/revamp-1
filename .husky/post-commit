@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+
+# Skip when running inside CI or when explicitly opted out.
+if [ "${CI:-}" = "true" ] || [ "${SKIP_POST_COMMIT_TESTS:-}" = "true" ]; then
+	exit 0
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+	echo "husky (post-commit) • npm not found in PATH, skipping test run."
+	exit 0
+fi
+
+echo "husky (post-commit) • running full test suite..."
+
+if npm run test; then
+	echo "husky (post-commit) • tests passed ✅"
+else
+	status=$?
+	echo "husky (post-commit) • tests failed. Fix issues and rerun 'npm run test'."
+	echo "husky (post-commit) • amend or follow-up commit may be required."
+	exit "$status"
+fi

@@ -69,6 +69,13 @@ This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-opti
 - `pnpm test:e2e`: Runs end-to-end tests using Playwright (spins up its own dev server on `PLAYWRIGHT_PORT`, default `3100`, with its own `.next-playwright` build output so you can keep `pnpm dev` running on `3000` simultaneously).
 - `pnpm type-check`: Checks for TypeScript errors.
 
+## Git Hooks
+
+- **Automated post-commit tests**: Husky runs `npm run test` (Jest + Playwright) immediately after every commit to surface regressions before pushing.
+- **Activation**: `npm install`/`pnpm install` automatically runs the `prepare` script (`husky install`). If hooks ever stop running, execute `npm run prepare`.
+- **Skipping in edge cases**: When you intentionally want to bypass the hook (e.g., spike commits), run `SKIP_POST_COMMIT_TESTS=true git commit ...` or set `HUSKY=0`.
+- **Troubleshooting**: If the hook fails because dependencies are missing, reinstall with Node 20+ and re-run the commit; the commit already exists, so follow up with `git commit --amend` once tests pass.
+
 ## Folder Structure
 
 ```plaintext
