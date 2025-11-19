@@ -24,7 +24,7 @@ if (!chatApiScope) {
   );
 }
 
-const baseScopes = ['openid', 'profile', 'email'] as const;
+const baseScopes = ['openid', 'profile', 'email', 'User.Read'] as const;
 
 // MSAL configuration
 export const msalConfig: Configuration = {

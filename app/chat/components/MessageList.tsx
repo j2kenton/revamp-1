@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { MessageDTO } from '@/types/models';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
+import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
 import { ChatMessage } from './ChatMessage';
 import { MessageListEmptyState } from './MessageListEmptyState';
 import { MessageListErrorState } from './MessageListErrorState';
@@ -32,7 +33,8 @@ interface MessageListProps {
 
 export function MessageList({ chatId, streamingMessage }: MessageListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
-  const { messages, isLoading, error } = useFetchChatHistory(chatId);
+  const { messages, isLoading, error } = useFetchChatHistory(chatId ?? null);
+  const { photoUrl: userPhotoUrl } = useProfilePhoto();
 
   // Combine messages with streaming message
   const streamingMetadata =
@@ -153,7 +155,11 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
                 }}
                 className="pb-4"
               >
-                <ChatMessage message={message} isStreaming={streamInProgress} />
+                <ChatMessage
+                  message={message}
+                  isStreaming={streamInProgress}
+                  userPhotoUrl={userPhotoUrl}
+                />
               </div>
             );
           })}

@@ -17,9 +17,14 @@ import { STRINGS } from '@/lib/constants/strings';
 interface ChatMessageProps {
   message: MessageDTO;
   isStreaming?: boolean;
+  userPhotoUrl?: string | null;
 }
 
-export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  isStreaming = false,
+  userPhotoUrl,
+}: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
@@ -51,9 +56,11 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
         })}
       >
         {/* Context truncation indicator */}
-        {contextTruncated && typeof messagesRemoved === 'number' && messagesRemoved > 0 && (
-          <ContextTruncationBanner messagesRemoved={messagesRemoved} />
-        )}
+        {contextTruncated &&
+          typeof messagesRemoved === 'number' &&
+          messagesRemoved > 0 && (
+            <ContextTruncationBanner messagesRemoved={messagesRemoved} />
+          )}
 
         <div className="whitespace-pre-wrap break-words text-sm">
           {message.content}
@@ -85,7 +92,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
       </div>
 
       {/* User avatar */}
-      {isUser && <MessageAvatar role={message.role} />}
+      {isUser && <MessageAvatar role={message.role} photoUrl={userPhotoUrl} />}
     </div>
   );
 }

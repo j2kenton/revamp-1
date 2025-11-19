@@ -26,7 +26,7 @@ export function PresenceToggle() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          className="cursor-pointer rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
           aria-expanded={open}
           aria-controls="presence-panel"
         >

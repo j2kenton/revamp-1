@@ -90,7 +90,8 @@ export default function TestSupportLoginPage() {
             Sign in as Test User
           </h1>
           <p className="text-sm text-gray-600">
-            This helper page configures the application for automated end-to-end tests.
+            This helper page configures the application for automated end-to-end
+            tests.
           </p>
         </div>
 
@@ -107,13 +108,14 @@ export default function TestSupportLoginPage() {
           type="button"
           onClick={() => void handleLogin()}
           disabled={isSubmitting}
-          className="mt-8 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-8 w-full cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isSubmitting ? 'Configuring test session…' : 'Continue to chat'}
         </button>
 
         <p className="mt-4 text-center text-xs text-gray-500">
-          A temporary cookie and local flag are stored to bypass MSAL login during the test session.
+          A temporary cookie and local flag are stored to bypass MSAL login
+          during the test session.
         </p>
       </div>
     </main>

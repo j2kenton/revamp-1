@@ -55,14 +55,14 @@ export function ChatErrorFallback({ error, onRetry }: ChatErrorFallbackProps) {
           <button
             type="button"
             onClick={onRetry}
-            className="flex w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="flex w-full cursor-pointer items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Retry chat
           </button>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="flex w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Reload page
           </button>
@@ -103,7 +103,10 @@ export class ChatErrorBoundary extends Component<
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <ChatErrorFallback error={this.state.error} onRetry={this.handleReset} />
+        <ChatErrorFallback
+          error={this.state.error}
+          onRetry={this.handleReset}
+        />
       );
     }
 

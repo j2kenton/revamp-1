@@ -77,7 +77,7 @@ export function TodoList({ userId }: TodoListProps) {
         <p className="text-sm text-red-700">{error.message}</p>
         <button
           onClick={() => mutate()}
-          className="mt-2 rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+          className="mt-2 cursor-pointer rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
         >
           Retry
         </button>
@@ -101,7 +101,7 @@ export function TodoList({ userId }: TodoListProps) {
         <button
           type="submit"
           disabled={isCreating || !newTodoTitle.trim()}
-          className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isCreating ? 'Adding...' : 'Add'}
         </button>
@@ -177,7 +177,7 @@ function TodoItem({ todo, onUpdate }: TodoItemProps) {
       <button
         onClick={handleDelete}
         disabled={isUpdating || isDeleting}
-        className="rounded px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="cursor-pointer rounded px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={`Delete "${todo.title}"`}
       >
         {isDeleting ? 'Deleting...' : 'Delete'}

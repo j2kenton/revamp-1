@@ -265,7 +265,7 @@ export function ChatInterface({
             <button
               type="button"
               onClick={() => void handleSendMessage(retryContent)}
-              className="rounded-md border px-3 py-1 text-sm"
+              className="cursor-pointer rounded-md border px-3 py-1 text-sm"
             >
               {STRINGS.actions.retry}
             </button>
@@ -327,7 +327,7 @@ export function ChatInterface({
             type="submit"
             disabled={isDisabled}
             aria-disabled={isDisabled}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+            className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {STRINGS.actions.send}
           </button>

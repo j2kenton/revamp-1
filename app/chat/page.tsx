@@ -6,8 +6,10 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import type { MessageDTO } from '@/types/models';
 import { useAuth } from '@/lib/auth/useAuth';
+import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MessageList } from './components/MessageList';
 import { ChatInput } from './components/ChatInput';
@@ -24,6 +26,7 @@ export default function ChatPage() {
     user,
     error: authError,
   } = useAuth();
+  const { photoUrl } = useProfilePhoto();
 
   const {
     sendStreamingMessage,
@@ -77,7 +80,7 @@ export default function ChatPage() {
           <button
             onClick={() => void login()}
             disabled={isAuthLoading}
-            className="mt-6 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 w-full cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isAuthLoading ? 'Signing in...' : 'Sign in with Microsoft'}
           </button>
@@ -101,15 +104,31 @@ export default function ChatPage() {
         </div>
         <div className="flex items-center gap-3">
           {user ? (
-            <div className="hidden text-sm text-gray-600 dark:text-gray-300 md:block">
-              Signed in as{' '}
-              <span className="font-medium">{user.name ?? user.email}</span>
+            <div className="flex items-center gap-2">
+              <span className="hidden text-sm text-gray-600 dark:text-gray-300 md:block">
+                Signed in as{' '}
+                <span className="font-medium">{user.name ?? user.email}</span>
+              </span>
+              {photoUrl ? (
+                <Image
+                  src={photoUrl}
+                  alt="Profile"
+                  width={32}
+                  height={32}
+                  className="rounded-full object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                  {(user.name ?? user.email).charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
           ) : null}
           <ThemeToggle />
           <button
             onClick={handleNewChat}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             New Chat
           </button>
@@ -121,7 +140,10 @@ export default function ChatPage() {
         <main id="chat-main" className="flex flex-1 flex-col overflow-hidden">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto">
-            <MessageList chatId={chatId} streamingMessage={streamingMessage} />
+            <MessageList
+              chatId={chatId ?? undefined}
+              streamingMessage={streamingMessage}
+            />
           </div>
 
           {/* Input */}

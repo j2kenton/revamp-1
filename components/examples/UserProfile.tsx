@@ -43,7 +43,7 @@ export function UserProfile({ userId }: UserProfileProps) {
         <p className="text-sm text-red-700">{error.message}</p>
         <button
           onClick={() => mutate()}
-          className="mt-2 rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+          className="mt-2 cursor-pointer rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
         >
           Retry
         </button>
@@ -85,7 +85,7 @@ export function UserProfile({ userId }: UserProfileProps) {
         </div>
         <button
           onClick={() => mutate()}
-          className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
+          className="cursor-pointer rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
           aria-label="Refresh user data"
         >
           Refresh
