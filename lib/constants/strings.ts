@@ -44,8 +44,10 @@ export const STRINGS = {
 
   // Chat input
   input: {
-    placeholder:
-      'Type your message... (Enter to send, Shift+Enter for new line)',
+    placeholder: `Type your message...
+      
+(Enter to send, Shift+Enter for new line)
+`,
     sendButton: 'Send',
     characterCount: (current: number, max: number) =>
       `Characters: ${current} / ${max}`,
