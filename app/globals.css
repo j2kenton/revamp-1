@@ -1,17 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Injected by next/font in layout: --font-geist-sans / --font-geist-mono */
-  /* Fallback stacks ensure readable text during swap phase */
-  --font-sans-stack: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-mono-stack: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* Google Sans Flex loaded via @import from Google Fonts CDN */
+  /* Roboto Mono injected by next/font in layout: --font-roboto-mono */
+  --font-sans-stack: "Google Sans Flex", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono-stack: var(--font-roboto-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   /* Decorative heading font variable now points to brand stack */
   --font-heading: var(--font-brand);
-  /* Brand stack (Google Sans). Note: Google Sans is proprietary; these names resolve only if available locally. */
-  --font-brand: 'Google Sans Flex', 'Google Sans', 'Helvetica Neue', sans-serif;
+  /* Brand stack uses Google Sans Flex (now open source under SIL OFL) */
+  --font-brand: "Google Sans Flex", sans-serif;
 }
 
 html.light {
@@ -34,8 +35,9 @@ html.dark {
 body {
   background: var(--background);
   color: var(--foreground);
-  /* Prefer brand stack; fall back to loaded Geist sans + system */
+  /* Use Google Sans Flex with system fallbacks */
   font-family: var(--font-brand), var(--font-sans-stack);
+  font-optical-sizing: auto;
   font-feature-settings: "kern" 1, "liga" 1;
   -webkit-font-smoothing: antialiased;
 }

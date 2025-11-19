@@ -10,10 +10,10 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Use CSS variable stacks to stay in sync with next/font + globals.css
+        // Use CSS variable stacks to stay in sync with globals.css
         sans: [
           'var(--font-brand)',
-          'var(--font-geist-sans)',
+          'Google Sans Flex',
           'system-ui',
           '-apple-system',
           'Segoe UI',
@@ -24,7 +24,7 @@ const config: Config = {
           'sans-serif',
         ],
         mono: [
-          'var(--font-geist-mono)',
+          'var(--font-roboto-mono)',
           'ui-monospace',
           'SFMono-Regular',
           'Menlo',

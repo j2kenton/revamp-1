@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Roboto_Mono } from 'next/font/google';
 import { TestAuthBypass } from '@/components/test-auth-bypass/TestAuthBypass';
 import { ReduxProvider } from '@/lib/redux/ReduxProvider';
 import { SessionProvider } from '@/lib/auth/SessionProvider';
@@ -10,17 +10,12 @@ import { WebVitalsReporter } from '@/components/WebVitalsReporter';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+// Google Sans Flex loaded via Google Fonts CDN in globals.css
+const robotoMono = Roboto_Mono({
+  variable: '--font-roboto-mono',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
 });
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
-// Heading font now uses local Google Sans Flex stack via CSS variable --font-brand / --font-heading.
 
 export const metadata: Metadata = {
   title: 'CR Project App',
@@ -39,9 +34,7 @@ if (shouldBypassAuthForTests) {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${robotoMono.variable} antialiased`}>
         <TestAuthBypass isEnabled={shouldBypassAuthForTests} />
         <ThemeProvider>
           <WebVitalsReporter />
