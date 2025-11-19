@@ -100,6 +100,12 @@ export default function ChatPage() {
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-3">
+          {user ? (
+            <div className="hidden text-sm text-gray-600 dark:text-gray-300 md:block">
+              Signed in as{' '}
+              <span className="font-medium">{user.name ?? user.email}</span>
+            </div>
+          ) : null}
           <ThemeToggle />
           <button
             onClick={handleNewChat}
@@ -125,7 +131,6 @@ export default function ChatPage() {
               isStreaming={isStreaming}
               error={streamingError}
               rateLimitSeconds={rateLimitSeconds}
-              userDisplayName={user?.name ?? user?.email ?? undefined}
             />
           </div>
         </main>
