@@ -22,7 +22,7 @@ else
 	echo "husky (post-commit) • amend or follow-up commit may be required."
 
 	# Show Windows notification popup
-	powershell.exe -Command "& {Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('Tests failed after commit! Check terminal for details.', 'Git Hook - Test Failure', 0, 48)}"
+	powershell.exe -Command "& {Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('Tests failed after commit! Check OUTPUT pane for details.', 'Git Hook - Test Failure', 0, 48)}"
 
 	exit "$status"
 fi
