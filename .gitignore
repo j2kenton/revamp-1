@@ -50,3 +50,6 @@ next-env.d.ts
 .output.md.*
 AGENTS.md
 .claude/settings.local.json
+
+# temp files
+/node_modules_old_to_delete/
