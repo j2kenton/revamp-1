@@ -3,9 +3,10 @@
  * Handles communication with Language Model APIs
  */
 
-import { GoogleGenAI } from '@google/genai';
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
+type GoogleGenAIModule = typeof import('@google/genai');
+type GoogleGenAIClient = InstanceType<GoogleGenAIModule['GoogleGenAI']>;
 
 interface LLMResponse {
   content: string;
@@ -32,7 +33,8 @@ interface LLMStreamOptions extends LLMRequestOptions {
 const DEFAULT_TEMPERATURE = 1;
 const FALLBACK_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
-let geminiClient: GoogleGenAI | null = null;
+let geminiClient: GoogleGenAIClient | null = null;
+let googleGenAIModulePromise: Promise<GoogleGenAIModule> | null = null;
 let hasLoggedMissingGeminiKey = false;
 let hasLoggedBrowserEnvironmentFallback = false;
 
@@ -79,12 +81,20 @@ function shouldUseMockLLM(): boolean {
   return true;
 }
 
-function getGeminiClient(): GoogleGenAI {
+async function loadGoogleGenAIModule(): Promise<GoogleGenAIModule> {
+  if (!googleGenAIModulePromise) {
+    googleGenAIModulePromise = import('@google/genai');
+  }
+  return googleGenAIModulePromise;
+}
+
+async function getGeminiClient(): Promise<GoogleGenAIClient> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is required.');
   }
   if (!geminiClient) {
+    const { GoogleGenAI } = await loadGoogleGenAIModule();
     geminiClient = new GoogleGenAI({ apiKey });
   }
   return geminiClient;
@@ -246,7 +256,7 @@ export async function callLLM(
   const startTime = Date.now();
 
   try {
-    const client = getGeminiClient();
+    const client = await getGeminiClient();
     const modelName = resolveModel(options.model);
 
     // Separate system message if present
@@ -331,7 +341,7 @@ export async function callLLMStream(
   const startTime = Date.now();
 
   try {
-    const client = getGeminiClient();
+    const client = await getGeminiClient();
     const modelName = resolveModel(options.model);
 
     // Separate system message if present
