@@ -400,7 +400,7 @@ NEXTAUTH_URL=http://localhost:3000
 
 # Don't hardcode this key!!! Always store credentials in a safe location and access them securely!!!
 OPENAI_API_KEY=
-OPENAI_CHAT_MODEL=gpt-4o-mini
+OPENAI_CHAT_MODEL=
 OPENAI_ORGANIZATION_ID=
 OPENAI_PROJECT_ID=
 ANTHROPIC_API_KEY=
