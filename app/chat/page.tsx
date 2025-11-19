@@ -94,8 +94,8 @@ export default function ChatPage() {
       {/* Header */}
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Gemini 3 Preview
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">
+            Gemini 3
           </h1>
           <ConnectionStatus />
         </div>
