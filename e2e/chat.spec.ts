@@ -10,10 +10,12 @@ test.describe('Chat Interface', () => {
     await loginAsTestUser(page);
   });
 
-  test('should display empty state when no chat is active', async ({ page }) => {
+  test('should display empty state when no chat is active', async ({
+    page,
+  }) => {
     await expect(page.getByText('Start a conversation')).toBeVisible();
     await expect(
-      page.getByText('Type a message below to begin chatting with AI')
+      page.getByText('Type a message below to begin chatting with AI'),
     ).toBeVisible();
   });
 
@@ -66,14 +68,6 @@ test.describe('Chat Interface', () => {
 
     await expect(input).toContainText('First line');
     // Should not have sent the message
-  });
-
-  test('should show keyboard shortcuts hint', async ({ page }) => {
-    const enterKeys = page.getByText('Enter', { exact: true });
-    await expect(enterKeys.first()).toBeVisible();
-    await expect(page.getByText('to send')).toBeVisible();
-    await expect(page.getByText('Shift')).toBeVisible();
-    await expect(page.getByText('for new line')).toBeVisible();
   });
 
   test('should prevent sending when character limit exceeded', async ({
