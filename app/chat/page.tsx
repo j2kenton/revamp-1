@@ -103,10 +103,10 @@ export default function ChatPage() {
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           {user ? (
             <div className="flex items-center gap-2">
               <span className="hidden text-sm text-gray-600 dark:text-gray-300 md:block">
-                Signed in as{' '}
                 <span className="font-medium">{user.name ?? user.email}</span>
               </span>
               {photoUrl ? (
@@ -125,7 +125,6 @@ export default function ChatPage() {
               )}
             </div>
           ) : null}
-          <ThemeToggle />
         </div>
       </header>
 
