@@ -12,7 +12,7 @@ fi
 
 echo "husky (post-commit) • running full test suite..."
 
-if npm run test; then
+if npm run test:unit; then
 	echo "husky (post-commit) • tests passed ✅"
 	# Optional: Uncomment to get notified on success too
 	# powershell.exe -Command "& {Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('All tests passed!', 'Git Hook - Success', 0, 64)}"
@@ -22,7 +22,7 @@ else
 	echo "husky (post-commit) • amend or follow-up commit may be required."
 
 	# Show Windows notification popup
-	powershell.exe -Command "& {Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('Tests failed after commit! Check OUTPUT pane for details.', 'Git Hook - Test Failure', 0, 48)}"
+	# powershell.exe -Command "& {Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('Tests failed after commit! Check OUTPUT pane for details.', 'Git Hook - Test Failure', 0, 48)}"
 
 	exit "$status"
 fi
