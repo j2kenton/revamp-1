@@ -5,10 +5,8 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import clsx from 'clsx';
-import Editor, { OnMount } from '@monaco-editor/react';
-import type { editor } from 'monaco-editor';
 import { LoadingSpinner } from '@/components/ui/icons';
 import {
   MAX_MESSAGE_LENGTH,
@@ -17,7 +15,6 @@ import {
   MESSAGE_LENGTH_WARNING_THRESHOLD,
 } from '@/lib/constants/ui';
 import { STRINGS } from '@/lib/constants/strings';
-import { useTheme } from '@/lib/theme/ThemeProvider';
 
 const COUNTDOWN_INTERVAL_MS = 1000;
 
@@ -34,14 +31,12 @@ export function ChatInput({
   error,
   rateLimitSeconds,
 }: ChatInputProps) {
-  const { actualTheme } = useTheme();
   const [message, setMessage] = useState('');
-  const [isComposing, _setIsComposing] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const [debouncedLength, setDebouncedLength] = useState(0);
   const [isDebounced, setIsDebounced] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [editorHeight, setEditorHeight] = useState(240); // Initial height in pixels
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const sendDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -62,19 +57,13 @@ export function ChatInput({
     };
   }, [message]);
 
-  // Calculate editor height based on content
-  const calculateEditorHeight = () => {
-    if (!editorRef.current) return 240;
-    const lineCount = editorRef.current.getModel()?.getLineCount() || 1;
-    const lineHeight = 20; // Monaco's default line height
-    const padding = 16; // Top and bottom padding
-    const minHeight = 240; // Minimum height (10 rows equivalent)
-    const maxHeight = 600; // Maximum height
-    return Math.min(
-      Math.max(lineCount * lineHeight + padding, minHeight),
-      maxHeight
-    );
-  };
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [message]);
 
   useEffect(() => {
     return () => {
@@ -142,50 +131,15 @@ export function ChatInput({
 
     onSendMessage(trimmed);
     setMessage('');
-    // Reset editor height after sending
-    if (editorRef.current) {
-      const height = calculateEditorHeight();
-      setEditorHeight(height);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposing) return;
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
-  };
-
-  // Monaco Editor mount handler
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
-    editorRef.current = editor;
-
-    // Add custom keybinding for Enter to send (without Shift)
-    editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      () => {
-        handleSubmit();
-      }
-    );
-
-    // Override default Enter behavior
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    editor.onKeyDown((e: any) => {
-      if (e.keyCode === monaco.KeyCode.Enter && !e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isComposing) {
-          handleSubmit();
-        }
-      }
-    });
-
-    // Handle content changes for auto-resize
-    editor.onDidChangeModelContent(() => {
-      const newHeight = calculateEditorHeight();
-      setEditorHeight(newHeight);
-    });
-
-    // Focus the editor on mount
-    editor.focus();
-  };
-
-  // Handle editor value changes
-  const handleEditorChange = (value: string | undefined) => {
-    setMessage(value || '');
   };
 
   const isNearLimit =
@@ -228,73 +182,32 @@ export function ChatInput({
       >
         <div className="flex w-full gap-3">
           <div className="flex-1">
-            <div
+            <textarea
+              id="chat-input"
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              placeholder={STRINGS.input.placeholder}
+              disabled={isStreaming || countdown !== null}
               className={clsx(
-                'overflow-hidden rounded-lg border',
+                'w-full resize-none rounded-lg border px-4 py-3 focus:outline-none focus:ring-2',
                 {
-                  'border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500':
+                  'border-gray-300 focus:border-blue-500 focus:ring-blue-500':
                     !isOverLimit,
-                  'border-red-300 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500':
+                  'border-red-300 focus:border-red-500 focus:ring-red-500':
                     isOverLimit,
                   'cursor-not-allowed opacity-50':
                     isStreaming || countdown !== null,
                 },
               )}
-              style={{ height: `${editorHeight}px` }}
-              role="textbox"
+              rows={10}
               aria-label={STRINGS.input.ariaLabel}
               aria-invalid={isOverLimit}
               aria-describedby="char-counter"
-            >
-              <Editor
-                height="100%"
-                defaultLanguage="plaintext"
-                value={message}
-                onChange={handleEditorChange}
-                onMount={handleEditorDidMount}
-                loading={<div className="flex h-full items-center justify-center">Loading editor...</div>}
-                options={{
-                  minimap: { enabled: false },
-                  lineNumbers: 'off',
-                  glyphMargin: false,
-                  folding: false,
-                  lineDecorationsWidth: 0,
-                  lineNumbersMinChars: 0,
-                  renderLineHighlight: 'none',
-                  scrollBeyondLastLine: false,
-                  overviewRulerLanes: 0,
-                  hideCursorInOverviewRuler: true,
-                  overviewRulerBorder: false,
-                  scrollbar: {
-                    vertical: 'auto',
-                    horizontal: 'hidden',
-                    verticalScrollbarSize: 8,
-                  },
-                  wordWrap: 'on',
-                  wrappingStrategy: 'advanced',
-                  fontSize: 14,
-                  fontFamily: 'inherit',
-                  padding: { top: 12, bottom: 12 },
-                  readOnly: isStreaming || countdown !== null,
-                  domReadOnly: isStreaming || countdown !== null,
-                  suggest: { showWords: false },
-                  quickSuggestions: false,
-                  parameterHints: { enabled: false },
-                  acceptSuggestionOnEnter: 'off',
-                  tabCompletion: 'off',
-                  wordBasedSuggestions: 'off',
-                  occurrencesHighlight: 'off',
-                  renderWhitespace: 'none',
-                  renderControlCharacters: false,
-                  contextmenu: true,
-                  mouseWheelZoom: false,
-                  smoothScrolling: true,
-                  cursorBlinking: 'smooth',
-                  cursorSmoothCaretAnimation: 'on',
-                }}
-                theme={actualTheme === 'dark' ? 'vs-dark' : 'vs'}
-              />
-            </div>
+            />
           </div>
           <button
             onClick={handleSubmit}
