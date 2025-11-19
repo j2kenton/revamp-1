@@ -47,7 +47,8 @@ export const STRINGS = {
     placeholder:
       'Type your message... (Enter to send, Shift+Enter for new line)',
     sendButton: 'Send',
-    characterCount: (current: number, max: number) => `${current} / ${max}`,
+    characterCount: (current: number, max: number) =>
+      `Characters: ${current} / ${max}`,
     ariaLabel: 'Message input',
   },
 

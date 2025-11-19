@@ -23,6 +23,7 @@ interface ChatInputProps {
   isStreaming: boolean;
   error?: Error | null;
   rateLimitSeconds?: number | null;
+  onNewChat?: () => void;
 }
 
 export function ChatInput({
@@ -30,6 +31,7 @@ export function ChatInput({
   isStreaming,
   error,
   rateLimitSeconds,
+  onNewChat,
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isComposing, setIsComposing] = useState(false);
@@ -181,7 +183,7 @@ export function ChatInput({
         }}
       >
         <div className="flex w-full gap-3">
-          <div className="flex-1">
+          <div className="flex flex-1 justify-end">
             <textarea
               id="chat-input"
               ref={textareaRef}
@@ -209,42 +211,55 @@ export function ChatInput({
               aria-describedby="char-counter"
             />
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className={clsx(
-              'rounded-md px-6 py-3 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
-              {
-                'cursor-pointer bg-blue-600 text-white hover:bg-blue-700':
-                  canSubmit,
-                'cursor-not-allowed bg-gray-300 text-gray-500': !canSubmit,
-              },
+          <div className="flex flex-col justify-end gap-2">
+            <div className="text-xs font-medium">
+              <span
+                id="char-counter"
+                className={clsx({
+                  'text-gray-400': !isNearLimit,
+                  'text-orange-500': isNearLimit && !isOverLimit,
+                  'text-red-500': isOverLimit,
+                })}
+                aria-live="polite"
+              >
+                {STRINGS.input.characterCount(
+                  debouncedLength,
+                  MAX_MESSAGE_LENGTH,
+                )}
+              </span>
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className={clsx(
+                'rounded-md px-6 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                {
+                  'cursor-pointer bg-blue-600 text-white hover:bg-blue-700':
+                    canSubmit,
+                  'cursor-not-allowed bg-gray-300 text-gray-500': !canSubmit,
+                },
+              )}
+              aria-label="Send message"
+              aria-disabled={!canSubmit}
+            >
+              {isStreaming ? (
+                <div className="flex items-center gap-2">
+                  <LoadingSpinner className="h-4 w-4 border-white border-t-transparent" />
+                  <span>{STRINGS.status.streaming}</span>
+                </div>
+              ) : (
+                STRINGS.input.sendButton
+              )}
+            </button>
+            {onNewChat && (
+              <button
+                onClick={onNewChat}
+                className="cursor-pointer rounded-md bg-gray-200 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+              >
+                New Chat
+              </button>
             )}
-            aria-label="Send message"
-            aria-disabled={!canSubmit}
-          >
-            {isStreaming ? (
-              <div className="flex items-center gap-2">
-                <LoadingSpinner className="h-4 w-4 border-white border-t-transparent" />
-                <span>{STRINGS.status.streaming}</span>
-              </div>
-            ) : (
-              STRINGS.input.sendButton
-            )}
-          </button>
-        </div>
-        <div className="mt-2 flex justify-between text-xs font-medium">
-          <span
-            id="char-counter"
-            className={clsx({
-              'text-gray-400': !isNearLimit,
-              'text-orange-500': isNearLimit && !isOverLimit,
-              'text-red-500': isOverLimit,
-            })}
-            aria-live="polite"
-          >
-            {STRINGS.input.characterCount(debouncedLength, MAX_MESSAGE_LENGTH)}
-          </span>
+          </div>
         </div>
       </div>
     </div>
