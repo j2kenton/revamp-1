@@ -17,7 +17,13 @@ import { useStreamingResponse } from './hooks/useStreamingResponse';
 
 export default function ChatPage() {
   const [chatId, setChatId] = useState<string | null>(null);
-  const { isAuthenticated, login, isLoading: isAuthLoading, user, error: authError } = useAuth();
+  const {
+    isAuthenticated,
+    login,
+    isLoading: isAuthLoading,
+    user,
+    error: authError,
+  } = useAuth();
 
   const {
     sendStreamingMessage,
@@ -53,13 +59,18 @@ export default function ChatPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-6">
         <div className="max-w-md rounded-xl bg-white p-8 text-center shadow">
-          <h1 className="text-2xl font-bold text-gray-900">Sign in to start chatting</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Sign in to start chatting
+          </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Connect with your Microsoft account to continue. Your identity is required for secure chat
-            history and rate limiting.
+            Connect with your Microsoft account to continue. Your identity is
+            required for secure chat history and rate limiting.
           </p>
           {authError && (
-            <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700" role="alert">
+            <p
+              className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700"
+              role="alert"
+            >
               {authError.message}
             </p>
           )}
@@ -83,13 +94,16 @@ export default function ChatPage() {
       {/* Header */}
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">AI Chat</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Gemini 3 Preview
+          </h1>
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-3">
           {user ? (
             <div className="hidden text-sm text-gray-600 dark:text-gray-300 md:block">
-              Signed in as <span className="font-medium">{user.name ?? user.email}</span>
+              Signed in as{' '}
+              <span className="font-medium">{user.name ?? user.email}</span>
             </div>
           ) : null}
           <ThemeToggle />
