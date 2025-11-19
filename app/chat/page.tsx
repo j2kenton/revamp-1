@@ -81,9 +81,9 @@ export default function ChatPage() {
         Skip to chat content
       </a>
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
+      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">AI Chat</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">AI Chat</h1>
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-3">
@@ -111,7 +111,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200 bg-white">
+          <div className="border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
             <ChatInput
               onSendMessage={handleSendMessage}
               isStreaming={isStreaming}

@@ -5,7 +5,7 @@
 export default function ChatLoading() {
   return (
     <div className="flex h-screen flex-col bg-gray-50">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
+      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="h-8 w-32 animate-pulse rounded bg-gray-200"></div>
         <div className="h-10 w-24 animate-pulse rounded bg-gray-200"></div>
       </header>
