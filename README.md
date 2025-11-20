@@ -19,6 +19,7 @@ ReVamp is a comprehensive web development template that combines modern best pra
 
 - **Node.js** v20.9.0 or later
 - **pnpm** (recommended) or npm
+- **Redis** (for local development)
 
 ### Installation
 
@@ -53,7 +54,9 @@ This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-opti
 - **Animations**: [Framer Motion](https://www.framer.com/motion/) 12.23.24
 - **State Management**: [Redux](https://redux.js.org/) 5.0.1 & [React Redux](https://react-redux.js.org/) 9.2.0
 - **Data Fetching**: [SWR](https://swr.vercel.app/) 2.3.6
-- **Authentication**: [NextAuth.js](https://next-auth.js.org/) 4.24.13
+- **Authentication**: [Microsoft Authentication Library (MSAL)](https://github.com/AzureAD/microsoft-authentication-library-for-js)
+- **Data Storage**: [Redis](https://redis.io/)
+- **AI/LLM**: [Google Gemini](https://ai.google/discover/gemini/)
 - **Form Management**: [React Hook Form](https://react-hook-form.com/) 7.66.0
 - **Schema Validation**: [Zod](https://zod.dev/) 3.25.76
 
@@ -79,33 +82,91 @@ This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-opti
 ## Folder Structure
 
 ```plaintext
-├── app
-│   ├── api
-│   │   ├── auth
-│   │   └── ...
-│   ├── (main)
-│   │   ├── dashboard
-│   │   └── ...
-│   └── login
-├── components
-│   ├── ui
-│   └── ...
-├── lib
-│   ├── auth
-│   ├── redux
-│   └── ...
-├── public
-└── ...
+app/
+├── api/
+│   ├── chat/
+│   │   ├── route.ts
+│   │   └── stream/
+│   │       └── route.ts
+│   └── auth/
+│       └── [...nextauth]/
+│           └── route.ts
+├── chat/
+│   ├── page.tsx
+│   └── components/
+│       ├── ChatHeader.tsx
+│       ├── ChatInput.tsx
+│       ├── ChatErrorBoundary.tsx
+│       ├── ChatSignInPrompt.tsx
+│       └── MessageList.tsx
+├── login/
+│   └── page.tsx
+├── layout.tsx
+└── page.tsx
+components/
+├── ui/
+│   ├── button.tsx
+│   └── input.tsx
+└── ThemeToggle.tsx
+lib/
+├── auth/
+│   ├── msalConfig.ts
+│   ├── SessionProvider.tsx
+│   └── useAuth.ts
+├── llm/
+│   └── service.ts
+├── redis/
+│   ├── chat.ts
+│   ├── client.ts
+│   └── keys.ts
+└── constants/
+    ├── common.ts
+    └── strings.ts
+server/
+└── middleware/
+    ├── csrf.ts
+    ├── rate-limit.ts
+    └── session.ts
+types/
+└── models.ts
 ```
 
-- **app**: Contains all the routes, such as `/` (app/page.tsx) and `/login` (app/login/page.tsx).
-- **app/api**: Contains all the API routes for the application.
-- **components**: Contains all the reusable components.
-- **lib**: Contains all the utility functions and libraries.
-- **public**: Contains all the static assets.
+## Architecture
 
-## Deploy on Vercel
+The application is built with a focus on performance, scalability, and user experience. For a more detailed explanation of the architecture, please see the [Architecture documentation](dev-resources/architecture/final.md).
+
+### High-Level Overview
+
+![High-Level Architecture](dev-resources/architecture/review/diagrams/overview/high_level_architecture.md)
+
+### Authentication
+
+Authentication is handled using the Microsoft Authentication Library (MSAL) for React.
+
+![Authentication Flow](dev-resources/architecture/review/diagrams/user/authentication_flow.md)
+
+### Real-time Communication
+
+Real-time communication is achieved using Server-Sent Events (SSE).
+
+![Real-time Chat Flow (SSE)](dev-resources/architecture/review/diagrams/chat/sse_flow.md)
+
+### Data Flow
+
+The application uses Redis as the primary data store.
+
+![Data Flow](dev-resources/architecture/review/diagrams/data/data_flow.md)
+
+### Deployment
 
 The easiest way to deploy your app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
+![Deployment Architecture](dev-resources/architecture/review/diagrams/deployment/deployment.md)
+
 Check out the [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+
+## Documentation
+
+- **[Project Walkthrough](WALKTHROUGH.md)**: A detailed explanation of the project's architecture, features, and implementation.
+- **[Accessibility Audit](ACCESSIBILITY_AUDIT.md)**: A report on the application's compliance with WCAG 2.1 Level AA.
+- **[Architecture Diagrams](dev-resources/architecture/review/diagrams)**: A collection of diagrams illustrating the application's architecture.

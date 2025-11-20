@@ -10,6 +10,7 @@
 6. [Testing](#testing)
 7. [Deployment](#deployment)
 8. [Environment Variables](#environment-variables)
+9. [See Also](#see-also)
 
 ## Architecture Overview
 
@@ -17,36 +18,68 @@ This is a full-stack Next.js application with the following architecture:
 
 ### Technology Stack
 
-- **Frontend**: Next.js 16 (React 19), TailwindCSS, TypeScript
+- **Frontend**: Next.js 16 (React 19), TailwindCSS, TypeScript, shadcn-ui
 - **State Management**: Redux + TanStack Query (React Query)
 - **Authentication**: Microsoft MSAL (Azure AD)
 - **Backend**: Next.js API Routes
 - **Data Storage**: Redis (sessions, chat data, rate limiting)
-- **AI Integration**: Mock LLM service (ready for OpenAI/Anthropic integration)
+- **AI Integration**: Google Gemini
 
 ### Directory Structure
 
 ```plaintext
-/app
-  /api
-    /auth          - NextAuth configuration
-    /chat          - Chat API endpoints
-      /[chatId]    - Get chat history
-      /stream      - SSE streaming endpoint
-  /chat            - Chat UI pages
-    /components    - Chat components
-    /hooks         - React hooks for chat
-  /login           - MSAL login page
-/lib
-  /auth            - MSAL configuration and hooks
-  /llm             - LLM service integration
-  /redis           - Redis clients and utilities
-  /theme           - Theme provider
-  /validation      - Zod schemas
-/server
-  /middleware      - API middleware
-/types             - TypeScript types
+app/
+├── api/
+│   ├── chat/
+│   │   ├── route.ts
+│   │   └── stream/
+│   │       └── route.ts
+│   └── auth/
+│       └── [...nextauth]/
+│           └── route.ts
+├── chat/
+│   ├── page.tsx
+│   └── components/
+│       ├── ChatHeader.tsx
+│       ├── ChatInput.tsx
+│       ├── ChatErrorBoundary.tsx
+│       ├── ChatSignInPrompt.tsx
+│       └── MessageList.tsx
+├── login/
+│   └── page.tsx
+├── layout.tsx
+└── page.tsx
+components/
+├── ui/
+│   ├── button.tsx
+│   └── input.tsx
+└── ThemeToggle.tsx
+lib/
+├── auth/
+│   ├── msalConfig.ts
+│   ├── SessionProvider.tsx
+│   └── useAuth.ts
+├── llm/
+│   └── service.ts
+├── redis/
+│   ├── chat.ts
+│   ├── client.ts
+│   └── keys.ts
+└── constants/
+    ├── common.ts
+    └── strings.ts
+server/
+└── middleware/
+    ├── csrf.ts
+    ├── rate-limit.ts
+    └── session.ts
+types/
+└── models.ts
 ```
+
+### High-Level Architecture
+
+![High-Level Architecture](dev-resources/architecture/review/diagrams/overview/high_level_architecture.md)
 
 ## Authentication Flow
 
@@ -70,24 +103,13 @@ The application uses Microsoft Authentication Library (MSAL) for Azure AD authen
    - Retry logic with exponential backoff
 
 4. **Session Creation**
-   - Server validates MSAL token via `server/middleware/msal-auth.ts`
-   - **Token Signature Verification**: Cryptographically validates tokens using Azure AD public keys (JWKS)
-   - Validates issuer, audience, expiration, and required claims
+   - Server validates MSAL token via `server/middleware/session.ts`
    - Session created in Redis with CSRF token
    - Session ID stored in httpOnly cookie
 
-5. **Token Storage**
-   - Access tokens: sessionStorage (client-side)
-   - Refresh tokens: httpOnly cookies (server-side)
-   - Session data: Redis with 7-day TTL
+### Authentication Flow Diagram
 
-### Security Measures
-
-- CSRF token validation on all state-changing requests
-- httpOnly cookies prevent XSS attacks
-- Secure flag enabled in production
-- SameSite=lax for CSRF protection
-- Token expiry monitoring with proactive refresh
+![Authentication Flow](dev-resources/architecture/review/diagrams/user/authentication_flow.md)
 
 ## Chat System
 
@@ -126,6 +148,10 @@ For real-time AI responses:
 4. Heartbeat messages prevent timeout
 5. Automatic reconnection on disconnect
 
+### SSE Flow Diagram
+
+![Real-time Chat Flow (SSE)](dev-resources/architecture/review/diagrams/chat/sse_flow.md)
+
 ### Key Features
 
 - **Optimistic Updates**: Instant UI feedback
@@ -146,216 +172,57 @@ For real-time AI responses:
 
 ### Rate Limiting
 
-Enhanced rate limiting with:
-
-- **Progressive Delays**: 1s, 2s, 4s, 8s after violations
-- **Account Lockout**: Lock after 3 violations for 15 minutes
-- **Per-Endpoint Configuration**: Custom limits per API
-- **Circuit Breaker**: Graceful degradation when Redis is down
-
-```typescript
-// Example: Chat rate limiting
-- 20 messages per minute per user
-- Progressive delays after violations
-- 15-minute lockout after 3 violations
-```
+- Per-user and per-IP rate limiting
+- Sliding window counters in Redis
+- Configurable limits per endpoint
+- Middleware: `server/middleware/rate-limit.ts`
 
 ### Content Sanitization
 
 - All user input sanitized via DOMPurify
 - XSS prevention in message rendering
-- Script tag removal
-- Safe URL validation
-
-### Database Transactions
-
-- Atomic operations prevent partial failures
-- Optimistic locking for concurrent edits
-- Automatic rollback on error
-- Idempotency for retry safety
+- `lib/sanitizer.ts`
 
 ## Performance & Reliability
 
 ### Redis Resilience
 
-#### Circuit Breaker Pattern
-
-- Opens after 5 consecutive failures
-- Half-open state after 30s
-- Closes after 2 successful requests
-- Graceful degradation with fallbacks
-
-#### Connection Pooling
-
-- Health checks every 30s
-- Automatic reconnection
-- Exponential backoff (max 5s)
-- Offline queue for requests
-
-#### Fallback Strategies
-
-- JWT validation when Redis unavailable
-- Allow requests if rate limiting fails
-- Cache session data client-side
+- **Circuit Breaker**: Prevents repeated calls to a failing service.
+- **Connection Pooling**: Efficiently manages Redis connections.
+- **Retry Logic**: Exponential backoff for transient errors.
 
 ### Frontend Performance
 
-- **Code Splitting**: Dynamic imports for routes
-- **Lazy Loading**: Components loaded on demand
-- **Stale-While-Revalidate**: TanStack Query caching
-- **Optimistic Updates**: Instant UI feedback
-- **Debounced Validation**: 300ms delay on input
+- **Code Splitting**: Automatic per-page code splitting.
+- **Lazy Loading**: Components loaded on demand.
+- **Stale-While-Revalidate**: TanStack Query caching.
+- **Optimistic Updates**: Instant UI feedback.
+- **Debounced Validation**: 300ms delay on input.
 
 ### Monitoring
 
-#### Health Check Endpoint
-
-`GET /api/health` provides comprehensive application health status:
-
-```typescript
-{
-  status: 'healthy' | 'degraded' | 'unhealthy',
-  timestamp: '2025-01-15T...',
-  uptime: 12345,
-  checks: {
-    redis: {
-      status: 'healthy',
-      latency: 5
-    },
-    memory: {
-      status: 'healthy',
-      usage: {
-        heapUsed: 45,  // MB
-        heapTotal: 128,
-        external: 2,
-        rss: 150
-      },
-      usagePercent: 35
-    },
-    process: {
-      status: 'healthy',
-      pid: 1234,
-      version: 'v20.x.x',
-      platform: 'linux'
-    }
-  }
-}
-```
-
-#### Web Vitals Monitoring
-
-Real-time performance metrics tracked and reported:
-
-- **Core Web Vitals**:
-  - CLS (Cumulative Layout Shift)
-  - FID (First Input Delay)
-  - LCP (Largest Contentful Paint)
-
-- **Additional Metrics**:
-  - FCP (First Contentful Paint)
-  - INP (Interaction to Next Paint)
-  - TTFB (Time to First Byte)
-
-Metrics are automatically sent to `/api/analytics/web-vitals` for analysis and aggregation.
-
-**Implementation**:
-
-- `lib/monitoring/web-vitals.ts` - Metric collection
-- `components/WebVitalsReporter.tsx` - Client-side integration
-- `app/api/analytics/web-vitals/route.ts` - Endpoint for receiving metrics
+- **Web Vitals**: `components/WebVitalsReporter.tsx` reports Core Web Vitals.
+- **Logging**: `utils/logger.ts` provides structured logging.
 
 ## Testing
 
 ### Test Coverage
 
-#### Unit Tests
-
-Located in `__tests__/unit/`:
-
-- **Message Reconciliation** (`message-reconciler.test.ts`)
-  - Duplicate message handling
-  - Optimistic update replacement
-  - Client request ID matching
-
-- **Chat Components** (`ChatMessage.test.tsx`)
-  - Message rendering
-  - Status indicators
-  - Accessibility attributes
-  - Timestamp formatting
-
-- **Sanitization** (`sanitizer.test.ts`)
-  - HTML sanitization
-  - XSS prevention
-  - URL validation
-  - Special character escaping
-
-- **CSRF Protection** (`csrf.test.ts`)
-  - Token generation
-  - Token validation
-  - Mismatch detection
-
-- **Existing Tests**:
-  - Authentication hooks
-  - Validation schemas
-  - HTTP client
-  - Session hydration
-  - Rate limiting
-
-#### Integration Tests
-
-Located in `__tests__/integration/`:
-
-- Chat flow (send → receive)
-- Session management
-- Error recovery
-
-#### E2E Tests
-
-Using Playwright (`e2e/chat.spec.ts`):
-
-- **Chat Interface**
-  - Empty state display
-  - Message input accessibility
-  - Character counter functionality
-  - Send button states
-  - Keyboard shortcuts (Enter, Shift+Enter)
-  - Character limit validation
-  - ARIA attributes
-
-- **Accessibility**
-  - Heading structure
-  - Landmark roles
-  - Keyboard navigation
-  - Screen reader compatibility
-
-- **Responsive Design**
-  - Mobile viewport (375x667)
-  - Tablet viewport (768x1024)
-  - Desktop viewport (1920x1080)
-
-#### Security Tests
-
-- CSRF protection
-- XSS prevention
-- Rate limiting effectiveness
-- Token signature verification
-- URL sanitization
-- SQL injection (N/A - using Redis)
+- **Unit Tests**: Jest and React Testing Library for components and utilities.
+- **Integration Tests**: Jest and MSW for API and feature workflows.
+- **E2E Tests**: Playwright for full user journeys.
 
 ### Running Tests
 
 ```bash
 # Unit tests
-npm run test:unit
+pnpm test:unit
 
 # Integration tests
-npm test
+pnpm test
 
 # E2E tests
-npm run test:e2e
-
-# With coverage
-npm run test:unit:coverage
+pnpm test:e2e
 ```
 
 ## Deployment
@@ -388,109 +255,37 @@ NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI=http://localhost:3000/login
 
 # Redis
 REDIS_URL=redis://localhost:6379
-# OR
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_TLS=false
 
 # NextAuth (for session secret)
 NEXTAUTH_SECRET=generate_with_openssl_rand_base64_32
 NEXTAUTH_URL=http://localhost:3000
 
-# Don't hardcode this key!!! Always store credentials in a safe location and access them securely!!!
-OPENAI_API_KEY=
-OPENAI_CHAT_MODEL=
-OPENAI_ORGANIZATION_ID=
-OPENAI_PROJECT_ID=
-ANTHROPIC_API_KEY=
+# Google Gemini
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ### Build & Run
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Development
-npm run dev
+pnpm dev
 
 # Production build
-npm run build
-npm start
-
-# Type check
-npm run type-check
-
-# Lint
-npm run lint
+pnpm build
+pnpm start
 ```
 
 ### Deployment Platforms
 
-#### Vercel (Recommended)
+- **Vercel (Recommended)**: The easiest way to deploy your Next.js app.
+- **Docker**: A `Dockerfile` is provided for containerized deployments.
 
-```bash
-# Install Vercel CLI
-# Add Redis via Upstash integration
+### Deployment Diagram
 
-# Deploy
-vercel
-
-# Add environment variables in Vercel dashboard
-# Add Redis via Upstash integration
-```
-
-#### Docker
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-#### Environment-Specific Considerations
-
-- Use managed Redis (Upstash, Redis Cloud)
-- Enable Redis TLS in production
-- Set `NODE_ENV=production`
-- Use HTTPS for all endpoints
-
-### Deployment Considerations
-
-- **Secrets Management:** Store MSAL client/tenant IDs, `NEXTAUTH_SECRET`, and LLM keys in the platform secret store (Vercel env vars, GitHub OIDC, etc.). Never commit them to the repo.
-- **Redis Availability:** Configure health checks and connect the `REDIS_URL` to a highly available cluster. The app now fails over to JWT validation when Redis is down, but Redis should still auto-recover to re-enable server sessions.
-- **Rate Limiting:** Keep `ENABLE_RATE_LIMITING` enabled in production so the new chat-specific throttling, progressive delays, and lockouts remain active. Tune `RATE_LIMITS.CHAT_MESSAGE` to match your traffic profile.
-- **Origin Security:** Serve the app behind HTTPS and a WAF. Set `NEXTAUTH_URL` and allowed CORS origins precisely to avoid token leakage.
-- **Observability:** Provision logging and monitoring (Datadog, Azure Monitor). Enable structured logs for chat APIs and wire them to alerting for rate-limit spikes or JWT fallback usage.
-- **Smoke Tests:** Run the provided unit/integration suites plus sanity E2E (login → chat → rate-limit) against the deployment target before promoting traffic.
-- Enable security headers
-
-## Environment Variables Reference
-
-### Required
-
-| Variable                         | Description            | Example                                 |
-| -------------------------------- | ---------------------- | --------------------------------------- |
-| `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | Azure AD Client ID     | `abc123...`                             |
-| `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | Azure AD Tenant ID     | `def456...`                             |
-| `REDIS_URL`                      | Redis connection URL   | `redis://localhost:6379`                |
-| `NEXTAUTH_SECRET`                | Session encryption key | Generate with `openssl rand -base64 32` |
-
-### Optional
-
-| Variable                   | Description         | Default     |
-| -------------------------- | ------------------- | ----------- |
-| `NEXT_PUBLIC_REDIRECT_URI` | Post-login redirect | `/`         |
-| `REDIS_HOST`               | Redis host          | `localhost` |
-| `REDIS_PORT`               | Redis port          | `6379`      |
-| `REDIS_PASSWORD`           | Redis password      | -           |
-| `REDIS_TLS`                | Enable TLS          | `false`     |
+![Deployment Architecture](dev-resources/architecture/review/diagrams/deployment/deployment.md)
 
 ## Accessibility
 
@@ -505,90 +300,7 @@ The application has been audited for WCAG 2.1 Level AA compliance. See `ACCESSIB
 - **Focus Management**: Logical tab order and focus trap prevention
 - **Error Handling**: Clear error messages with `role="alert"` and `aria-live`
 
-### Component-Specific Features
+## See Also
 
-- **MessageList**: `role="log"` with `aria-live="polite"` for dynamic updates
-- **ChatMessage**: `role="article"` with descriptive `aria-label`
-- **ChatInput**: `aria-invalid`, `aria-describedby`, keyboard shortcuts
-- **MessageSkeleton**: `role="status"` with loading announcement
-- **ConnectionStatus**: Status indicators with both color and text
-
-**Audit Result**: ✅ WCAG 2.1 Level AA Compliant
-
-## Key Features Summary
-
-✅ **MSAL Authentication** with cryptographic token verification
-✅ **Automatic Token Refresh** with proactive expiry monitoring
-✅ **Real-time Chat** with AI responses
-✅ **SSE Streaming** for progressive responses
-✅ **Optimistic Updates** for instant feedback
-✅ **CSRF Protection** on all mutations
-✅ **Enhanced Rate Limiting** with progressive delays and lockouts
-✅ **Redis Circuit Breaker** for resilience
-✅ **Database Transactions** for consistency
-✅ **Idempotency** for duplicate prevention
-✅ **Content Sanitization** with DOMPurify (XSS prevention)
-✅ **Dark/Light Theme** with system preference
-✅ **Accessibility** (WCAG 2.1 Level AA compliant)
-✅ **Comprehensive Testing** (unit, integration, E2E)
-✅ **Performance Monitoring** with Web Vitals
-✅ **Health Check Endpoint** for monitoring
-
-## Troubleshooting
-
-### Common Issues
-
-#### MSAL authentication fails
-
-- Check Azure AD app registration
-- Verify redirect URIs match exactly
-- Ensure Client ID and Tenant ID are correct
-- Check browser console for MSAL errors
-
-#### Redis connection errors
-
-- Verify Redis is running: `redis-cli ping`
-- Check connection string format
-- Enable TLS if using Redis Cloud
-- Review circuit breaker logs
-
-#### Rate limiting too aggressive
-
-- Adjust limits in `server/middleware/enhanced-rate-limit.ts`
-- Clear rate limit keys: `redis-cli DEL ratelimit:*`
-- Check lockout status: `redis-cli GET lockout:chat:userId`
-
-#### Session expires too quickly
-
-- Token refresh logic in `lib/auth/useAuth.ts`
-- Check token expiry buffer (default: 5 minutes)
-- Verify silent token acquisition works
-
-## Next Steps
-
-### Production Readiness
-
-1. **LLM Integration**: Replace mock service with OpenAI/Anthropic
-2. **Database Migration**: Consider PostgreSQL for chat history
-3. **Monitoring**: Add Sentry, DataDog, or similar
-4. **CDN**: Use Cloudflare or similar for static assets
-5. **Load Balancing**: Add multiple instances
-6. **Backup**: Implement Redis backup strategy
-
-### Future Enhancements
-
-- Message editing and deletion
-- File/image upload support
-- Multi-user chat rooms
-- Chat search functionality
-- Export chat history
-- Voice input/output
-- Mobile app (React Native)
-
----
-
-**Need Help?**
-
-- Review code comments for implementation details
-- Check `/dev-resources/architecture/` for diagrams
-- File issues in project repository
+- **[README.md](README.md)**: For a general overview of the project.
+- **[Architecture Diagrams](dev-resources/architecture/review/diagrams)**: For a more detailed look at the application's architecture.
