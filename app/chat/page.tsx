@@ -67,8 +67,8 @@ export default function ChatPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-6">
-        <div className="max-w-md rounded-xl bg-white p-8 text-center shadow">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 px-6">
+        <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-lg">
           <h1 className="text-2xl font-bold text-gray-900">
             Sign in to start chatting
           </h1>
