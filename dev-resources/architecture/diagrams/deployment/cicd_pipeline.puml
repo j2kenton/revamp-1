@@ -1,0 +1,13 @@
+@startuml
+start
+:Push to Git Repository;
+:Trigger CI Pipeline;
+:Run Linting & Static Analysis;
+:Run Unit & Integration Tests;
+:Build Application;
+:Run E2E Tests;
+:Deploy to Staging;
+:Manual Approval;
+:Deploy to Production;
+stop
+@enduml

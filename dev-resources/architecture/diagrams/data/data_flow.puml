@@ -1,0 +1,17 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+Container(frontend, "Next.js Frontend", "Displays chat interface")
+Container(backend, "Next.js API", "Handles business logic")
+ContainerDb(redis, "Redis", "Stores chat history and user sessions")
+System_Ext(gemini, "Google Gemini", "Generates AI responses")
+
+frontend -> backend: Sends new messages
+backend -> redis: Stores messages
+backend -> gemini: Requests AI response
+gemini -> backend: Returns AI response
+backend -> redis: Stores AI response
+backend -> frontend: Streams AI response
+@enduml

@@ -1,0 +1,15 @@
+@startuml
+node "Vercel" {
+  component [Next.js App]
+  folder "Serverless Functions" {
+    component [API Routes]
+  }
+}
+
+database "Redis Cloud" {
+  component [Redis]
+}
+
+[Next.js App] --> [API Routes]
+[API Routes] --> [Redis]
+@enduml

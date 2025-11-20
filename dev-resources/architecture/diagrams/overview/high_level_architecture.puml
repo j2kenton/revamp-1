@@ -1,0 +1,23 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+Person(user, "User", "A user of the chat application.")
+
+System_Boundary(c1, "Revamp-1") {
+    Container(frontend, "Next.js Frontend", "TypeScript, React", "The user interface for the chat application.")
+    Container(backend, "Next.js API", "TypeScript, Serverless", "The backend API for the chat application.")
+    ContainerDb(redis, "Redis", "In-memory data store", "Caches chat history and user data.")
+}
+
+System_Ext(msal, "Microsoft Entra ID", "Handles user authentication.")
+System_Ext(gemini, "Google Gemini", "Provides AI-powered chat responses.")
+
+Rel(user, frontend, "Uses", "HTTPS")
+Rel(frontend, backend, "Sends API requests to", "HTTPS")
+Rel(backend, msal, "Validates tokens with", "HTTPS")
+Rel(backend, redis, "Reads/writes data to", "TCP")
+Rel(backend, gemini, "Gets AI responses from", "HTTPS")
+
+@enduml

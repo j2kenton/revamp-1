@@ -1,0 +1,16 @@
+@startuml
+actor User
+participant "Next.js Frontend" as Frontend
+participant "Next.js API" as Backend
+participant "Microsoft Entra ID" as MSAL
+
+User -> Frontend: Clicks "Login"
+Frontend -> MSAL: Initiates login flow
+MSAL -> User: Prompts for credentials
+User -> MSAL: Enters credentials
+MSAL -> Frontend: Returns access token
+Frontend -> Backend: Makes authenticated API request with token
+Backend -> MSAL: Validates token
+MSAL -> Backend: Confirms token validity
+Backend -> Frontend: Returns API response
+@enduml

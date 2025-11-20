@@ -1,0 +1,14 @@
+@startuml
+participant "Chat Client" as Client
+participant "Next.js API (/api/chat/stream)" as API
+participant "LLM Service" as LLM
+participant "Redis" as Redis
+
+Client -> API: POST request with new message
+API -> Redis: Store user message
+API -> LLM: Stream LLM response
+LLM -> API: Chunks of AI response
+API -> Client: SSE events (content_delta)
+API -> Redis: Store AI response
+Client -> Client: Update UI with streaming response
+@enduml
