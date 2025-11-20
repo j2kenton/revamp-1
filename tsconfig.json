@@ -26,9 +26,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "ioredis-mock": [
-        "./types/ioredis-mock.d.ts"
       ]
     }
   },

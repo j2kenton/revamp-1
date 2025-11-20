@@ -4,6 +4,7 @@
  */
 
 import Redis from 'ioredis';
+// @ts-expect-error - ioredis-mock does not publish TypeScript definitions
 import RedisMock from 'ioredis-mock';
 import { logError, logInfo } from '@/utils/logger';
 import { PARSE_INT_RADIX } from '@/lib/constants/common';
