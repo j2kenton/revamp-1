@@ -68,7 +68,7 @@ export function ThemeToggle() {
                 setIsOpen(false);
               }}
               className={clsx(
-                'flex flex-col items-start rounded-md px-3 py-2 text-left text-sm transition-colors',
+                'flex cursor-pointer flex-col items-start rounded-md px-3 py-2 text-left text-sm transition-colors',
                 'hover:bg-gray-100 dark:hover:bg-gray-700',
                 theme === option.value && 'bg-gray-100 dark:bg-gray-700',
               )}
