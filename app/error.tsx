@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * Error boundary for the application.
@@ -14,16 +14,30 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     // Log the error to an error reporting service
     console.error('Application error:', error);
   }, [error]);
 
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
+    <div
+      ref={containerRef}
+      className="flex min-h-screen flex-col items-center justify-center p-4"
+      tabIndex={-1}
+    >
       <div className="max-w-md text-center">
         <h2 className="mb-4 text-2xl font-bold">Something went wrong!</h2>
-        <p className="mb-6 text-gray-600">
+        <p
+          className="mb-6 text-gray-600"
+          role="alert"
+          aria-live="assertive"
+        >
           {error.message || 'An unexpected error occurred. Please try again.'}
         </p>
         <button
