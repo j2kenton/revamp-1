@@ -11,6 +11,12 @@ import type { MessageDTO } from '@/types/models';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { MessageList } from './components/MessageList';
 import { ChatInput } from './components/ChatInput';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -22,6 +28,7 @@ export default function ChatPage() {
   const {
     isAuthenticated,
     login,
+    logout,
     isLoading: isAuthLoading,
     user,
     error: authError,
@@ -116,32 +123,69 @@ export default function ChatPage() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           {user ? (
-            <div className="flex items-center gap-2">
-              <div className="hidden flex-col items-end md:flex">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {user.name ?? user.email}
-                </span>
-                {user.name && user.email && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {user.email}
-                  </span>
-                )}
-              </div>
-              {photoUrl ? (
-                <Image
-                  src={photoUrl}
-                  alt="Profile"
-                  width={32}
-                  height={32}
-                  className="rounded-full object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
-                  {(user.name ?? user.email).charAt(0).toUpperCase()}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="h-auto rounded-full p-0 hover:ring-2 hover:ring-blue-500 hover:ring-offset-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  aria-label="Open user menu"
+                >
+                  {photoUrl ? (
+                    <Image
+                      src={photoUrl}
+                      alt="Profile"
+                      width={32}
+                      height={32}
+                      className="rounded-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                      {(user.name ?? user.email).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-3">
+                    {photoUrl ? (
+                      <Image
+                        src={photoUrl}
+                        alt="Profile"
+                        width={40}
+                        height={40}
+                        className="rounded-full object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-300 text-sm font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                        {(user.name ?? user.email).charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-col overflow-hidden">
+                      <span className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {user.name ?? user.email}
+                      </span>
+                      {user.name && user.email && (
+                        <span className="truncate text-xs text-gray-500 dark:text-gray-400">
+                          {user.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950 dark:hover:text-red-300"
+                      onClick={() => void logout()}
+                    >
+                      Sign out
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
           ) : null}
         </div>
       </header>
