@@ -97,12 +97,12 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen flex-col bg-[var(--background)] dark:bg-gray-900">
       <a href="#chat-main" className="skip-link">
         Skip to chat content
       </a>
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <header className="flex items-center justify-between border-b border-gray-200 bg-[var(--background)] px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 pr-1">
             Introducing:
@@ -202,7 +202,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+          <div className="border-t border-gray-200 bg-[var(--background)] dark:border-gray-700 dark:bg-gray-900">
             <ChatInput
               onSendMessage={handleSendMessage}
               isStreaming={isStreaming}

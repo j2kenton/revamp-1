@@ -5,7 +5,7 @@
 
 export const THEME_COLORS = {
   DARK: '#1f2937',
-  LIGHT: '#f9fafb',
+  LIGHT: '#fafafa',
 } as const;
 
 export const THEME_STORAGE_KEY = 'app-theme';

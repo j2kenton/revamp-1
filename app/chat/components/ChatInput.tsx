@@ -254,7 +254,7 @@ export function ChatInput({
             {onNewChat && (
               <button
                 onClick={onNewChat}
-                className="cursor-pointer rounded-md bg-gray-200 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                className="cursor-pointer rounded-md bg-gray-300 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
               >
                 New Chat
               </button>

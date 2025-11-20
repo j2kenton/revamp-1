@@ -3,7 +3,7 @@
 @config "../tailwind.config.ts";
 
 :root {
-  --background: #f9fafb;
+  --background: #fafafa;
   --foreground: #171717;
   /* Google Sans Flex loaded via @import from Google Fonts CDN */
   /* Roboto Mono injected by next/font in layout: --font-roboto-mono */
@@ -16,7 +16,7 @@
 }
 
 html.light {
-  --background: #f9fafb;
+  --background: #fafafa;
   --foreground: #171717;
 }
 
