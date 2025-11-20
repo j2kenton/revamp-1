@@ -232,14 +232,15 @@ export function ChatInterface({
   }, []);
 
   const handleStream = useCallback(
-    async (response: Response) => {
-      if (!response.body) {
+    async (response: HttpResponseLike) => {
+      const { body } = response;
+      if (!body || typeof body.getReader !== 'function') {
         return;
       }
 
       const streamMessage = createMessage('assistant', '');
       appendMessage(streamMessage);
-      const reader = response.body.getReader();
+      const reader = body.getReader();
       const decoder = new TextDecoder();
       let accumulated = '';
 
