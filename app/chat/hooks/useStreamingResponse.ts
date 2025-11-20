@@ -12,6 +12,12 @@ import { deriveCsrfToken } from '@/lib/auth/csrf';
 import type { MessageDTO } from '@/types/models';
 import { BYPASS_ACCESS_TOKEN, BYPASS_CSRF_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
 
+interface MessageCacheUpdate
+  extends Partial<Omit<MessageDTO, 'id' | 'chatId'>> {
+  id: string;
+  chatId: string;
+}
+
 interface StreamingMessage {
   id: string;
   content: string;
@@ -49,10 +55,117 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const contextTruncatedRef = useRef(false);
   const messagesRemovedRef = useRef(0);
   const activeChatIdRef = useRef<string | null>(chatId);
+  const [liveMessages, setLiveMessages] = useState<MessageDTO[]>([]);
+  const previousChatIdRef = useRef<string | null>(chatId ?? null);
+  const lastUserMessageRef = useRef<{
+    content: string;
+    parentMessageId: string | null;
+    messageId: string | null;
+  }>({
+    content: '',
+    parentMessageId: null,
+    messageId: null,
+  });
 
   useEffect(() => {
     activeChatIdRef.current = chatId;
   }, [chatId]);
+
+  useEffect(() => {
+    const prevChatId = previousChatIdRef.current;
+    if (!chatId) {
+      setLiveMessages([]);
+      previousChatIdRef.current = null;
+      return;
+    }
+
+    if (prevChatId && chatId && prevChatId !== chatId) {
+      setLiveMessages([]);
+    }
+    previousChatIdRef.current = chatId;
+  }, [chatId]);
+
+  const upsertLiveMessage = useCallback(
+    (message: MessageDTO) => {
+      setLiveMessages((prev) => {
+        const index = prev.findIndex((entry) => entry.id === message.id);
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = message;
+          return next;
+        }
+        return [...prev, message];
+      });
+    },
+    [],
+  );
+
+  const shouldTrackLiveMessage = useCallback(
+    (messageChatId: string) => {
+      const activeChatId = activeChatIdRef.current || chatId;
+      return Boolean(messageChatId && activeChatId && messageChatId === activeChatId);
+    },
+    [chatId],
+  );
+
+  const upsertMessageInCache = useCallback(
+    (update: MessageCacheUpdate) => {
+      const targetChatId = update.chatId;
+      if (!targetChatId) {
+        return;
+      }
+
+      queryClient.setQueryData(
+        ['chat', targetChatId],
+        (old: { messages?: MessageDTO[] } | undefined) => {
+          const existingMessages = old?.messages ?? [];
+          const targetIndex = existingMessages.findIndex(
+            (entry) => entry.id === update.id,
+          );
+          const baseline: MessageDTO =
+            targetIndex >= 0
+              ? existingMessages[targetIndex]
+              : {
+                  id: update.id,
+                  chatId: targetChatId,
+                  role: 'assistant',
+                  content: '',
+                  status: 'sending',
+                  parentMessageId: null,
+                  metadata: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+
+          const nextMessage: MessageDTO = {
+            ...baseline,
+            ...update,
+            metadata:
+              update.metadata === undefined ? baseline.metadata : update.metadata,
+            parentMessageId:
+              update.parentMessageId === undefined
+                ? baseline.parentMessageId
+                : update.parentMessageId,
+          };
+
+          const nextMessages =
+            targetIndex >= 0
+              ? [
+                  ...existingMessages.slice(0, targetIndex),
+                  nextMessage,
+                  ...existingMessages.slice(targetIndex + 1),
+                ]
+              : [...existingMessages, nextMessage];
+
+          return {
+            ...old,
+            messages: nextMessages,
+          };
+        },
+      );
+    },
+    [queryClient],
+  );
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
@@ -104,13 +217,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       };
 
       onMessageCreated?.(userMessageId, resolvedChatId, false, 0);
-      queryClient.setQueryData(
-        ['chat', resolvedChatId],
-        (old: { messages?: MessageDTO[] } | undefined) => ({
-          ...old,
-          messages: [...(old?.messages || []), userMessage],
-        }),
-      );
+      upsertMessageInCache(userMessage);
+      upsertLiveMessage(userMessage);
 
       const simulatedChunks = [
         `Thanks for your message: "${content}".`,
@@ -120,11 +228,23 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       let accumulated = '';
       for (const chunk of simulatedChunks) {
         accumulated = accumulated ? `${accumulated} ${chunk}` : chunk;
+        const partialMessage: MessageDTO = {
+          id: assistantMessageId,
+          chatId: resolvedChatId,
+          role: 'assistant',
+          content: accumulated,
+          status: 'sending',
+          parentMessageId: userMessageId,
+          metadata: null,
+          createdAt: nowIso,
+          updatedAt: new Date().toISOString(),
+        };
         setStreamingMessage({
           id: assistantMessageId,
           content: accumulated,
           isComplete: false,
         });
+        upsertLiveMessage(partialMessage);
         // Small delay to mimic streaming without slowing tests noticeably
         await new Promise((resolve) => setTimeout(resolve, 15));
       }
@@ -141,24 +261,14 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         updatedAt: new Date().toISOString(),
       };
 
-      setStreamingMessage({
-        id: assistantMessageId,
-        content: assistantMessage.content,
-        isComplete: true,
-      });
-
-      queryClient.setQueryData(
-        ['chat', resolvedChatId],
-        (old: { messages?: MessageDTO[] } | undefined) => ({
-          ...old,
-          messages: [...(old?.messages || []), assistantMessage],
-        }),
-      );
+      upsertMessageInCache(assistantMessage);
+      upsertLiveMessage(assistantMessage);
+      setStreamingMessage(null);
 
       onComplete?.(assistantMessage);
       setIsStreaming(false);
     },
-    [chatId, onComplete, onMessageCreated, queryClient],
+    [chatId, onComplete, onMessageCreated, upsertLiveMessage, upsertMessageInCache],
   );
 
   const sendStreamingMessage = useCallback(
@@ -185,6 +295,11 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         setMessagesRemoved(0);
         contextTruncatedRef.current = false;
         messagesRemovedRef.current = 0;
+        lastUserMessageRef.current = {
+          content,
+          parentMessageId: parentMessageId ?? null,
+          messageId: null,
+        };
 
         // Create FormData or JSON payload
         const payload = {
@@ -337,6 +452,35 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 setMessagesRemoved(removedCount);
                 contextTruncatedRef.current = isTruncated;
                 messagesRemovedRef.current = removedCount;
+                if (resolvedChatId && messageId) {
+                  lastUserMessageRef.current.messageId = messageId;
+                  const timestamp = new Date().toISOString();
+
+                  upsertMessageInCache({
+                    id: messageId,
+                    chatId: resolvedChatId,
+                    role: 'user',
+                    content: lastUserMessageRef.current.content,
+                    status: 'sent',
+                    parentMessageId: lastUserMessageRef.current.parentMessageId,
+                    metadata: null,
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                  });
+                  if (shouldTrackLiveMessage(resolvedChatId)) {
+                    upsertLiveMessage({
+                      id: messageId,
+                      chatId: resolvedChatId,
+                      role: 'user',
+                      content: lastUserMessageRef.current.content,
+                      status: 'sent',
+                      parentMessageId: lastUserMessageRef.current.parentMessageId,
+                      metadata: null,
+                      createdAt: timestamp,
+                      updatedAt: timestamp,
+                    });
+                  }
+                }
 
                 onMessageCreated?.(
                   messageId,
@@ -357,6 +501,42 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 const removedMessagesCount = isContextTruncated
                   ? messagesRemovedRef.current
                   : undefined;
+                const resolvedChatId = activeChatIdRef.current || chatId || '';
+                if (messageId && resolvedChatId) {
+                  upsertMessageInCache({
+                    id: messageId,
+                    chatId: resolvedChatId,
+                    role: 'assistant',
+                    content: accumulatedContent,
+                    status: 'sending',
+                    parentMessageId: lastUserMessageRef.current.messageId ?? null,
+                    metadata: isContextTruncated
+                      ? {
+                          contextTruncated: true,
+                          messagesRemoved: removedMessagesCount,
+                        }
+                      : undefined,
+                    updatedAt: new Date().toISOString(),
+                  });
+                  if (shouldTrackLiveMessage(resolvedChatId)) {
+                    upsertLiveMessage({
+                      id: messageId,
+                      chatId: resolvedChatId,
+                      role: 'assistant',
+                      content: accumulatedContent,
+                      status: 'sending',
+                      parentMessageId: lastUserMessageRef.current.messageId ?? null,
+                      metadata: isContextTruncated
+                        ? {
+                            contextTruncated: true,
+                            messagesRemoved: removedMessagesCount,
+                          }
+                        : undefined,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }
+                }
                 setStreamingMessage({
                   id: messageId,
                   content: accumulatedContent,
@@ -372,13 +552,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 const messageId = typeof data.messageId === 'string' ? data.messageId : '';
                 const content = typeof data.content === 'string' ? data.content : '';
                 const metadata = (data.metadata as MessageDTO['metadata']) || null;
-                setStreamingMessage({
-                  id: messageId,
-                  content,
-                  isComplete: true,
-                  contextTruncated: metadata?.contextTruncated,
-                  messagesRemoved: metadata?.messagesRemoved,
-                });
+                const parentForAssistant = lastUserMessageRef.current.messageId;
+                setStreamingMessage(null);
 
                 // Create complete message DTO
                 const completeMessage: MessageDTO = {
@@ -387,13 +562,21 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                   role: 'assistant',
                   content,
                   status: 'sent',
-                  parentMessageId: null,
+                  parentMessageId: parentForAssistant,
                   metadata,
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 };
 
                 onComplete?.(completeMessage);
+                if (resolvedChatId) {
+                  upsertMessageInCache({
+                    ...completeMessage,
+                  });
+                  if (shouldTrackLiveMessage(resolvedChatId)) {
+                    upsertLiveMessage(completeMessage);
+                  }
+                }
 
                 // Update cache
                 if (resolvedChatId) {
@@ -405,6 +588,11 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 setMessagesRemoved(0);
                 contextTruncatedRef.current = false;
                 messagesRemovedRef.current = 0;
+                lastUserMessageRef.current = {
+                  content: '',
+                  parentMessageId: null,
+                  messageId: null,
+                };
 
                 break;
               }
@@ -426,25 +614,32 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                   role: 'assistant',
                   content: typeof data.message === 'string' ? data.message : '',
                   status: 'sent',
-                  parentMessageId: null,
+                  parentMessageId: lastUserMessageRef.current.messageId,
                   metadata: fallbackMetadata,
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 };
-                setStreamingMessage({
-                  id: fallbackMessage.id,
-                  content: fallbackMessage.content,
-                  isComplete: true,
-                });
+                setStreamingMessage(null);
                 setContextTruncated(false);
                 setMessagesRemoved(0);
                 contextTruncatedRef.current = false;
                 messagesRemovedRef.current = 0;
                 onComplete?.(fallbackMessage);
                 if (resolvedChatId) {
+                  upsertMessageInCache({
+                    ...fallbackMessage,
+                  });
                   queryClient.invalidateQueries({ queryKey: ['chat', resolvedChatId] });
+                  if (shouldTrackLiveMessage(resolvedChatId)) {
+                    upsertLiveMessage(fallbackMessage);
+                  }
                 }
                 onFallback?.(fallbackMessage.content);
+                lastUserMessageRef.current = {
+                  content: '',
+                  parentMessageId: null,
+                  messageId: null,
+                };
                 break;
               }
 
@@ -452,6 +647,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 const streamError = new Error(
                   typeof data.message === 'string' ? data.message : 'Streaming error'
                 );
+                setStreamingMessage(null);
                 setError(streamError);
                 onError?.(streamError);
                 break;
@@ -465,6 +661,12 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
         reconnectAttempts.current = 0;
       } catch (err) {
+        lastUserMessageRef.current = {
+          content: '',
+          parentMessageId: null,
+          messageId: null,
+        };
+        setStreamingMessage(null);
         const streamError = err instanceof Error ? err : new Error('Unknown streaming error');
         setError(streamError);
         onError?.(streamError);
@@ -484,6 +686,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     },
     [
       accessToken,
+      upsertMessageInCache,
       bypassAuth,
       chatId,
       isAutomatedTestMode,
@@ -514,5 +717,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     contextTruncated,
     messagesRemoved,
     rateLimitSeconds,
+    liveMessages,
   };
 }

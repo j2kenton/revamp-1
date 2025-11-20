@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { MessageDTO } from '@/types/models';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
@@ -22,47 +22,41 @@ import { STRINGS } from '@/lib/constants/strings';
 
 interface MessageListProps {
   chatId?: string;
-  streamingMessage?: {
-    id: string;
-    content: string;
-    isComplete: boolean;
-    contextTruncated?: boolean;
-    messagesRemoved?: number;
-  } | null;
+  liveMessages?: MessageDTO[];
 }
 
-export function MessageList({ chatId, streamingMessage }: MessageListProps) {
+export function MessageList({ chatId, liveMessages }: MessageListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const { messages, isLoading, error } = useFetchChatHistory(chatId ?? null);
   const { photoUrl: userPhotoUrl } = useProfilePhoto();
 
-  // Combine messages with streaming message
-  const streamingMetadata =
-    streamingMessage &&
-    (streamingMessage.contextTruncated ||
-      typeof streamingMessage.messagesRemoved === 'number')
-      ? {
-          contextTruncated: streamingMessage.contextTruncated ?? false,
-          messagesRemoved: streamingMessage.messagesRemoved,
-        }
-      : null;
+  const allMessages = useMemo(() => {
+    if (!liveMessages?.length) {
+      return messages;
+    }
 
-  const allMessages = streamingMessage
-    ? [
-        ...messages,
-        {
-          id: streamingMessage.id,
-          chatId: chatId || '',
-          role: 'assistant' as const,
-          content: streamingMessage.content,
-          status: streamingMessage.isComplete ? 'sent' : 'sending',
-          parentMessageId: null,
-          metadata: streamingMetadata,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        } satisfies MessageDTO,
-      ]
-    : messages;
+    const merged = [...messages];
+    const indexMap = new Map<string, number>();
+
+    merged.forEach((message, index) => {
+      indexMap.set(message.id, index);
+    });
+
+    liveMessages.forEach((message) => {
+      const existingIndex = indexMap.get(message.id);
+      if (typeof existingIndex === 'number') {
+        merged[existingIndex] = message;
+      } else {
+        indexMap.set(message.id, merged.length);
+        merged.push(message);
+      }
+    });
+
+    return merged.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  }, [liveMessages, messages]);
 
   // Virtual scrolling setup
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack's hook manages its own memoization
@@ -133,13 +127,7 @@ export function MessageList({ chatId, streamingMessage }: MessageListProps) {
         >
           {rowVirtualizer.getVirtualItems().map((virtualItem) => {
             const message = allMessages[virtualItem.index];
-            const activeStreamingId = streamingMessage?.id ?? null;
-            const isStreamingMessage =
-              activeStreamingId !== null && message.id === activeStreamingId;
-            const streamInProgress =
-              isStreamingMessage && streamingMessage
-                ? !streamingMessage.isComplete
-                : false;
+            const streamInProgress = message.status === 'sending';
 
             return (
               <div

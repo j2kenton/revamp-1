@@ -30,11 +30,11 @@ export default function ChatPage() {
 
   const {
     sendStreamingMessage,
-    streamingMessage,
     isStreaming,
     error: streamingError,
     closeConnection,
     rateLimitSeconds,
+    liveMessages,
   } = useStreamingResponse({
     chatId,
     onMessageCreated: (_messageId, serverChatId) => {
@@ -150,7 +150,7 @@ export default function ChatPage() {
           <div className="flex-1 overflow-y-auto">
             <MessageList
               chatId={chatId ?? undefined}
-              streamingMessage={streamingMessage}
+              liveMessages={liveMessages}
             />
           </div>
 

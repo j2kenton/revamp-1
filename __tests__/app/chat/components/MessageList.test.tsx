@@ -110,17 +110,20 @@ describe('MessageList', () => {
     expect(screen.getByText('Hi there!')).toBeInTheDocument();
   });
 
-  it('appends streaming message when provided', () => {
+  it('appends live messages when provided', () => {
     mockUseFetchChatHistory.mockReturnValue(createHookResult());
 
     render(
       <MessageList
         chatId="chat-123"
-        streamingMessage={{
-          id: 'stream-1',
-          content: 'Typing...',
-          isComplete: false,
-        }}
+        liveMessages={[
+          buildMessage({
+            id: 'stream-1',
+            content: 'Typing...',
+            role: 'assistant',
+            status: 'sending',
+          }),
+        ]}
       />,
     );
 

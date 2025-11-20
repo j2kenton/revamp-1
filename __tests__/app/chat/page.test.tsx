@@ -58,13 +58,14 @@ const baseAuthState = {
 
 const baseStreamingState = {
   sendStreamingMessage: jest.fn(),
-  streamingMessage: null,
   isStreaming: false,
   error: null,
   closeConnection: jest.fn(),
   rateLimitSeconds: 0,
   contextTruncated: false,
   messagesRemoved: 0,
+  liveMessages: [],
+  streamingMessage: null,
 };
 
 describe('ChatPage', () => {
