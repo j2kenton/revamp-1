@@ -23,12 +23,21 @@ jest.mock('@/app/chat/components/MessageList', () => ({
 jest.mock('@/app/chat/components/ChatInput', () => ({
   ChatInput: ({
     onSendMessage,
+    onNewChat,
   }: {
     onSendMessage: (value: string) => void;
+    onNewChat?: () => void;
   }) => (
-    <button type="button" onClick={() => onSendMessage('hello')}>
-      Send Message
-    </button>
+    <>
+      <button type="button" onClick={() => onSendMessage('hello')}>
+        Send Message
+      </button>
+      {onNewChat && (
+        <button type="button" onClick={onNewChat}>
+          New Chat
+        </button>
+      )}
+    </>
   ),
 }));
 

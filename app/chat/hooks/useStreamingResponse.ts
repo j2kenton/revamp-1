@@ -10,7 +10,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
 import type { MessageDTO } from '@/types/models';
-import { BYPASS_ACCESS_TOKEN, BYPASS_CSRF_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
+import {
+  BYPASS_ACCESS_TOKEN,
+  BYPASS_CSRF_TOKEN,
+  isBypassAuthEnabled,
+} from '@/lib/auth/bypass';
 
 interface MessageCacheUpdate
   extends Partial<Omit<MessageDTO, 'id' | 'chatId'>> {
@@ -46,7 +50,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const queryClient = useQueryClient();
   const isAutomatedTestMode = process.env.NEXT_PUBLIC_TEST_AUTH_MODE === 'true';
 
-  const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
+  const [streamingMessage, setStreamingMessage] =
+    useState<StreamingMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [rateLimitSeconds, setRateLimitSeconds] = useState<number | null>(null);
@@ -85,25 +90,24 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     previousChatIdRef.current = chatId;
   }, [chatId]);
 
-  const upsertLiveMessage = useCallback(
-    (message: MessageDTO) => {
-      setLiveMessages((prev) => {
-        const index = prev.findIndex((entry) => entry.id === message.id);
-        if (index >= 0) {
-          const next = [...prev];
-          next[index] = message;
-          return next;
-        }
-        return [...prev, message];
-      });
-    },
-    [],
-  );
+  const upsertLiveMessage = useCallback((message: MessageDTO) => {
+    setLiveMessages((prev) => {
+      const index = prev.findIndex((entry) => entry.id === message.id);
+      if (index >= 0) {
+        const next = [...prev];
+        next[index] = message;
+        return next;
+      }
+      return [...prev, message];
+    });
+  }, []);
 
   const shouldTrackLiveMessage = useCallback(
     (messageChatId: string) => {
       const activeChatId = activeChatIdRef.current || chatId;
-      return Boolean(messageChatId && activeChatId && messageChatId === activeChatId);
+      return Boolean(
+        messageChatId && activeChatId && messageChatId === activeChatId,
+      );
     },
     [chatId],
   );
@@ -141,7 +145,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
             ...baseline,
             ...update,
             metadata:
-              update.metadata === undefined ? baseline.metadata : update.metadata,
+              update.metadata === undefined
+                ? baseline.metadata
+                : update.metadata,
             parentMessageId:
               update.parentMessageId === undefined
                 ? baseline.parentMessageId
@@ -263,12 +269,24 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
       upsertMessageInCache(assistantMessage);
       upsertLiveMessage(assistantMessage);
-      setStreamingMessage(null);
+
+      // Mark as complete and keep state for UI/tests
+      setStreamingMessage({
+        id: assistantMessageId,
+        content: accumulated,
+        isComplete: true,
+      });
 
       onComplete?.(assistantMessage);
       setIsStreaming(false);
     },
-    [chatId, onComplete, onMessageCreated, upsertLiveMessage, upsertMessageInCache],
+    [
+      chatId,
+      onComplete,
+      onMessageCreated,
+      upsertLiveMessage,
+      upsertMessageInCache,
+    ],
   );
 
   const sendStreamingMessage = useCallback(
@@ -325,7 +343,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
         if (response.status === 429) {
           let errorMessage = 'Too many requests';
-          let retryAfter = parseInt(response.headers.get('Retry-After') ?? '0', 10);
+          let retryAfter = parseInt(
+            response.headers.get('Retry-After') ?? '0',
+            10,
+          );
 
           try {
             const errorBody = await response.json();
@@ -411,7 +432,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 eventType = line.slice(6).trim();
               } else if (line.startsWith('data:')) {
                 const valuePart = line.slice(5).trim();
-                dataPayload = dataPayload ? `${dataPayload}\n${valuePart}` : valuePart;
+                dataPayload = dataPayload
+                  ? `${dataPayload}\n${valuePart}`
+                  : valuePart;
               }
             }
 
@@ -437,12 +460,15 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
               case 'message_created': {
                 const isTruncated = Boolean(data.truncated);
                 const removedCount =
-                  isTruncated && typeof data.removedCount === 'number' ? data.removedCount : 0;
+                  isTruncated && typeof data.removedCount === 'number'
+                    ? data.removedCount
+                    : 0;
                 const resolvedChatId: string =
                   (typeof data.chatId === 'string' && data.chatId) ||
                   activeChatIdRef.current ||
                   '';
-                const messageId = typeof data.messageId === 'string' ? data.messageId : '';
+                const messageId =
+                  typeof data.messageId === 'string' ? data.messageId : '';
 
                 if (resolvedChatId) {
                   activeChatIdRef.current = resolvedChatId;
@@ -474,7 +500,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       role: 'user',
                       content: lastUserMessageRef.current.content,
                       status: 'sent',
-                      parentMessageId: lastUserMessageRef.current.parentMessageId,
+                      parentMessageId:
+                        lastUserMessageRef.current.parentMessageId,
                       metadata: null,
                       createdAt: timestamp,
                       updatedAt: timestamp,
@@ -486,7 +513,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                   messageId,
                   resolvedChatId,
                   Boolean(data.truncated),
-                  typeof data.removedCount === 'number' ? data.removedCount : undefined,
+                  typeof data.removedCount === 'number'
+                    ? data.removedCount
+                    : undefined,
                 );
                 break;
               }
@@ -496,7 +525,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                   typeof data.accumulatedContent === 'string'
                     ? data.accumulatedContent
                     : accumulatedContent;
-                const messageId = typeof data.messageId === 'string' ? data.messageId : '';
+                const messageId =
+                  typeof data.messageId === 'string' ? data.messageId : '';
                 const isContextTruncated = contextTruncatedRef.current;
                 const removedMessagesCount = isContextTruncated
                   ? messagesRemovedRef.current
@@ -509,7 +539,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                     role: 'assistant',
                     content: accumulatedContent,
                     status: 'sending',
-                    parentMessageId: lastUserMessageRef.current.messageId ?? null,
+                    parentMessageId:
+                      lastUserMessageRef.current.messageId ?? null,
                     metadata: isContextTruncated
                       ? {
                           contextTruncated: true,
@@ -525,13 +556,14 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                       role: 'assistant',
                       content: accumulatedContent,
                       status: 'sending',
-                      parentMessageId: lastUserMessageRef.current.messageId ?? null,
+                      parentMessageId:
+                        lastUserMessageRef.current.messageId ?? null,
                       metadata: isContextTruncated
                         ? {
                             contextTruncated: true,
                             messagesRemoved: removedMessagesCount,
                           }
-                        : undefined,
+                        : null,
                       createdAt: new Date().toISOString(),
                       updatedAt: new Date().toISOString(),
                     });
@@ -549,9 +581,12 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
               case 'message_complete': {
                 const resolvedChatId = activeChatIdRef.current || chatId || '';
-                const messageId = typeof data.messageId === 'string' ? data.messageId : '';
-                const content = typeof data.content === 'string' ? data.content : '';
-                const metadata = (data.metadata as MessageDTO['metadata']) || null;
+                const messageId =
+                  typeof data.messageId === 'string' ? data.messageId : '';
+                const content =
+                  typeof data.content === 'string' ? data.content : '';
+                const metadata =
+                  (data.metadata as MessageDTO['metadata']) || null;
                 const parentForAssistant = lastUserMessageRef.current.messageId;
                 setStreamingMessage(null);
 
@@ -580,7 +615,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
                 // Update cache
                 if (resolvedChatId) {
-                  queryClient.invalidateQueries({ queryKey: ['chat', resolvedChatId] });
+                  queryClient.invalidateQueries({
+                    queryKey: ['chat', resolvedChatId],
+                  });
                 }
 
                 // Reset truncation state
@@ -629,7 +666,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                   upsertMessageInCache({
                     ...fallbackMessage,
                   });
-                  queryClient.invalidateQueries({ queryKey: ['chat', resolvedChatId] });
+                  queryClient.invalidateQueries({
+                    queryKey: ['chat', resolvedChatId],
+                  });
                   if (shouldTrackLiveMessage(resolvedChatId)) {
                     upsertLiveMessage(fallbackMessage);
                   }
@@ -645,7 +684,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
               case 'error': {
                 const streamError = new Error(
-                  typeof data.message === 'string' ? data.message : 'Streaming error'
+                  typeof data.message === 'string'
+                    ? data.message
+                    : 'Streaming error',
                 );
                 setStreamingMessage(null);
                 setError(streamError);
@@ -667,7 +708,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           messageId: null,
         };
         setStreamingMessage(null);
-        const streamError = err instanceof Error ? err : new Error('Unknown streaming error');
+        const streamError =
+          err instanceof Error ? err : new Error('Unknown streaming error');
         setError(streamError);
         onError?.(streamError);
 
@@ -685,18 +727,20 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       }
     },
     [
-      accessToken,
-      upsertMessageInCache,
-      bypassAuth,
-      chatId,
       isAutomatedTestMode,
-      onMessageCreated,
-      onComplete,
-      onError,
-      onFallback,
-      queryClient,
+      accessToken,
+      bypassAuth,
       simulateTestStream,
-    ]
+      onError,
+      chatId,
+      onMessageCreated,
+      upsertMessageInCache,
+      shouldTrackLiveMessage,
+      upsertLiveMessage,
+      onComplete,
+      queryClient,
+      onFallback,
+    ],
   );
 
   /**
