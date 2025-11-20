@@ -1,4 +1,5 @@
 {
   "cSpell.words": ["NEXTAUTH", "vercel"],
-  "chatgpt.openOnStartup": false
+  "chatgpt.openOnStartup": false,
+  "css.customData": [".vscode/tailwindcss-custom-data.json"]
 }
