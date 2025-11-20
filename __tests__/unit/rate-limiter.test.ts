@@ -1,12 +1,12 @@
 import type { Redis } from 'ioredis';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limiter';
 
-type RedisMock = {
+interface RedisMock {
   zremrangebyscore: jest.Mock;
   zadd: jest.Mock;
   expire: jest.Mock;
   zrange: jest.Mock;
-};
+}
 
 const createRedisMock = (
   overrides: Partial<RedisMock> = {},

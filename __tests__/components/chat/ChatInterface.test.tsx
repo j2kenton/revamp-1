@@ -1,9 +1,17 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ChatInterface } from '@/components/chat/ChatInterface';
 import { Provider } from 'react-redux';
 import { legacy_createStore as createStore, combineReducers } from 'redux';
+import { ChatInterface } from '@/components/chat/ChatInterface';
 import { chatReducer } from '@/lib/redux/features/chat/reducer';
+import type { ApiResponse } from '@/types/api';
+import type { MessageDTO } from '@/types/models';
+
+interface ChatResponseData {
+  userMessage: MessageDTO;
+  aiMessage: MessageDTO;
+  chatId: string;
+}
 
 // Mock SWR
 jest.mock('swr', () => ({
@@ -23,13 +31,54 @@ const createMockStore = () =>
     }),
   );
 
+const buildMessage = (overrides: Partial<MessageDTO> = {}): MessageDTO => ({
+  id: 'message-id',
+  chatId: 'chat-123',
+  role: 'assistant',
+  content: 'Hi there!',
+  status: 'sent',
+  parentMessageId: null,
+  metadata: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  ...overrides,
+});
+
+const buildChatApiResponse = (
+  aiContent: string,
+  userContent: string,
+): ApiResponse<ChatResponseData> => ({
+  data: {
+    userMessage: buildMessage({ role: 'user', content: userContent }),
+    aiMessage: buildMessage({ content: aiContent }),
+    chatId: 'chat-123',
+  },
+  meta: {
+    requestId: 'test-request',
+    timestamp: new Date().toISOString(),
+  },
+});
+
+const createFetchResponse = (
+  payload: ApiResponse<ChatResponseData> = buildChatApiResponse(
+    'Hi there!',
+    'Test message',
+  ),
+) =>
+  new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
 describe('ChatInterface', () => {
   let store: ReturnType<typeof createMockStore>;
   const user = userEvent.setup();
 
   beforeEach(() => {
     store = createMockStore();
-    global.fetch = jest.fn();
+    global.fetch = jest.fn().mockImplementation(() =>
+      Promise.resolve(createFetchResponse()),
+    );
   });
 
   afterEach(() => {
@@ -114,10 +163,9 @@ describe('ChatInterface', () => {
     });
 
     it('trims whitespace from messages', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ aiResponse: 'Response' }),
-      });
+      (global.fetch as jest.Mock).mockResolvedValueOnce(
+        createFetchResponse(buildChatApiResponse('Response', 'Test message')),
+      );
 
       render(
         <Provider store={store}>
@@ -157,14 +205,9 @@ describe('ChatInterface', () => {
 
   describe('Message Sending', () => {
     it('sends message and displays response', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          chatId: 'chat-123',
-          userMessage: 'Hello',
-          aiResponse: 'Hi there!',
-        }),
-      });
+      (global.fetch as jest.Mock).mockResolvedValueOnce(
+        createFetchResponse(buildChatApiResponse('Hi there!', 'Hello')),
+      );
 
       render(
         <Provider store={store}>
@@ -184,7 +227,16 @@ describe('ChatInterface', () => {
 
     it('disables input while sending', async () => {
       (global.fetch as jest.Mock).mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 100)),
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve(
+                  createFetchResponse(buildChatApiResponse('Slow response', 'Test')),
+                ),
+              100,
+            ),
+          ),
       );
 
       render(
@@ -205,7 +257,16 @@ describe('ChatInterface', () => {
 
     it('shows loading indicator during send', async () => {
       (global.fetch as jest.Mock).mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 100)),
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve(
+                  createFetchResponse(buildChatApiResponse('Delayed', 'Test')),
+                ),
+              100,
+            ),
+          ),
       );
 
       render(
@@ -246,10 +307,9 @@ describe('ChatInterface', () => {
     it('provides retry option on failure', async () => {
       (global.fetch as jest.Mock)
         .mockRejectedValueOnce(new Error('Failed'))
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ aiResponse: 'Success' }),
-        });
+        .mockResolvedValueOnce(
+          createFetchResponse(buildChatApiResponse('Success', 'Test')),
+        );
 
       render(
         <Provider store={store}>

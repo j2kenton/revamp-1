@@ -11,6 +11,8 @@ import {
 } from '@/lib/constants/ui';
 import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@/lib/constants/http-status';
 import { STRINGS } from '@/lib/constants/strings';
+import type { ApiResponse } from '@/types/api';
+import type { MessageDTO } from '@/types/models';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -24,10 +26,21 @@ export interface ChatInterfaceProps {
   streamingEnabled?: boolean;
 }
 
-interface FetchResponse extends Response {
-  // TODO: fix any type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  json: () => Promise<any>;
+interface ChatApiResponseBody {
+  userMessage: MessageDTO;
+  aiMessage: MessageDTO;
+  chatId: string;
+}
+
+interface HttpResponseLike {
+  ok: boolean;
+  status?: number;
+  body?: ReadableStream<Uint8Array> | null;
+  json?: () => Promise<unknown>;
+}
+
+interface JsonResponseLike extends HttpResponseLike {
+  json: () => Promise<unknown>;
 }
 
 const createMessage = (role: ChatRole, content: string): ChatMessage => ({
@@ -35,6 +48,150 @@ const createMessage = (role: ChatRole, content: string): ChatMessage => ({
   role,
   content,
 });
+
+const isMessageDTO = (value: unknown): value is MessageDTO => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.chatId === 'string' &&
+    typeof candidate.role === 'string' &&
+    typeof candidate.content === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.createdAt === 'string' &&
+    typeof candidate.updatedAt === 'string'
+  );
+};
+
+const isChatApiResponse = (
+  value: unknown,
+): value is ApiResponse<ChatApiResponseBody> => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as ApiResponse<ChatApiResponseBody>;
+  const chatData = candidate.data;
+
+  return (
+    !!chatData &&
+    isMessageDTO(chatData.userMessage) &&
+    isMessageDTO(chatData.aiMessage) &&
+    typeof chatData.chatId === 'string'
+  );
+};
+
+const createMessageDTO = (
+  role: ChatRole,
+  content: string,
+  chatId: string = 'local-chat',
+): MessageDTO => ({
+  id: `${role}-${Date.now()}`,
+  chatId,
+  role,
+  content,
+  status: 'sent',
+  parentMessageId: null,
+  metadata: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+const extractChatData = (payload: unknown): ChatApiResponseBody | null => {
+  if (isChatApiResponse(payload) && payload.data) {
+    return payload.data;
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const candidate = payload as {
+    chatId?: unknown;
+    aiResponse?: unknown;
+    userMessage?: unknown;
+    data?: {
+      chatId?: unknown;
+      aiMessage?: { content?: unknown };
+      userMessage?: { content?: unknown };
+    };
+  };
+
+  const aiContentFromData =
+    typeof candidate.data?.aiMessage?.content === 'string'
+      ? candidate.data.aiMessage.content
+      : null;
+  const aiContent =
+    typeof candidate.aiResponse === 'string'
+      ? candidate.aiResponse
+      : aiContentFromData;
+
+  if (aiContent === null) {
+    return null;
+  }
+
+  const userContent =
+    typeof candidate.userMessage === 'string'
+      ? candidate.userMessage
+      : typeof candidate.data?.userMessage?.content === 'string'
+        ? candidate.data.userMessage.content
+        : '';
+
+  const chatId =
+    (typeof candidate.chatId === 'string' && candidate.chatId) ||
+    (typeof candidate.data?.chatId === 'string' && candidate.data.chatId) ||
+    'local-chat';
+
+  return {
+    chatId,
+    userMessage: createMessageDTO('user', userContent, chatId),
+    aiMessage: createMessageDTO('assistant', aiContent, chatId),
+  };
+};
+
+const parseChatResponse = async (
+  response: JsonResponseLike,
+): Promise<ChatApiResponseBody> => {
+  const payload: unknown = await response.json();
+
+  const chatData = extractChatData(payload);
+
+  if (chatData) {
+    return chatData;
+  }
+
+  return {
+    chatId: 'local-chat',
+    userMessage: createMessageDTO('user', ''),
+    aiMessage: createMessageDTO('assistant', 'OK'),
+  };
+};
+
+const hasJsonBody = (response: HttpResponseLike): response is JsonResponseLike =>
+  typeof response.json === 'function';
+
+const createFallbackResponse = (userContent: string): Response =>
+  new Response(
+    JSON.stringify({
+      data: {
+        chatId: 'local-chat',
+        userMessage: createMessageDTO('user', userContent),
+        aiMessage: createMessageDTO('assistant', 'OK'),
+      },
+      meta: {
+        requestId: `local-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      },
+    } satisfies ApiResponse<ChatApiResponseBody>),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
 
 export function ChatInterface({
   streamingEnabled = false,
@@ -150,13 +307,9 @@ export function ChatInterface({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ message: trimmed }),
-        })) as FetchResponse | undefined;
+        })) as HttpResponseLike | undefined;
 
-        const response: FetchResponse =
-          rawResponse ??
-          (new Response(JSON.stringify({ aiResponse: '' }), {
-            status: 200,
-          }) as unknown as FetchResponse);
+        const response = rawResponse ?? createFallbackResponse(trimmed);
 
         if (!response.ok) {
           if (response.status === HTTP_STATUS_TOO_MANY_REQUESTS) {
@@ -170,12 +323,11 @@ export function ChatInterface({
 
         if (streamingEnabled && response.body) {
           await handleStream(response);
+        } else if (hasJsonBody(response)) {
+          const payload = await parseChatResponse(response);
+          appendMessage(createMessage('assistant', payload.aiMessage.content));
         } else {
-          const payload = await response.json();
-          const aiResponse =
-            payload?.aiResponse ?? payload?.data?.aiMessage?.content ?? 'OK';
-
-          appendMessage(createMessage('assistant', aiResponse));
+          appendMessage(createMessage('assistant', 'OK'));
         }
 
         if (contentOverride === undefined && inputRef.current) {

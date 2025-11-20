@@ -11,19 +11,19 @@ export interface CounterState {
 }
 
 // Action Types
-export type IncrementAction = {
+export interface IncrementAction {
   type: CounterActionType.INCREMENT;
   payload?: number;
-};
+}
 
-export type DecrementAction = {
+export interface DecrementAction {
   type: CounterActionType.DECREMENT;
   payload?: number;
-};
+}
 
-export type ResetAction = {
+export interface ResetAction {
   type: CounterActionType.RESET;
-};
+}
 
 // Union of all counter actions
 export type CounterAction = IncrementAction | DecrementAction | ResetAction;

@@ -18,19 +18,19 @@ export interface AuthState {
 }
 
 // Action Types
-export type LoginAction = {
+export interface LoginAction {
   type: AuthActionType.LOGIN;
   payload: User | null;
-};
+}
 
-export type LogoutAction = {
+export interface LogoutAction {
   type: AuthActionType.LOGOUT;
-};
+}
 
-export type SetUserAction = {
+export interface SetUserAction {
   type: AuthActionType.SET_USER;
   payload: User | null;
-};
+}
 
 // Union of all auth actions
 export type AuthAction = LoginAction | LogoutAction | SetUserAction;
