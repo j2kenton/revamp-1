@@ -89,7 +89,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   });
 
   useEffect(() => {
-    activeChatIdRef.current = chatId;
+    activeChatIdRef.current = chatId ?? null;
   }, [chatId]);
 
   useEffect(() => {
@@ -359,7 +359,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         });
 
         if (response.status === STATUS_TOO_MANY_REQUESTS) {
-          let errorMessage = STRINGS.errors.rateLimited;
+          let errorMessage: string = STRINGS.errors.rateLimited;
           let retryAfter = parseInt(
             response.headers.get('Retry-After') ?? RETRY_AFTER_FALLBACK,
             PARSE_INT_RADIX,
@@ -391,7 +391,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         }
 
         if (!response.ok) {
-          let errorMessage = STRINGS.errors.streamingStartFailed;
+          let errorMessage: string = STRINGS.errors.streamingStartFailed;
           try {
             const errorBody = await response.json();
             errorMessage = errorBody.error?.message || errorMessage;
