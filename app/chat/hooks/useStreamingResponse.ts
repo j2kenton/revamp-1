@@ -15,16 +15,22 @@ import {
   BYPASS_CSRF_TOKEN,
   isBypassAuthEnabled,
 } from '@/lib/auth/bypass';
+import { STRINGS } from '@/lib/constants/strings';
+import {
+  ONE_SECOND_IN_MS,
+  PARSE_INT_RADIX,
+} from '@/lib/constants/common';
 
 const MAX_RECONNECT_ATTEMPTS = 3;
 const TEST_STREAM_CHUNK_DELAY_MS = 15;
 const STATUS_TOO_MANY_REQUESTS = 429;
 const RETRY_AFTER_FALLBACK = '0';
-const RETRY_AFTER_RADIX = 10;
 const MIN_RETRY_AFTER_SECONDS = 1;
 const DEFAULT_RETRY_AFTER_SECONDS = 30;
 const RECONNECT_BACKOFF_MULTIPLIER = 2;
-const RECONNECT_BACKOFF_BASE_MS = 1000;
+const RECONNECT_BACKOFF_BASE_MS = ONE_SECOND_IN_MS;
+const calculateReconnectDelay = (attempt: number) =>
+  Math.pow(RECONNECT_BACKOFF_MULTIPLIER, attempt) * RECONNECT_BACKOFF_BASE_MS;
 
 interface MessageCacheUpdate
   extends Partial<Omit<MessageDTO, 'id' | 'chatId'>> {
@@ -41,7 +47,7 @@ interface StreamingMessage {
 }
 
 interface UseStreamingResponseOptions {
-  chatId: string | null;
+  chatId?: string;
   onMessageCreated?: (
     messageId: string,
     chatId: string,
@@ -69,7 +75,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const [messagesRemoved, setMessagesRemoved] = useState(0);
   const contextTruncatedRef = useRef(false);
   const messagesRemovedRef = useRef(0);
-  const activeChatIdRef = useRef<string | null>(chatId);
+  const activeChatIdRef = useRef<string | null>(chatId ?? null);
   const [liveMessages, setLiveMessages] = useState<MessageDTO[]>([]);
   const previousChatIdRef = useRef<string | null>(chatId ?? null);
   const lastUserMessageRef = useRef<{
@@ -236,8 +242,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       upsertLiveMessage(userMessage);
 
       const simulatedChunks = [
-        `Thanks for your message: "${content}".`,
-        'This automated test response simulates streaming output.',
+        STRINGS.streaming.testIntro(content),
+        STRINGS.streaming.testChunk,
       ];
 
       let accumulated = '';
@@ -309,7 +315,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
       const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
       if (!token) {
-        const authError = new Error('Not authenticated');
+        const authError = new Error(STRINGS.errors.notAuthenticated);
         setError(authError);
         onError?.(authError);
         return;
@@ -353,10 +359,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         });
 
         if (response.status === STATUS_TOO_MANY_REQUESTS) {
-          let errorMessage = 'Too many requests';
+          let errorMessage = STRINGS.errors.rateLimited;
           let retryAfter = parseInt(
             response.headers.get('Retry-After') ?? RETRY_AFTER_FALLBACK,
-            RETRY_AFTER_RADIX,
+            PARSE_INT_RADIX,
           );
 
           try {
@@ -385,7 +391,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         }
 
         if (!response.ok) {
-          let errorMessage = 'Failed to start streaming';
+          let errorMessage = STRINGS.errors.streamingStartFailed;
           try {
             const errorBody = await response.json();
             errorMessage = errorBody.error?.message || errorMessage;
@@ -405,7 +411,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         const decoder = new TextDecoder();
 
         if (!reader) {
-          throw new Error('No response body');
+          throw new Error(STRINGS.errors.emptyResponse);
         }
 
         // Process SSE stream
@@ -697,7 +703,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 const streamError = new Error(
                   typeof data.message === 'string'
                     ? data.message
-                    : 'Streaming error',
+                    : STRINGS.errors.streamingGeneric,
                 );
                 setStreamingMessage(null);
                 setError(streamError);
@@ -720,15 +726,15 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         };
         setStreamingMessage(null);
         const streamError =
-          err instanceof Error ? err : new Error('Unknown streaming error');
+          err instanceof Error
+            ? err
+            : new Error(STRINGS.errors.streamingGeneric);
         setError(streamError);
         onError?.(streamError);
 
         // Attempt reconnection with exponential backoff
         if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-          const delay =
-            Math.pow(RECONNECT_BACKOFF_MULTIPLIER, reconnectAttempts.current) *
-            RECONNECT_BACKOFF_BASE_MS;
+          const delay = calculateReconnectDelay(reconnectAttempts.current);
           reconnectAttempts.current++;
 
           setTimeout(() => {

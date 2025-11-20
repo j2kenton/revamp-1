@@ -11,6 +11,17 @@ import {
   QueryClientProvider,
   type QueryClientConfig,
 } from '@tanstack/react-query';
+import {
+  FIVE_MINUTES_IN_MS,
+  TEN_MINUTES_IN_MS,
+  ONE_SECOND_IN_MS,
+} from '@/lib/constants/common';
+
+const DEFAULT_STALE_TIME_MS = FIVE_MINUTES_IN_MS;
+const DEFAULT_CACHE_TIME_MS = TEN_MINUTES_IN_MS;
+const RETRY_BACKOFF_BASE_MS = ONE_SECOND_IN_MS;
+const RETRY_BACKOFF_EXPONENT = 2;
+const MAX_RETRY_DELAY_MS = 30 * ONE_SECOND_IN_MS;
 
 /**
  * Query client configuration
@@ -18,17 +29,20 @@ import {
 const queryClientConfig: QueryClientConfig = {
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      staleTime: DEFAULT_STALE_TIME_MS,
+      gcTime: DEFAULT_CACHE_TIME_MS,
       retry: 3,
       retryDelay: (attemptIndex: number) =>
-        Math.min(1000 * 2 ** attemptIndex, 30000),
+        Math.min(
+          RETRY_BACKOFF_BASE_MS * RETRY_BACKOFF_EXPONENT ** attemptIndex,
+          MAX_RETRY_DELAY_MS,
+        ),
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
     },
     mutations: {
       retry: 1,
-      retryDelay: 1000,
+      retryDelay: ONE_SECOND_IN_MS,
     },
   },
 };

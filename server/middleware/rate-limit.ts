@@ -11,12 +11,16 @@ import { tooManyRequests } from '@/server/api-response';
 import { getSessionFromRequest } from '@/server/middleware/session';
 import { chatRateLimit, enhancedRateLimit } from '@/server/middleware/enhanced-rate-limit';
 import { logWarn } from '@/utils/logger';
-import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
+import {
+  FIFTEEN_MINUTES_IN_MS,
+  MILLISECONDS_PER_SECOND,
+  ONE_MINUTE_IN_MS,
+} from '@/lib/constants/common';
 
-const AUTH_WINDOW_MS = 60 * 1000;
+const AUTH_WINDOW_MS = ONE_MINUTE_IN_MS;
 const AUTH_MAX_REQUESTS = 10;
 const AUTH_LOCKOUT_THRESHOLD = 5;
-const AUTH_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+const AUTH_LOCKOUT_DURATION_MS = FIFTEEN_MINUTES_IN_MS;
 
 /**
  * Get identifier for rate limiting

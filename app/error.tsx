@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { STRINGS } from '@/lib/constants/strings';
 
 const FOCUSABLE_TAB_INDEX = -1;
 
@@ -34,19 +35,21 @@ export default function Error({
       tabIndex={FOCUSABLE_TAB_INDEX}
     >
       <div className="max-w-md text-center">
-        <h2 className="mb-4 text-2xl font-bold">Something went wrong!</h2>
+        <h2 className="mb-4 text-2xl font-bold">
+          {STRINGS.errorsUi.appBoundaryTitle}
+        </h2>
         <p
           className="mb-6 text-gray-600"
           role="alert"
           aria-live="assertive"
         >
-          {error.message || 'An unexpected error occurred. Please try again.'}
+          {error.message || STRINGS.errorsUi.appBoundaryDescription}
         </p>
         <button
           onClick={reset}
           className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
-          Try again
+          {STRINGS.actions.tryAgain}
         </button>
       </div>
     </div>

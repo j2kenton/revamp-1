@@ -7,6 +7,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import Link from 'next/link';
+import { STRINGS } from '@/lib/constants/strings';
 
 interface ChatErrorBoundaryProps {
   children: ReactNode;
@@ -44,11 +45,13 @@ export function ChatErrorFallback({ error, onRetry }: ChatErrorFallbackProps) {
               />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">We hit a snag</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            {STRINGS.errorsUi.chatBoundaryTitle}
+          </h2>
         </div>
         <p className="text-sm text-gray-600" aria-live="polite">
           {error?.message ||
-            'An unexpected error occurred while loading the chat experience.'}
+            STRINGS.errorsUi.chatBoundaryDescription}
         </p>
 
         <div className="mt-6 space-y-3">
@@ -57,20 +60,20 @@ export function ChatErrorFallback({ error, onRetry }: ChatErrorFallbackProps) {
             onClick={onRetry}
             className="flex w-full cursor-pointer items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Retry chat
+            {STRINGS.actions.retryChat}
           </button>
           <button
             type="button"
             onClick={() => window.location.reload()}
             className="flex w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Reload page
+            {STRINGS.actions.reload}
           </button>
           <Link
             href="/login"
             className="flex w-full items-center justify-center rounded-md border border-transparent bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Return to login
+            {STRINGS.actions.returnToLogin}
           </Link>
         </div>
       </div>

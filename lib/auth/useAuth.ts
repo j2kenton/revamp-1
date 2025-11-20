@@ -14,6 +14,11 @@ import {
   AuthenticationResult
 } from '@azure/msal-browser';
 import { BYPASS_ACCESS_TOKEN, isBypassAuthEnabled } from '@/lib/auth/bypass';
+import {
+  FIVE_MINUTES_IN_MS,
+  ONE_MINUTE_IN_MS,
+  ONE_SECOND_IN_MS,
+} from '@/lib/constants/common';
 import { loginRequest, silentRequest } from './msalConfig';
 
 interface UseAuthReturn {
@@ -31,7 +36,7 @@ interface UseAuthReturn {
   error: Error | null;
 }
 
-const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes in milliseconds
+const TOKEN_EXPIRY_BUFFER = FIVE_MINUTES_IN_MS;
 export function useAuth(): UseAuthReturn {
   const msalContext = useMsal();
   const { instance, accounts, inProgress } = msalContext;
@@ -107,7 +112,7 @@ export function useAuth(): UseAuthReturn {
       } else {
         // Network or other error - retry with exponential backoff
         if (retryCount < 3) {
-          const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+          const delay = Math.pow(2, retryCount) * ONE_SECOND_IN_MS; // 1s, 2s, 4s
           await new Promise(resolve => setTimeout(resolve, delay));
           return acquireToken(retryCount + 1);
         }
@@ -191,7 +196,7 @@ export function useAuth(): UseAuthReturn {
     };
 
     // Check every minute
-    const interval = setInterval(checkAndRefresh, 60 * 1000);
+    const interval = setInterval(checkAndRefresh, ONE_MINUTE_IN_MS);
 
     // Also check immediately
     checkAndRefresh();

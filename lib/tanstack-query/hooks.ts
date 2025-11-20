@@ -8,6 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ChatDTO, MessageDTO, UserDTO } from '@/types/models';
 import { post, get } from '@/lib/http/client';
+import { TEN_MINUTES_IN_MS } from '@/lib/constants/common';
 
 /**
  * Query keys
@@ -32,7 +33,7 @@ export function useUserSession() {
       }
       return response.data;
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: TEN_MINUTES_IN_MS,
   });
 }
 

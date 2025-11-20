@@ -10,9 +10,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
 import { dedupeMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO, ChatDTO } from '@/types/models';
+import { STRINGS } from '@/lib/constants/strings';
+import { FIVE_MINUTES_IN_MS, TEN_MINUTES_IN_MS } from '@/lib/constants/common';
 
-const STALE_TIME_MS = 5 * 60 * 1000; // 5 minutes
-const GC_TIME_MS = 10 * 60 * 1000; // 10 minutes
+const STALE_TIME_MS = FIVE_MINUTES_IN_MS;
+const GC_TIME_MS = TEN_MINUTES_IN_MS;
 const NOT_FOUND_STATUS_TEXT = '404';
 const MAX_RETRY_ATTEMPTS = 2;
 
@@ -42,20 +44,20 @@ async function fetchChatHistory(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || 'Failed to fetch chat history');
+    throw new Error(error.error?.message || STRINGS.errors.chatHistoryFailed);
   }
 
   const data = await response.json();
   return data.data;
 }
 
-export function useFetchChatHistory(chatId: string | null) {
+export function useFetchChatHistory(chatId?: string) {
   const { accessToken } = useAuth();
 
   const query = useQuery({
-    queryKey: ['chat', chatId],
-    queryFn: () => fetchChatHistory(chatId!, accessToken),
-    enabled: !!chatId && !!accessToken,
+    queryKey: ['chat', chatId ?? ''],
+    queryFn: () => fetchChatHistory(chatId as string, accessToken),
+    enabled: Boolean(chatId && accessToken),
     staleTime: STALE_TIME_MS,
     gcTime: GC_TIME_MS,
     refetchOnWindowFocus: true,

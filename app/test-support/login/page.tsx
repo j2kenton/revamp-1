@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { TEST_AUTH_STORAGE_KEY } from '@/lib/constants/test-auth';
+import { STRINGS } from '@/lib/constants/strings';
 
 const testAuthEnabled = process.env.NEXT_PUBLIC_TEST_AUTH_MODE === 'true';
 
@@ -33,7 +34,7 @@ export default function TestSupportLoginPage() {
 
   const handleLogin = useCallback(async () => {
     if (!testAuthEnabled) {
-      setError('Test authentication mode is disabled.');
+      setError(STRINGS.testSupport.disabledError);
       return;
     }
 
@@ -58,7 +59,9 @@ export default function TestSupportLoginPage() {
       enableBypassFlags();
       await router.push('/chat');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred.');
+      setError(
+        err instanceof Error ? err.message : STRINGS.errors.unexpected,
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -69,10 +72,10 @@ export default function TestSupportLoginPage() {
       <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
         <div className="max-w-md rounded-lg bg-white p-8 shadow">
           <h1 className="text-2xl font-semibold text-gray-900">
-            Test login disabled
+            {STRINGS.testSupport.disabledTitle}
           </h1>
           <p className="mt-4 text-gray-600">
-            Enable `TEST_AUTH_MODE` to access the automated test login page.
+            {STRINGS.testSupport.disabledDescription}
           </p>
         </div>
       </main>
@@ -84,14 +87,13 @@ export default function TestSupportLoginPage() {
       <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
         <div className="space-y-2 text-center">
           <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-            Test Support
+            {STRINGS.testSupport.subtitle}
           </p>
           <h1 className="text-2xl font-semibold text-gray-900">
-            Sign in as Test User
+            {STRINGS.testSupport.title}
           </h1>
           <p className="text-sm text-gray-600">
-            This helper page configures the application for automated end-to-end
-            tests.
+            {STRINGS.testSupport.description}
           </p>
         </div>
 
@@ -110,12 +112,13 @@ export default function TestSupportLoginPage() {
           disabled={isSubmitting}
           className="mt-8 w-full cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isSubmitting ? 'Configuring test session…' : 'Continue to chat'}
+          {isSubmitting
+            ? STRINGS.testSupport.configuring
+            : STRINGS.testSupport.continueCta}
         </button>
 
         <p className="mt-4 text-center text-xs text-gray-500">
-          A temporary cookie and local flag are stored to bypass MSAL login
-          during the test session.
+          {STRINGS.testSupport.helperText}
         </p>
       </div>
     </main>

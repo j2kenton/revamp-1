@@ -8,23 +8,32 @@ import { getRedisClient } from '@/lib/redis/client';
 import { withCircuitBreaker } from '@/lib/redis/circuit-breaker';
 import { tooManyRequests } from '@/server/api-response';
 import { logWarn, logError } from '@/utils/logger';
-import { MILLISECONDS_PER_SECOND } from '@/lib/constants/common';
+import {
+  MILLISECONDS_PER_SECOND,
+  ONE_HOUR_IN_MS,
+  ONE_MINUTE_IN_MS,
+  ONE_SECOND_IN_MS,
+  FIFTEEN_MINUTES_IN_MS,
+  SECONDS_PER_MINUTE,
+  MINUTES_PER_HOUR,
+  MILLISECONDS_PER_MINUTE,
+} from '@/lib/constants/common';
 import { BACKOFF_EXPONENT, MIN_RETRY_AFTER_SECONDS } from '@/lib/constants/retry';
 
-const DEFAULT_WINDOW_MS = 60 * 1000;
+const DEFAULT_WINDOW_MS = ONE_MINUTE_IN_MS;
 const DEFAULT_MAX_REQUESTS = 10;
-const DEFAULT_BLOCK_DURATION_MS = 15 * 60 * 1000;
+const DEFAULT_BLOCK_DURATION_MS = FIFTEEN_MINUTES_IN_MS;
 const DEFAULT_LOCKOUT_THRESHOLD = 5;
-const DEFAULT_LOCKOUT_DURATION_MS = 60 * 60 * 1000;
+const DEFAULT_LOCKOUT_DURATION_MS = ONE_HOUR_IN_MS;
 const NO_DELAY = 0;
 const BACKOFF_INITIAL_ATTEMPT = 1;
-const MAX_BACKOFF_MS = 30000;
-const ATTEMPT_RESET_SECONDS = 3600;
-const MILLISECONDS_TO_MINUTES = 60000;
-const CHAT_WINDOW_MS = 60 * 1000;
+const MAX_BACKOFF_MS = 30 * ONE_SECOND_IN_MS;
+const ATTEMPT_RESET_SECONDS = MINUTES_PER_HOUR * SECONDS_PER_MINUTE;
+const MILLISECONDS_TO_MINUTES = MILLISECONDS_PER_MINUTE;
+const CHAT_WINDOW_MS = ONE_MINUTE_IN_MS;
 const CHAT_MAX_REQUESTS = 20;
 const CHAT_LOCKOUT_THRESHOLD = 3;
-const CHAT_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+const CHAT_LOCKOUT_DURATION_MS = FIFTEEN_MINUTES_IN_MS;
 
 interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds

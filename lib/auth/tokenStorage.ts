@@ -4,6 +4,7 @@
  */
 
 import { cookies } from 'next/headers';
+import { FIVE_MINUTES_IN_MS } from '@/lib/constants/common';
 
 const REFRESH_TOKEN_COOKIE_NAME = 'msal_refresh_token';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
@@ -95,7 +96,6 @@ export const clientTokenStorage = {
     const expiresAt = this.getTokenExpiresAt();
     if (!expiresAt) return true;
 
-    const bufferTime = 5 * 60 * 1000; // 5 minutes
-    return Date.now() >= expiresAt - bufferTime;
+    return Date.now() >= expiresAt - FIVE_MINUTES_IN_MS;
   },
 };
