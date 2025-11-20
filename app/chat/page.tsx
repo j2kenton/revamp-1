@@ -97,6 +97,9 @@ export default function ChatPage() {
       {/* Header */}
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 pr-1">
+            Introducing:
+          </h1>
           <Image
             src="/gemini-style-logo.png"
             alt="Gemini 3 logo"

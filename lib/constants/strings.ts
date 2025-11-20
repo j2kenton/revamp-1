@@ -32,7 +32,7 @@ export const STRINGS = {
     sending: 'Sending',
     sent: 'Sent',
     failed: 'Failed',
-    streaming: 'Streaming',
+    loading: 'Loading...',
   },
 
   // Connection status

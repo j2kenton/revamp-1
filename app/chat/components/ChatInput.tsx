@@ -245,7 +245,7 @@ export function ChatInput({
               {isStreaming ? (
                 <div className="flex items-center gap-2">
                   <LoadingSpinner className="h-4 w-4 border-white border-t-transparent" />
-                  <span>{STRINGS.status.streaming}</span>
+                  <span>{STRINGS.status.loading}</span>
                 </div>
               ) : (
                 STRINGS.input.sendButton

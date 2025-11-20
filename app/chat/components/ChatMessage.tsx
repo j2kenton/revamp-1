@@ -85,7 +85,7 @@ export function ChatMessage({
           {isStreaming && (
             <span className="flex items-center gap-1">
               <LoadingDots />
-              <span className="ml-1">{STRINGS.status.streaming}</span>
+              <span className="ml-1">{STRINGS.status.loading}</span>
             </span>
           )}
           {message.metadata?.tokensUsed && !isStreaming && (
