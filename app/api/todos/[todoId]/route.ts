@@ -9,6 +9,10 @@ import { requireCsrfToken } from '@/server/middleware/csrf';
 import { requireRateLimit } from '@/server/middleware/rate-limit';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
 
+const SIMULATED_DELAY_MS = 300;
+const STATUS_OK = 200;
+const STATUS_INTERNAL_SERVER_ERROR = 500;
+
 // Import the shared mock data (in production, use a database)
 // Note: This is a simplified example; in production, use a proper data layer
 
@@ -23,7 +27,7 @@ async function handlePatch(
     const { todoId } = await (typedContext?.params || Promise.resolve({ todoId: '' }));
 
     // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, SIMULATED_DELAY_MS));
 
     // In a real app, update the database here
     // For this example, we'll just return the updated todo
@@ -37,7 +41,7 @@ async function handlePatch(
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 },
+      { status: STATUS_INTERNAL_SERVER_ERROR },
     );
   }
 }
@@ -46,19 +50,19 @@ async function handlePatch(
 async function handleDelete(_: NextRequest) {
   try {
     // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, SIMULATED_DELAY_MS));
 
     // In a real app, delete from database here
     // For this example, we'll just return success
 
     return NextResponse.json(
       { message: 'Todo deleted successfully' },
-      { status: 200 },
+      { status: STATUS_OK },
     );
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 },
+      { status: STATUS_INTERNAL_SERVER_ERROR },
     );
   }
 }

@@ -20,6 +20,12 @@ import {
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 
+const TITLE_MAX_LENGTH = 50;
+const CONTEXT_MAX_TOKENS = 8000;
+const HEARTBEAT_FREQUENCY = 10;
+const LLM_STREAM_MAX_TOKENS = 2000;
+const LLM_STREAM_TEMPERATURE = 0.7;
+
 async function processChatStream(request: NextRequest) {
   try {
     // Require authenticated session
@@ -50,7 +56,9 @@ async function processChatStream(request: NextRequest) {
     }
 
     if (!chat) {
-      const title = sanitizedContent.slice(0, 50) + (sanitizedContent.length > 50 ? '...' : '');
+      const title =
+        sanitizedContent.slice(0, TITLE_MAX_LENGTH) +
+        (sanitizedContent.length > TITLE_MAX_LENGTH ? '...' : '');
       chat = await createChat(session.userId, title);
     }
 
@@ -64,7 +72,7 @@ async function processChatStream(request: NextRequest) {
     ];
 
     const { messages: truncatedMessages, truncated, removedCount } =
-      truncateMessagesToFit(allMessages, 8000);
+      truncateMessagesToFit(allMessages, CONTEXT_MAX_TOKENS);
 
     if (truncated) {
       logWarn('Context truncated for streaming request', {
@@ -174,13 +182,13 @@ async function processChatStream(request: NextRequest) {
                 });
 
                 // Send heartbeat periodically
-                if (heartbeatCount % 10 === 0) {
+                if (heartbeatCount % HEARTBEAT_FREQUENCY === 0) {
                   sendHeartbeat();
                 }
               },
               {
-                maxTokens: 2000,
-                temperature: 0.7,
+                maxTokens: LLM_STREAM_MAX_TOKENS,
+                temperature: LLM_STREAM_TEMPERATURE,
               }
             );
 

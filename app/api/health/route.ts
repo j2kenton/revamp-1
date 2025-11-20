@@ -6,6 +6,16 @@
 import { NextRequest } from 'next/server';
 import { getRedisClient } from '@/lib/redis/client';
 
+const MEMORY_DEGRADED_THRESHOLD_PERCENT = 90;
+const BYTES_PER_MEGABYTE = 1024 * 1024;
+const STATUS_OK = 200;
+const STATUS_SERVICE_UNAVAILABLE = 503;
+const JSON_INDENT_SPACES = 2;
+const NO_STORE_CACHE_CONTROL = 'no-cache, no-store, must-revalidate';
+const RESPONSE_TIME_HEADER = 'X-Response-Time';
+const CONTENT_TYPE_JSON = 'application/json';
+const MS_TIME_SUFFIX = 'ms';
+
 interface HealthCheckResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -68,12 +78,12 @@ function checkMemoryHealth(): HealthCheckResponse['checks']['memory'] {
   const usagePercent = (usage.heapUsed / usage.heapTotal) * 100;
 
   return {
-    status: usagePercent > 90 ? 'degraded' : 'healthy',
+    status: usagePercent > MEMORY_DEGRADED_THRESHOLD_PERCENT ? 'degraded' : 'healthy',
     usage: {
-      heapUsed: Math.round(usage.heapUsed / 1024 / 1024), // MB
-      heapTotal: Math.round(usage.heapTotal / 1024 / 1024), // MB
-      external: Math.round(usage.external / 1024 / 1024), // MB
-      rss: Math.round(usage.rss / 1024 / 1024), // MB
+      heapUsed: Math.round(usage.heapUsed / BYTES_PER_MEGABYTE), // MB
+      heapTotal: Math.round(usage.heapTotal / BYTES_PER_MEGABYTE), // MB
+      external: Math.round(usage.external / BYTES_PER_MEGABYTE), // MB
+      rss: Math.round(usage.rss / BYTES_PER_MEGABYTE), // MB
     },
     usagePercent: Math.round(usagePercent),
   };
@@ -126,14 +136,17 @@ export async function GET(_request: NextRequest) {
     };
 
     // Return appropriate status code based on health
-    const statusCode = status === 'healthy' ? 200 : status === 'degraded' ? 200 : 503;
+    const statusCode =
+      status === 'healthy' || status === 'degraded'
+        ? STATUS_OK
+        : STATUS_SERVICE_UNAVAILABLE;
 
-    return new Response(JSON.stringify(response, null, 2), {
+    return new Response(JSON.stringify(response, null, JSON_INDENT_SPACES), {
       status: statusCode,
       headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Response-Time': `${Date.now() - startTime}ms`,
+        'Content-Type': CONTENT_TYPE_JSON,
+        'Cache-Control': NO_STORE_CACHE_CONTROL,
+        [RESPONSE_TIME_HEADER]: `${Date.now() - startTime}${MS_TIME_SUFFIX}`,
       },
     });
   } catch (_error) {
@@ -151,12 +164,12 @@ export async function GET(_request: NextRequest) {
       },
     };
 
-    return new Response(JSON.stringify(errorResponse, null, 2), {
-      status: 503,
+    return new Response(JSON.stringify(errorResponse, null, JSON_INDENT_SPACES), {
+      status: STATUS_SERVICE_UNAVAILABLE,
       headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Response-Time': `${Date.now() - startTime}ms`,
+        'Content-Type': CONTENT_TYPE_JSON,
+        'Cache-Control': NO_STORE_CACHE_CONTROL,
+        [RESPONSE_TIME_HEADER]: `${Date.now() - startTime}${MS_TIME_SUFFIX}`,
       },
     });
   }

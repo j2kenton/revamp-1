@@ -7,9 +7,12 @@ import {
 
 const TEST_AUTH_ENV_FLAG = 'TEST_AUTH_MODE';
 const COOKIE_MAX_AGE_SECONDS = 60 * 60;
+const UNAUTHORIZED_STATUS = 403;
+const NOT_FOUND_STATUS = 404;
+const DELETED_COOKIE_MAX_AGE = 0;
 const DEFAULT_ALLOWED_HOSTS = ['localhost', '127.0.0.1'];
 
-const unauthorizedResponse = (message: string, status = 403): NextResponse =>
+const unauthorizedResponse = (message: string, status = UNAUTHORIZED_STATUS): NextResponse =>
   NextResponse.json(
     {
       error: {
@@ -101,7 +104,7 @@ const isRequestFromAllowedHost = (request: NextRequest): boolean => {
 
 const validateRequest = (request: NextRequest): NextResponse | null => {
   if (!isTestAuthEnabled()) {
-    return unauthorizedResponse('Test authentication mode is disabled.', 404);
+    return unauthorizedResponse('Test authentication mode is disabled.', NOT_FOUND_STATUS);
   }
 
   if (process.env.NODE_ENV === 'production' && !isRequestFromAllowedHost(request)) {
@@ -157,7 +160,7 @@ export async function DELETE(request: NextRequest): Promise<Response> {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 0,
+    maxAge: DELETED_COOKIE_MAX_AGE,
   });
 
   return response;

@@ -6,15 +6,18 @@
 
 import { z } from 'zod';
 
+const MIN_REQUIRED_LENGTH = 1;
+const MIN_PASSWORD_LENGTH = 6;
+
 export const loginSchema = z.object({
   email: z
     .string()
-    .min(1, 'Email is required')
+    .min(MIN_REQUIRED_LENGTH, 'Email is required')
     .email('Please enter a valid email address'),
   password: z
     .string()
-    .min(1, 'Password is required')
-    .min(6, 'Password must be at least 6 characters'),
+    .min(MIN_REQUIRED_LENGTH, 'Password is required')
+    .min(MIN_PASSWORD_LENGTH, 'Password must be at least 6 characters'),
 });
 
 export type LoginFormData = z.infer<typeof loginSchema>;

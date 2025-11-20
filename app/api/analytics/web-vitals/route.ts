@@ -8,6 +8,18 @@ import { logInfo, logError } from '@/utils/logger';
 import { getRedisClient } from '@/lib/redis/client';
 import { checkRateLimit } from '@/lib/rate-limiter';
 
+const MAX_ATTRIBUTION_SIZE_BYTES = 10 * 1024; // 10KB in bytes
+const RATE_LIMIT_MAX_REQUESTS = 10;
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const STATUS_FORBIDDEN = 403;
+const STATUS_TOO_MANY_REQUESTS = 429;
+const STATUS_BAD_REQUEST = 400;
+const STATUS_SUCCESS = 200;
+const STATUS_INTERNAL_ERROR = 500;
+const STATUS_PAYLOAD_TOO_LARGE = 413;
+const UNKNOWN_FALLBACK_VALUE = 'unknown';
+const CONTENT_TYPE_JSON = 'application/json';
+
 interface WebVitalsMetric {
   id: string;
   name: string;
@@ -28,11 +40,6 @@ interface WebVitalsMetric {
  * TTFB: Time to First Byte
  */
 const VALID_METRICS = ['CLS', 'FID', 'LCP', 'FCP', 'INP', 'TTFB'] as const;
-
-/**
- * Maximum size for attribution data (10KB)
- */
-const MAX_ATTRIBUTION_SIZE = 10 * 1024; // 10KB in bytes
 
 /**
  * Validate origin to prevent abuse from unauthorized domains
@@ -96,8 +103,8 @@ export async function POST(request: NextRequest) {
           error: 'Unauthorized origin',
         }),
         {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' },
+          status: STATUS_FORBIDDEN,
+          headers: { 'Content-Type': CONTENT_TYPE_JSON },
         }
       );
     }
@@ -107,13 +114,13 @@ export async function POST(request: NextRequest) {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0] ||
       request.headers.get('x-real-ip') ||
-      'unknown';
+      UNKNOWN_FALLBACK_VALUE;
 
     try {
       const redis = getRedisClient();
       const rateLimitResult = await checkRateLimit(redis, `webvitals:${ip}`, {
-        maxRequests: 10,
-        windowSeconds: 60,
+        maxRequests: RATE_LIMIT_MAX_REQUESTS,
+        windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
         keyPrefix: 'ratelimit:webvitals',
       });
 
@@ -131,9 +138,9 @@ export async function POST(request: NextRequest) {
             resetAt: rateLimitResult.resetAt.toISOString(),
           }),
           {
-            status: 429,
+            status: STATUS_TOO_MANY_REQUESTS,
             headers: {
-              'Content-Type': 'application/json',
+              'Content-Type': CONTENT_TYPE_JSON,
               'X-RateLimit-Limit': rateLimitResult.limit.toString(),
               'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
               'X-RateLimit-Reset': rateLimitResult.resetAt.toISOString(),
@@ -159,8 +166,8 @@ export async function POST(request: NextRequest) {
           error: `Invalid metric name. Must be one of: ${VALID_METRICS.join(', ')}`,
         }),
         {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          status: STATUS_BAD_REQUEST,
+          headers: { 'Content-Type': CONTENT_TYPE_JSON },
         }
       );
     }
@@ -173,30 +180,30 @@ export async function POST(request: NextRequest) {
           error: 'Invalid metric data: value must be a number',
         }),
         {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          status: STATUS_BAD_REQUEST,
+          headers: { 'Content-Type': CONTENT_TYPE_JSON },
         }
       );
     }
 
     // 5. Validate attribution size to prevent excessive data
     const attributionSize = getAttributionSize(metric.attribution);
-    if (attributionSize > MAX_ATTRIBUTION_SIZE) {
+    if (attributionSize > MAX_ATTRIBUTION_SIZE_BYTES) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Attribution data too large. Maximum size: ${MAX_ATTRIBUTION_SIZE} bytes`,
+          error: `Attribution data too large. Maximum size: ${MAX_ATTRIBUTION_SIZE_BYTES} bytes`,
         }),
         {
-          status: 413,
-          headers: { 'Content-Type': 'application/json' },
+          status: STATUS_PAYLOAD_TOO_LARGE,
+          headers: { 'Content-Type': CONTENT_TYPE_JSON },
         }
       );
     }
 
     // Get user agent and other context
-    const userAgent = request.headers.get('user-agent') || 'unknown';
-    const referer = request.headers.get('referer') || 'unknown';
+    const userAgent = request.headers.get('user-agent') || UNKNOWN_FALLBACK_VALUE;
+    const referer = request.headers.get('referer') || UNKNOWN_FALLBACK_VALUE;
 
     // Log the metric with security context
     logInfo('Web Vital recorded', {
@@ -228,8 +235,8 @@ export async function POST(request: NextRequest) {
         success: true,
       }),
       {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        status: STATUS_SUCCESS,
+        headers: { 'Content-Type': CONTENT_TYPE_JSON },
       }
     );
   } catch (error) {
@@ -241,8 +248,8 @@ export async function POST(request: NextRequest) {
         error: 'Internal server error',
       }),
       {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        status: STATUS_INTERNAL_ERROR,
+        headers: { 'Content-Type': CONTENT_TYPE_JSON },
       }
     );
   }

@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+const MIN_REQUIRED_LENGTH = 1;
+const MIN_NAME_LENGTH = 2;
+const MAX_PROFILE_NAME_LENGTH = 50;
+const MAX_PROFILE_BIO_LENGTH = 500;
+const MAX_CONTACT_NAME_LENGTH = 100;
+const MIN_SUBJECT_LENGTH = 5;
+const MAX_SUBJECT_LENGTH = 200;
+const MIN_MESSAGE_LENGTH = 10;
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_SEARCH_QUERY_LENGTH = 200;
+
 /**
  * User Profile Schema
  * Validates user profile information
@@ -7,13 +18,22 @@ import { z } from 'zod';
 export const userProfileSchema = z.object({
   name: z
     .string()
-    .min(1, 'Name is required')
-    .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name must not exceed 50 characters'),
-  email: z.string().min(1, 'Email is required').email('Invalid email address'),
+    .min(MIN_REQUIRED_LENGTH, 'Name is required')
+    .min(MIN_NAME_LENGTH, `Name must be at least ${MIN_NAME_LENGTH} characters`)
+    .max(
+      MAX_PROFILE_NAME_LENGTH,
+      `Name must not exceed ${MAX_PROFILE_NAME_LENGTH} characters`,
+    ),
+  email: z
+    .string()
+    .min(MIN_REQUIRED_LENGTH, 'Email is required')
+    .email('Invalid email address'),
   bio: z
     .string()
-    .max(500, 'Bio must not exceed 500 characters')
+    .max(
+      MAX_PROFILE_BIO_LENGTH,
+      `Bio must not exceed ${MAX_PROFILE_BIO_LENGTH} characters`,
+    )
     .optional()
     .or(z.literal('')),
   website: z.string().url('Invalid URL').optional().or(z.literal('')),
@@ -36,20 +56,38 @@ export type UserProfileFormData = z.infer<typeof userProfileSchema>;
 export const contactFormSchema = z.object({
   name: z
     .string()
-    .min(1, 'Name is required')
-    .min(2, 'Name must be at least 2 characters')
-    .max(100, 'Name must not exceed 100 characters'),
-  email: z.string().min(1, 'Email is required').email('Invalid email address'),
+    .min(MIN_REQUIRED_LENGTH, 'Name is required')
+    .min(MIN_NAME_LENGTH, `Name must be at least ${MIN_NAME_LENGTH} characters`)
+    .max(
+      MAX_CONTACT_NAME_LENGTH,
+      `Name must not exceed ${MAX_CONTACT_NAME_LENGTH} characters`,
+    ),
+  email: z
+    .string()
+    .min(MIN_REQUIRED_LENGTH, 'Email is required')
+    .email('Invalid email address'),
   subject: z
     .string()
-    .min(1, 'Subject is required')
-    .min(5, 'Subject must be at least 5 characters')
-    .max(200, 'Subject must not exceed 200 characters'),
+    .min(MIN_REQUIRED_LENGTH, 'Subject is required')
+    .min(
+      MIN_SUBJECT_LENGTH,
+      `Subject must be at least ${MIN_SUBJECT_LENGTH} characters`,
+    )
+    .max(
+      MAX_SUBJECT_LENGTH,
+      `Subject must not exceed ${MAX_SUBJECT_LENGTH} characters`,
+    ),
   message: z
     .string()
-    .min(1, 'Message is required')
-    .min(10, 'Message must be at least 10 characters')
-    .max(2000, 'Message must not exceed 2000 characters'),
+    .min(MIN_REQUIRED_LENGTH, 'Message is required')
+    .min(
+      MIN_MESSAGE_LENGTH,
+      `Message must be at least ${MIN_MESSAGE_LENGTH} characters`,
+    )
+    .max(
+      MAX_MESSAGE_LENGTH,
+      `Message must not exceed ${MAX_MESSAGE_LENGTH} characters`,
+    ),
   category: z.enum(['general', 'support', 'sales', 'feedback'], {
     errorMap: () => ({ message: 'Please select a category' }),
   }),
@@ -62,7 +100,10 @@ export type ContactFormData = z.infer<typeof contactFormSchema>;
  * Validates newsletter subscription
  */
 export const newsletterSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Invalid email address'),
+  email: z
+    .string()
+    .min(MIN_REQUIRED_LENGTH, 'Email is required')
+    .email('Invalid email address'),
   preferences: z.object({
     productUpdates: z.boolean().default(true),
     weeklyNewsletter: z.boolean().default(true),
@@ -79,8 +120,11 @@ export type NewsletterFormData = z.infer<typeof newsletterSchema>;
 export const searchFormSchema = z.object({
   query: z
     .string()
-    .min(1, 'Search query is required')
-    .max(200, 'Query must not exceed 200 characters'),
+    .min(MIN_REQUIRED_LENGTH, 'Search query is required')
+    .max(
+      MAX_SEARCH_QUERY_LENGTH,
+      `Query must not exceed ${MAX_SEARCH_QUERY_LENGTH} characters`,
+    ),
   category: z
     .enum(['all', 'posts', 'users', 'products'])
     .default('all')

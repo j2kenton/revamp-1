@@ -9,6 +9,10 @@ import { NextResponse } from 'next/server';
 
 import type { User } from '@/lib/swr/types';
 
+const SIMULATED_DELAY_MS = 500;
+const STATUS_NOT_FOUND = 404;
+const STATUS_INTERNAL_SERVER_ERROR = 500;
+
 // Mock user data
 const mockUsers: User[] = [
   {
@@ -45,20 +49,23 @@ export async function GET(
 ) {
   try {
     // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, SIMULATED_DELAY_MS));
 
     const { userId } = await params;
     const user = mockUsers.find((u) => u.id === userId);
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: STATUS_NOT_FOUND },
+      );
     }
 
     return NextResponse.json(user);
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 },
+      { status: STATUS_INTERNAL_SERVER_ERROR },
     );
   }
 }

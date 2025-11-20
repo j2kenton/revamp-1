@@ -11,6 +11,11 @@ import { useAuth } from '@/lib/auth/useAuth';
 import { dedupeMessages } from '@/app/chat/utils/messageReconciler';
 import type { MessageDTO, ChatDTO } from '@/types/models';
 
+const STALE_TIME_MS = 5 * 60 * 1000; // 5 minutes
+const GC_TIME_MS = 10 * 60 * 1000; // 10 minutes
+const NOT_FOUND_STATUS_TEXT = '404';
+const MAX_RETRY_ATTEMPTS = 2;
+
 interface ChatHistoryResponse {
   chat: ChatDTO;
   messages: MessageDTO[];
@@ -51,14 +56,14 @@ export function useFetchChatHistory(chatId: string | null) {
     queryKey: ['chat', chatId],
     queryFn: () => fetchChatHistory(chatId!, accessToken),
     enabled: !!chatId && !!accessToken,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
     refetchOnWindowFocus: true,
     retry: (failureCount, error) => {
-      if (error.message.includes('404')) {
+      if (error.message.includes(NOT_FOUND_STATUS_TEXT)) {
         return false; // Don't retry if chat not found
       }
-      return failureCount < 2;
+      return failureCount < MAX_RETRY_ATTEMPTS;
     },
   });
 

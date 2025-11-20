@@ -16,6 +16,16 @@ import {
   isBypassAuthEnabled,
 } from '@/lib/auth/bypass';
 
+const MAX_RECONNECT_ATTEMPTS = 3;
+const TEST_STREAM_CHUNK_DELAY_MS = 15;
+const STATUS_TOO_MANY_REQUESTS = 429;
+const RETRY_AFTER_FALLBACK = '0';
+const RETRY_AFTER_RADIX = 10;
+const MIN_RETRY_AFTER_SECONDS = 1;
+const DEFAULT_RETRY_AFTER_SECONDS = 30;
+const RECONNECT_BACKOFF_MULTIPLIER = 2;
+const RECONNECT_BACKOFF_BASE_MS = 1000;
+
 interface MessageCacheUpdate
   extends Partial<Omit<MessageDTO, 'id' | 'chatId'>> {
   id: string;
@@ -175,7 +185,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
 
   /**
    * Close SSE connection
@@ -252,7 +261,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         });
         upsertLiveMessage(partialMessage);
         // Small delay to mimic streaming without slowing tests noticeably
-        await new Promise((resolve) => setTimeout(resolve, 15));
+        await new Promise((resolve) =>
+          setTimeout(resolve, TEST_STREAM_CHUNK_DELAY_MS),
+        );
       }
 
       const assistantMessage: MessageDTO = {
@@ -341,11 +352,11 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           body: JSON.stringify(payload),
         });
 
-        if (response.status === 429) {
+        if (response.status === STATUS_TOO_MANY_REQUESTS) {
           let errorMessage = 'Too many requests';
           let retryAfter = parseInt(
-            response.headers.get('Retry-After') ?? '0',
-            10,
+            response.headers.get('Retry-After') ?? RETRY_AFTER_FALLBACK,
+            RETRY_AFTER_RADIX,
           );
 
           try {
@@ -360,8 +371,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           }
 
           const normalizedRetry = Number.isFinite(retryAfter)
-            ? Math.max(retryAfter, 1)
-            : 30;
+            ? Math.max(retryAfter, MIN_RETRY_AFTER_SECONDS)
+            : DEFAULT_RETRY_AFTER_SECONDS;
 
           setRateLimitSeconds(normalizedRetry);
 
@@ -714,8 +725,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         onError?.(streamError);
 
         // Attempt reconnection with exponential backoff
-        if (reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = Math.pow(2, reconnectAttempts.current) * 1000;
+        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+          const delay =
+            Math.pow(RECONNECT_BACKOFF_MULTIPLIER, reconnectAttempts.current) *
+            RECONNECT_BACKOFF_BASE_MS;
           reconnectAttempts.current++;
 
           setTimeout(() => {

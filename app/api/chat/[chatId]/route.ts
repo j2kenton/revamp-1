@@ -12,6 +12,11 @@ import { logError } from '@/utils/logger';
 import { messageToDTO, chatToDTO } from '@/types/models';
 import { getMessagesSchema } from '@/lib/validation/chat.schema';
 
+const DEFAULT_OFFSET_PARAM = '0';
+const DEFAULT_LIMIT_PARAM = '50';
+const CACHE_MAX_AGE_SECONDS = 300;
+const PRIVATE_CACHE_CONTROL = `private, max-age=${CACHE_MAX_AGE_SECONDS}`;
+
 interface RouteContext {
   params: Promise<{ chatId: string }>;
 }
@@ -34,8 +39,8 @@ async function handleChatGet(
     // Get query parameters for pagination
     const searchParams = request.nextUrl.searchParams;
     const queryValidation = getMessagesSchema.safeParse({
-      offset: searchParams.get('offset') || '0',
-      limit: searchParams.get('limit') || '50',
+      offset: searchParams.get('offset') || DEFAULT_OFFSET_PARAM,
+      limit: searchParams.get('limit') || DEFAULT_LIMIT_PARAM,
     });
 
     if (!queryValidation.success) {
@@ -81,7 +86,7 @@ async function handleChatGet(
       },
       {
         headers: {
-          'Cache-Control': 'private, max-age=300', // Cache for 5 minutes
+          'Cache-Control': PRIVATE_CACHE_CONTROL, // Cache for 5 minutes
         },
       }
     );

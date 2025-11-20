@@ -32,6 +32,20 @@ interface LLMStreamOptions extends LLMRequestOptions {
 
 const DEFAULT_TEMPERATURE = 1;
 const FALLBACK_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5;
+const CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 2;
+const CIRCUIT_BREAKER_TIMEOUT_MS = 60000;
+const MOCK_LLM_DELAY_MS = 1000;
+const MOCK_LLM_TOKEN_RANGE = 500;
+const MOCK_LLM_TOKEN_BASE = 100;
+const MOCK_STREAM_DEFAULT_DELAY_MS = 30;
+const MIN_MOCK_DELAY_MS = 0;
+const TOKEN_APPROX_CHARS_PER_TOKEN = 4;
+const DEFAULT_MAX_TOKENS = 8000;
+const MIN_TOKEN_LIMIT = 1;
+const DEFAULT_MAX_RETRIES = 3;
+const BACKOFF_EXPONENT = 2;
+const BACKOFF_BASE_DELAY_MS = 1000;
 
 let geminiClient: GoogleGenAIClient | null = null;
 let googleGenAIModulePromise: Promise<GoogleGenAIModule> | null = null;
@@ -154,9 +168,9 @@ class CircuitBreaker {
   private nextAttemptTime: number = 0;
 
   constructor(
-    private failureThreshold: number = 5,
-    private successThreshold: number = 2,
-    private timeout: number = 60000, // 1 minute
+    private failureThreshold: number = CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    private successThreshold: number = CIRCUIT_BREAKER_SUCCESS_THRESHOLD,
+    private timeout: number = CIRCUIT_BREAKER_TIMEOUT_MS, // 1 minute
   ) {}
 
   async execute<T>(fn: () => Promise<T>): Promise<T> {
@@ -426,7 +440,7 @@ async function callMockLLM(
   const startTime = Date.now();
   const latestContent = messages[messages.length - 1]?.content ?? '';
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, MOCK_LLM_DELAY_MS));
 
   const mockResponse = `This is a mock response to: "${latestContent}".
 
@@ -448,7 +462,8 @@ To integrate a real LLM:
   return {
     content: mockResponse,
     model: options.model || 'mock-model',
-    tokensUsed: Math.floor(Math.random() * 500) + 100,
+    tokensUsed:
+      Math.floor(Math.random() * MOCK_LLM_TOKEN_RANGE) + MOCK_LLM_TOKEN_BASE,
     processingTime,
   };
 }
@@ -471,9 +486,9 @@ Each word is sent as a separate chunk to simulate real streaming behavior.`;
   let fullContent = '';
 
   const mockDelay =
-    typeof options.mockDelay === 'number' && options.mockDelay >= 0
+    typeof options.mockDelay === 'number' && options.mockDelay >= MIN_MOCK_DELAY_MS
       ? options.mockDelay
-      : 30;
+      : MOCK_STREAM_DEFAULT_DELAY_MS;
 
   for (let i = 0; i < words.length; i++) {
     const word = `${words[i]} `;
@@ -505,7 +520,7 @@ Each word is sent as a separate chunk to simulate real streaming behavior.`;
 export function calculateTokenCount(text: string): number {
   // Rough approximation: ~4 characters per token
   // Use proper tokenizers like tiktoken for OpenAI models
-  return Math.ceil(text.length / 4);
+  return Math.ceil(text.length / TOKEN_APPROX_CHARS_PER_TOKEN);
 }
 
 /**
@@ -513,9 +528,9 @@ export function calculateTokenCount(text: string): number {
  */
 export function validateTokenCount(
   messages: Array<{ role: string; content: string }>,
-  maxTokens: number = 8000,
+  maxTokens: number = DEFAULT_MAX_TOKENS,
 ): boolean {
-  if (maxTokens <= 0) {
+  if (maxTokens < MIN_TOKEN_LIMIT) {
     throw new Error('maxTokens must be a positive number');
   }
 
@@ -533,13 +548,13 @@ export function validateTokenCount(
  */
 export function truncateMessagesToFit(
   messages: Array<{ role: string; content: string }>,
-  maxTokens: number = 8000,
+  maxTokens: number = DEFAULT_MAX_TOKENS,
 ): {
   messages: Array<{ role: string; content: string }>;
   truncated: boolean;
   removedCount: number;
 } {
-  if (maxTokens <= 0) {
+  if (maxTokens < MIN_TOKEN_LIMIT) {
     throw new Error('maxTokens must be a positive number');
   }
 
@@ -614,7 +629,7 @@ export function formatMessagesForLLM(
 export async function callLLMWithRetry(
   messages: Array<{ role: string; content: string }>,
   options: LLMRequestOptions = {},
-  maxRetries: number = 3,
+  maxRetries: number = DEFAULT_MAX_RETRIES,
 ): Promise<LLMResponse> {
   // Check circuit breaker first
   return llmCircuitBreaker.execute(async () => {
@@ -633,7 +648,8 @@ export async function callLLMWithRetry(
 
         if (attempt < maxRetries - 1) {
           // Exponential backoff: 1s, 2s, 4s
-          const delay = Math.pow(2, attempt) * 1000;
+          const delay =
+            Math.pow(BACKOFF_EXPONENT, attempt) * BACKOFF_BASE_DELAY_MS;
           logInfo(`Retrying LLM call in ${delay}ms`, {
             attempt: attempt + 1,
             maxRetries,
@@ -654,7 +670,7 @@ export async function callLLMStreamWithRetry(
   messages: Array<{ role: string; content: string }>,
   onChunk: StreamCallback,
   options: LLMStreamOptions = {},
-  maxRetries: number = 3,
+  maxRetries: number = DEFAULT_MAX_RETRIES,
 ): Promise<LLMResponse> {
   // Check circuit breaker first
   return llmCircuitBreaker.execute(async () => {
@@ -673,7 +689,8 @@ export async function callLLMStreamWithRetry(
 
         if (attempt < maxRetries - 1) {
           // Exponential backoff: 1s, 2s, 4s
-          const delay = Math.pow(2, attempt) * 1000;
+          const delay =
+            Math.pow(BACKOFF_EXPONENT, attempt) * BACKOFF_BASE_DELAY_MS;
           logInfo(`Retrying LLM streaming call in ${delay}ms`, {
             attempt: attempt + 1,
             maxRetries,

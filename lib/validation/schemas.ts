@@ -5,6 +5,13 @@
 
 import { z } from 'zod';
 
+const MINIMUM_STRING_LENGTH = 1;
+const MAX_CHAT_MESSAGE_LENGTH = 2000;
+const MAX_TITLE_LENGTH = 100;
+const DEFAULT_PAGE_NUMBER = 1;
+const MAX_PAGE_LIMIT = 100;
+const DEFAULT_PAGE_LIMIT = 20;
+
 /**
  * Chat message validation schema
  */
@@ -13,8 +20,8 @@ export const chatMessageSchema = z.object({
   content: z
     .string()
     .trim()
-    .min(1, 'Message cannot be empty')
-    .max(2000, 'Message cannot exceed 2000 characters')
+    .min(MINIMUM_STRING_LENGTH, 'Message cannot be empty')
+    .max(MAX_CHAT_MESSAGE_LENGTH, 'Message cannot exceed 2000 characters')
     .transform((val) => val.trim()),
   parentMessageId: z.string().uuid().optional(),
 });
@@ -28,8 +35,8 @@ export const createChatSchema = z.object({
   title: z
     .string()
     .trim()
-    .min(1, 'Title cannot be empty')
-    .max(100, 'Title cannot exceed 100 characters')
+    .min(MINIMUM_STRING_LENGTH, 'Title cannot be empty')
+    .max(MAX_TITLE_LENGTH, 'Title cannot exceed 100 characters')
     .optional(),
 });
 
@@ -42,8 +49,8 @@ export const updateChatSchema = z.object({
   title: z
     .string()
     .trim()
-    .min(1, 'Title cannot be empty')
-    .max(100, 'Title cannot exceed 100 characters')
+    .min(MINIMUM_STRING_LENGTH, 'Title cannot be empty')
+    .max(MAX_TITLE_LENGTH, 'Title cannot exceed 100 characters')
     .optional(),
   archived: z.boolean().optional(),
 });
@@ -57,13 +64,13 @@ export const updateUserProfileSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, 'Name cannot be empty')
-    .max(100, 'Name cannot exceed 100 characters')
+    .min(MINIMUM_STRING_LENGTH, 'Name cannot be empty')
+    .max(MAX_TITLE_LENGTH, 'Name cannot exceed 100 characters')
     .optional(),
   title: z
     .string()
     .trim()
-    .max(100, 'Title cannot exceed 100 characters')
+    .max(MAX_TITLE_LENGTH, 'Title cannot exceed 100 characters')
     .optional(),
 });
 
@@ -73,8 +80,13 @@ export type UpdateUserProfileInput = z.infer<typeof updateUserProfileSchema>;
  * Pagination validation schema
  */
 export const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  page: z.coerce.number().int().positive().default(DEFAULT_PAGE_NUMBER),
+  limit: z
+    .coerce.number()
+    .int()
+    .positive()
+    .max(MAX_PAGE_LIMIT)
+    .default(DEFAULT_PAGE_LIMIT),
 });
 
 export type PaginationInput = z.infer<typeof paginationSchema>;

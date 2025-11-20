@@ -17,6 +17,9 @@ import {
 import { STRINGS } from '@/lib/constants/strings';
 
 const COUNTDOWN_INTERVAL_MS = 1000;
+const MIN_COUNTDOWN_VALUE = 1;
+const TEXTAREA_ROW_COUNT = 3;
+const IMMEDIATE_TIMEOUT_MS = 0;
 
 interface ChatInputProps {
   onSendMessage: (content: string) => void;
@@ -83,7 +86,7 @@ export function ChatInput({
     let timeoutId: NodeJS.Timeout | null = null;
 
     if (typeof window === 'undefined') {
-      timeoutId = setTimeout(() => setCountdown(nextCountdown), 0);
+      timeoutId = setTimeout(() => setCountdown(nextCountdown), IMMEDIATE_TIMEOUT_MS);
     } else {
       frameId = window.requestAnimationFrame(() => {
         setCountdown(nextCountdown);
@@ -110,7 +113,7 @@ export function ChatInput({
         if (prev === null) {
           return null;
         }
-        if (prev <= 1) {
+        if (prev <= MIN_COUNTDOWN_VALUE) {
           return null;
         }
         return prev - 1;
@@ -205,7 +208,7 @@ export function ChatInput({
                     isStreaming || countdown !== null,
                 },
               )}
-              rows={3}
+              rows={TEXTAREA_ROW_COUNT}
               aria-label={STRINGS.input.ariaLabel}
               aria-invalid={isOverLimit}
               aria-describedby="char-counter"

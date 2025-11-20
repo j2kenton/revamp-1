@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 
+const FOCUSABLE_TAB_INDEX = -1;
+
 /**
  * Error boundary for the application.
  * This component catches errors that occur during rendering,
@@ -29,7 +31,7 @@ export default function Error({
     <div
       ref={containerRef}
       className="flex min-h-screen flex-col items-center justify-center p-4"
-      tabIndex={-1}
+      tabIndex={FOCUSABLE_TAB_INDEX}
     >
       <div className="max-w-md text-center">
         <h2 className="mb-4 text-2xl font-bold">Something went wrong!</h2>

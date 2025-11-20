@@ -12,6 +12,11 @@ import { requireCsrfToken } from '@/server/middleware/csrf';
 import { requireRateLimit } from '@/server/middleware/rate-limit';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
 
+const SIMULATED_DELAY_MS = 300;
+const STATUS_BAD_REQUEST = 400;
+const STATUS_CREATED = 201;
+const STATUS_INTERNAL_SERVER_ERROR = 500;
+
 // In-memory store (in production, use a real database)
 const mockTodos: Todo[] = [
   {
@@ -44,7 +49,7 @@ async function handleGet(request: NextRequest) {
     const userId = searchParams.get('userId');
 
     // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, SIMULATED_DELAY_MS));
 
     let todos = mockTodos;
 
@@ -56,7 +61,7 @@ async function handleGet(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 },
+      { status: STATUS_INTERNAL_SERVER_ERROR },
     );
   }
 }
@@ -70,7 +75,7 @@ async function handlePost(request: NextRequest) {
     if (!body.title || !body.userId) {
       return NextResponse.json(
         { error: 'Missing required fields' },
-        { status: 400 },
+        { status: STATUS_BAD_REQUEST },
       );
     }
 
@@ -88,11 +93,11 @@ async function handlePost(request: NextRequest) {
     // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    return NextResponse.json(newTodo, { status: 201 });
+    return NextResponse.json(newTodo, { status: STATUS_CREATED });
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 },
+      { status: STATUS_INTERNAL_SERVER_ERROR },
     );
   }
 }
