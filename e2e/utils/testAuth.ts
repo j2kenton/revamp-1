@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { APIResponse, Page } from '@playwright/test';
 
 const STORAGE_KEY = 'test-auth-bypass';
 const MESSAGE_INPUT_SELECTOR = 'textarea[aria-label="Message input"]';
@@ -22,7 +22,7 @@ export async function loginAsTestUser(page: Page): Promise<void> {
     window.__BYPASS_AUTH__ = true;
   }, STORAGE_KEY);
 
-  let authResponse: Response | null = null;
+  let authResponse: APIResponse | null = null;
   for (let attempt = 0; attempt < AUTH_MAX_ATTEMPTS; attempt++) {
     try {
       const response = await page.request.post('/api/test-support/auth');

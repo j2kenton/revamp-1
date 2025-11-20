@@ -79,7 +79,6 @@ describe('useStreamingResponse', () => {
     const { result } = renderHook(
       () =>
         useStreamingResponse({
-          chatId: null,
         }),
       { wrapper: createWrapper() },
     );
