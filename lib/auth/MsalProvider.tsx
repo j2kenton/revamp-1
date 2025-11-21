@@ -25,10 +25,18 @@ export function MsalProvider({ children }: MsalProviderProps) {
       try {
         await msalInstance.initialize();
 
+        // Process redirect responses (supports redirect fallback when popups are blocked)
+        const redirectResult = await msalInstance.handleRedirectPromise();
+        if (redirectResult?.account) {
+          msalInstance.setActiveAccount(redirectResult.account);
+        }
+
         // Account selection logic is app dependent. Adjust as needed for your use case.
         const accounts = msalInstance.getAllAccounts();
         if (accounts.length > 0) {
-          msalInstance.setActiveAccount(accounts[0]);
+          msalInstance.setActiveAccount(
+            redirectResult?.account ?? accounts[0],
+          );
         }
 
         // Listen for sign-in event and set active account

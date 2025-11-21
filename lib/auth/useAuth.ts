@@ -36,6 +36,22 @@ interface UseAuthReturn {
   error: Error | null;
 }
 
+const isEmbeddedContext = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const hasOpener = window.opener != null;
+
+  try {
+    // Accessing window.top can throw in cross-origin iframes; guard accordingly.
+    const isFramed = window.top !== window.self;
+    return hasOpener || isFramed;
+  } catch {
+    return hasOpener;
+  }
+};
+
 const TOKEN_EXPIRY_BUFFER = FIVE_MINUTES_IN_MS;
 export function useAuth(): UseAuthReturn {
   const msalContext = useMsal();
@@ -97,6 +113,10 @@ export function useAuth(): UseAuthReturn {
       if (err instanceof InteractionRequiredAuthError) {
         // Token expired or requires interaction - try to acquire interactively
         try {
+          if (isEmbeddedContext()) {
+            await instance.acquireTokenRedirect(loginRequest);
+            return null;
+          }
           const response = await instance.acquireTokenPopup(loginRequest);
           setAccessToken(response.accessToken);
           if (response.expiresOn) {
@@ -136,6 +156,11 @@ export function useAuth(): UseAuthReturn {
     setError(null);
 
     try {
+      if (isEmbeddedContext()) {
+        await instance.loginRedirect(loginRequest);
+        return;
+      }
+
       const response = await instance.loginPopup(loginRequest);
       instance.setActiveAccount(response.account);
       setAccessToken(response.accessToken);
