@@ -302,5 +302,4 @@ The application has been audited for WCAG 2.1 Level AA compliance. See `ACCESSIB
 
 ## See Also
 
-- **[README.md](README.md)**: For a general overview of the project.
 - **[Architecture Diagrams](dev-resources/architecture/review/diagrams)**: For a more detailed look at the application's architecture.
