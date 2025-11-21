@@ -171,8 +171,9 @@ const parseChatResponse = async (
   };
 };
 
-const hasJsonBody = (response: HttpResponseLike): response is JsonResponseLike =>
-  typeof response.json === 'function';
+const hasJsonBody = (
+  response: HttpResponseLike,
+): response is JsonResponseLike => typeof response.json === 'function';
 
 const createFallbackResponse = (userContent: string): Response =>
   new Response(
@@ -473,7 +474,7 @@ export function ChatInterface({
           rows={3}
         />
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>
+          <span className="hidden sm:inline">
             {STRINGS.input.characterCount(charCount, MAX_CHAT_MESSAGE_LENGTH)}
           </span>
           <button

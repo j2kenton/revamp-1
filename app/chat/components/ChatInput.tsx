@@ -86,7 +86,10 @@ export function ChatInput({
     let timeoutId: NodeJS.Timeout | null = null;
 
     if (typeof window === 'undefined') {
-      timeoutId = setTimeout(() => setCountdown(nextCountdown), IMMEDIATE_TIMEOUT_MS);
+      timeoutId = setTimeout(
+        () => setCountdown(nextCountdown),
+        IMMEDIATE_TIMEOUT_MS,
+      );
     } else {
       frameId = window.requestAnimationFrame(() => {
         setCountdown(nextCountdown);
@@ -215,7 +218,7 @@ export function ChatInput({
             />
           </div>
           <div className="flex flex-col justify-end gap-2">
-            <div className="text-xs font-medium">
+            <div className="hidden text-xs font-medium sm:block">
               <span
                 id="char-counter"
                 className={clsx({
@@ -235,7 +238,7 @@ export function ChatInput({
               onClick={handleSubmit}
               disabled={!canSubmit}
               className={clsx(
-                'rounded-md px-6 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                'flex-1 rounded-md px-6 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial',
                 {
                   'cursor-pointer bg-blue-600 text-white hover:bg-blue-700':
                     canSubmit,
@@ -257,7 +260,7 @@ export function ChatInput({
             {onNewChat && (
               <button
                 onClick={onNewChat}
-                className="cursor-pointer rounded-md bg-gray-300 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
+                className="flex-1 cursor-pointer rounded-md bg-gray-300 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
               >
                 {STRINGS.actions.newChat}
               </button>
