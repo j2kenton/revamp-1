@@ -52,6 +52,10 @@ const isEmbeddedContext = () => {
   }
 };
 
+// Allow forcing redirect flow (e.g., to avoid popup loops in hosted environments)
+const preferRedirectFlow =
+  process.env.NEXT_PUBLIC_MSAL_LOGIN_FLOW === 'redirect';
+
 const TOKEN_EXPIRY_BUFFER = FIVE_MINUTES_IN_MS;
 export function useAuth(): UseAuthReturn {
   const msalContext = useMsal();
@@ -113,7 +117,7 @@ export function useAuth(): UseAuthReturn {
       if (err instanceof InteractionRequiredAuthError) {
         // Token expired or requires interaction - try to acquire interactively
         try {
-          if (isEmbeddedContext()) {
+          if (preferRedirectFlow || isEmbeddedContext()) {
             await instance.acquireTokenRedirect(loginRequest);
             return null;
           }
@@ -152,16 +156,16 @@ export function useAuth(): UseAuthReturn {
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      if (isEmbeddedContext()) {
-        await instance.loginRedirect(loginRequest);
-        return;
-      }
+  try {
+    if (preferRedirectFlow || isEmbeddedContext()) {
+      await instance.loginRedirect(loginRequest);
+      return;
+    }
 
-      const response = await instance.loginPopup(loginRequest);
+    const response = await instance.loginPopup(loginRequest);
       instance.setActiveAccount(response.account);
       setAccessToken(response.accessToken);
       if (response.expiresOn) {
