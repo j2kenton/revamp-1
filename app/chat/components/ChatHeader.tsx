@@ -25,7 +25,9 @@ export function ChatHeader({ user, photoUrl, onLogout }: ChatHeaderProps) {
     <header className="flex items-center justify-between border-b border-gray-200 bg-[var(--background)] px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
       <div className="flex items-center gap-2">
         <h1 className="flex items-center gap-2 pr-1 text-4xl font-bold text-gray-900 dark:text-gray-100">
-          <span>{STRINGS.chat.header.brandLead}</span>
+          <span className="hidden lg:inline">
+            {STRINGS.chat.header.brandLead}
+          </span>
           <Image
             src="/gemini-style-logo.png"
             alt={STRINGS.chat.header.logoAlt}
@@ -34,7 +36,9 @@ export function ChatHeader({ user, photoUrl, onLogout }: ChatHeaderProps) {
             priority
             className="h-10 w-10"
           />
-          <span>{STRINGS.chat.header.productName}</span>
+          <span className="hidden md:inline">
+            {STRINGS.chat.header.productName}
+          </span>
         </h1>
         <ConnectionStatus />
       </div>
