@@ -79,7 +79,7 @@ types/
 
 ### High-Level Architecture
 
-![High-Level Architecture](dev-resources/architecture/review/diagrams/overview/high_level_architecture.md)
+[High-Level Architecture](dev-resources/architecture/review/diagrams/overview/high_level_architecture.md)
 
 ## Authentication Flow
 
@@ -109,7 +109,7 @@ The application uses Microsoft Authentication Library (MSAL) for Azure AD authen
 
 ### Authentication Flow Diagram
 
-![Authentication Flow](dev-resources/architecture/review/diagrams/user/authentication_flow.md)
+[Authentication Flow](dev-resources/architecture/review/diagrams/user/authentication_flow.md)
 
 ## Chat System
 
@@ -150,7 +150,7 @@ For real-time AI responses:
 
 ### SSE Flow Diagram
 
-![Real-time Chat Flow (SSE)](dev-resources/architecture/review/diagrams/chat/sse_flow.md)
+[Real-time Chat Flow (SSE)](dev-resources/architecture/review/diagrams/chat/sse_flow.md)
 
 ### Key Features
 
@@ -285,7 +285,7 @@ pnpm start
 
 ### Deployment Diagram
 
-![Deployment Architecture](dev-resources/architecture/review/diagrams/deployment/deployment.md)
+[Deployment Architecture](dev-resources/architecture/review/diagrams/deployment/deployment.md)
 
 ## Accessibility
 
