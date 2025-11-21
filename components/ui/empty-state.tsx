@@ -33,8 +33,8 @@ export function EmptyState({
     warning: 'text-amber-600',
   }[variant];
 
-  const titleColorClass = 'text-gray-900';
-  const descriptionColorClass = 'text-gray-500';
+  const titleColorClass = 'text-gray-900 dark:text-gray-100';
+  const descriptionColorClass = 'text-gray-500 dark:text-gray-400';
 
   return (
     <div className={clsx('flex h-full items-center justify-center', className)}>
