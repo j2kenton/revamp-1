@@ -4,6 +4,7 @@
  */
 
 const TAG_REGEX = /<[^>]*>/g;
+const SCRIPT_REGEX = /<script[\s\S]*?>[\s\S]*?<\/script>/gi;
 
 /**
  * Sanitize HTML content
@@ -11,8 +12,9 @@ const TAG_REGEX = /<[^>]*>/g;
  * @returns Sanitized HTML string
  */
 export function sanitizeHtml(dirty: string): string {
-  // Strip any HTML tags then escape remaining special characters.
-  const withoutTags = dirty.replace(TAG_REGEX, '');
+  // Remove script blocks and their contents, strip remaining tags, then escape.
+  const withoutScripts = dirty.replace(SCRIPT_REGEX, '');
+  const withoutTags = withoutScripts.replace(TAG_REGEX, '');
   return escapeSpecialChars(withoutTags);
 }
 
