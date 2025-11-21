@@ -1,39 +1,19 @@
 /**
  * Content Sanitization Utilities
- * DOMPurify integration for XSS prevention
+ * Plain-text focused sanitization to prevent XSS in server and client contexts
  */
 
-import DOMPurify from 'isomorphic-dompurify';
-
-/**
- * Sanitization configuration interface
- */
-interface SanitizeConfig {
-  ALLOWED_TAGS?: string[];
-  ALLOWED_ATTR?: string[];
-  ALLOW_DATA_ATTR?: boolean;
-}
-
-/**
- * Plain text config: strip all tags/attributes
- */
-const plainTextConfig: SanitizeConfig = {
-  ALLOWED_TAGS: [],
-  ALLOWED_ATTR: [],
-  ALLOW_DATA_ATTR: false,
-};
+const TAG_REGEX = /<[^>]*>/g;
 
 /**
  * Sanitize HTML content
  * @param dirty - Raw HTML string
- * @param config - Optional DOMPurify configuration
  * @returns Sanitized HTML string
  */
-export function sanitizeHtml(
-  dirty: string,
-  config: SanitizeConfig = plainTextConfig,
-): string {
-  return DOMPurify.sanitize(dirty, config) as string;
+export function sanitizeHtml(dirty: string): string {
+  // Strip any HTML tags then escape remaining special characters.
+  const withoutTags = dirty.replace(TAG_REGEX, '');
+  return escapeSpecialChars(withoutTags);
 }
 
 /**
