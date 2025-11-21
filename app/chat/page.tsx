@@ -70,7 +70,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--background)] dark:bg-gray-900">
+    <div className="flex h-dvh flex-col bg-[var(--background)] dark:bg-gray-900">
       <a href="#chat-main" className="skip-link">
         {STRINGS.chat.authPrompt.skipLink}
       </a>
