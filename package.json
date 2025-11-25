@@ -22,6 +22,8 @@
     "test:ci": "npm run test:unit:coverage && npm run test:e2e",
     "type-check": "tsc --noEmit",
     "validate": "pnpm type-check && pnpm lint",
+    "validate-and-test": "pnpm run validate && pnpm run test:all",
+    "check": "powershell -NoProfile -Command \"pnpm run validate-and-test 2>&1 | Tee-Object -Variable output; $output | Set-Clipboard; Write-Host '`n[validate:copy] Output copied to clipboard'\"",
     "prepare": "husky"
   },
   "dependencies": {
