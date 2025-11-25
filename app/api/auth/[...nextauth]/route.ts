@@ -4,10 +4,9 @@ import type { NextAuthOptions } from 'next-auth';
 
 const nextAuthSecret = process.env.NEXTAUTH_SECRET;
 
-if (!nextAuthSecret && process.env.NODE_ENV === 'production') {
-  throw new Error(
-    'NEXTAUTH_SECRET environment variable must be set in production.',
-  );
+// SECURITY: Require NEXTAUTH_SECRET in ALL environments (HIGH-04)
+if (!nextAuthSecret) {
+  throw new Error('NEXTAUTH_SECRET environment variable must be set.');
 }
 
 export const authOptions: NextAuthOptions = {
@@ -23,31 +22,23 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        // TODO: Replace this with your actual authentication logic
-        // This is just a placeholder - connect to your database/API here
+        // SECURITY (CRIT-01): Demo credentials have been removed.
+        // TODO: Implement your actual authentication logic here.
+        // Connect to your database/API to validate credentials.
+        //
+        // Example implementation:
+        // const user = await db.user.findUnique({ where: { email: credentials.email } });
+        // if (!user) return null;
+        // const isValid = await bcrypt.compare(credentials.password, user.password);
+        // if (!isValid) return null;
+        // return { id: user.id, email: user.email, name: user.name };
 
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
 
-        // Example: Check against your database
-        // const user = await db.user.findUnique({ where: { email: credentials.email } });
-        // const isValid = await bcrypt.compare(credentials.password, user.password);
-
-        // Example to demonstrate functionality only.
-        // REPLACE THIS!
-        if (
-          credentials.email === 'demo@example.com' &&
-          credentials.password === 'password'
-        ) {
-          return {
-            id: '1',
-            email: credentials.email,
-            name: 'Demo User',
-          };
-        }
-
-        // Return null if user data could not be retrieved
+        // No demo credentials - authentication must be implemented
+        // Return null until real auth is configured
         return null;
       },
     }),

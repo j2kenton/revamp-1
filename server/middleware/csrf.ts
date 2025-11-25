@@ -25,8 +25,11 @@ import { isTestAuthRequest } from '@/server/utils/test-auth';
 export async function withCsrfProtection(
   request: NextRequest,
 ): Promise<{ valid: boolean; error?: Response }> {
-  if (process.env.BYPASS_AUTH === 'true' || isTestAuthRequest(request)) {
-    return { valid: true };
+  // SECURITY (CRIT-02): Never bypass CSRF in production
+  if (process.env.NODE_ENV !== 'production') {
+    if (process.env.BYPASS_AUTH === 'true' || isTestAuthRequest(request)) {
+      return { valid: true };
+    }
   }
 
   // Skip CSRF check for safe methods
@@ -60,7 +63,9 @@ export async function withCsrfProtection(
   if (session.id.startsWith(JWT_FALLBACK_PREFIX)) {
     const fallbackToken = getMsalTokenFromRequest(request);
     if (!fallbackToken) {
-      logWarn('CSRF fallback failed: Missing MSAL token', { sessionId: session.id });
+      logWarn('CSRF fallback failed: Missing MSAL token', {
+        sessionId: session.id,
+      });
       return {
         valid: false,
         error: unauthorized('Invalid CSRF token'),
@@ -68,7 +73,9 @@ export async function withCsrfProtection(
     }
     const expected = createHash('sha256').update(fallbackToken).digest('hex');
     if (expected !== csrfToken) {
-      logWarn('CSRF fallback failed: Token mismatch', { sessionId: session.id });
+      logWarn('CSRF fallback failed: Token mismatch', {
+        sessionId: session.id,
+      });
       return {
         valid: false,
         error: unauthorized('Invalid CSRF token'),

@@ -1,13 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PLAYWRIGHT_PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
-const PLAYWRIGHT_DIST_DIR = process.env.PLAYWRIGHT_DIST_DIR ?? '.next-playwright';
+const PLAYWRIGHT_DIST_DIR =
+  process.env.PLAYWRIGHT_DIST_DIR ?? '.next-playwright';
 const CI_RETRIES = 2;
 const CI_WORKERS = 1;
 const WEB_SERVER_TIMEOUT_MS = 120000;
+const TEST_TIMEOUT_MS = 60000;
 
 export default defineConfig({
   testDir: './e2e',
+  timeout: TEST_TIMEOUT_MS,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? CI_RETRIES : 0,

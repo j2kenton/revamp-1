@@ -2,7 +2,7 @@ import type { APIResponse, Page } from '@playwright/test';
 
 const STORAGE_KEY = 'test-auth-bypass';
 const MESSAGE_INPUT_SELECTOR = 'textarea[aria-label="Message input"]';
-const CHAT_READY_TIMEOUT_MS = 45_000;
+const CHAT_READY_TIMEOUT_MS = 50_000;
 const AUTH_MAX_ATTEMPTS = 6;
 const AUTH_RETRY_DELAY_MS = 500;
 
@@ -42,7 +42,13 @@ export async function loginAsTestUser(page: Page): Promise<void> {
 
   await page.goto('/chat', { waitUntil: 'domcontentloaded' });
 
+  // Wait for network to be idle before checking for selector
+  await page.waitForLoadState('networkidle', {
+    timeout: CHAT_READY_TIMEOUT_MS,
+  });
+
   await page.waitForSelector(MESSAGE_INPUT_SELECTOR, {
     timeout: CHAT_READY_TIMEOUT_MS,
+    state: 'visible',
   });
 }

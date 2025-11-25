@@ -6,7 +6,12 @@
 import { NextRequest } from 'next/server';
 import { requireSession } from '@/server/middleware/session';
 import { withChatRateLimit } from '@/server/middleware/rate-limit';
-import { success, badRequest, unauthorized, notFound } from '@/server/api-response';
+import {
+  success,
+  badRequest,
+  unauthorized,
+  notFound,
+} from '@/server/api-response';
 import { getChat, getChatMessages } from '@/lib/redis/chat';
 import { logError } from '@/utils/logger';
 import { messageToDTO, chatToDTO } from '@/types/models';
@@ -54,13 +59,11 @@ async function handleChatGet(
     // Get chat
     const chat = await getChat(chatId);
 
-    if (!chat) {
+    // SECURITY (HIGH-01): Combine ownership check to prevent IDOR enumeration
+    // Return same error for "not found" and "unauthorized" to prevent
+    // attackers from discovering which chat IDs exist
+    if (!chat || chat.userId !== session.userId) {
       return notFound('Chat not found');
-    }
-
-    // Verify ownership
-    if (chat.userId !== session.userId) {
-      return unauthorized('You do not have access to this chat');
     }
 
     // Get messages
@@ -88,7 +91,7 @@ async function handleChatGet(
         headers: {
           'Cache-Control': PRIVATE_CACHE_CONTROL, // Cache for 5 minutes
         },
-      }
+      },
     );
   } catch (error) {
     logError('Chat retrieval error', error);

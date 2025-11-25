@@ -34,14 +34,15 @@
     "**/*.ts",
     "**/*.tsx",
     "**/*.d.ts",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
     "**/*.mts",
     "scripts/write-output.ts",
     ".next-playwright/types/**/*.ts",
     ".next-playwright/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next-playwright",
+    ".next/dev/types/validator.ts",
+    ".next/types/validator.ts"
   ]
 }

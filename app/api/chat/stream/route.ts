@@ -9,15 +9,63 @@ import { sanitizeChatMessage } from '@/lib/sanitizer';
 import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
 import { withChatRateLimit } from '@/server/middleware/rate-limit';
-import { badRequest, unauthorized } from '@/server/api-response';
-import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
+import { badRequest, unauthorized, forbidden } from '@/server/api-response';
+import { logError, logInfo, logWarn } from '@/utils/logger';
+
+/**
+ * SECURITY (MED-04): Validate request origin for SSE endpoint
+ */
+function validateOrigin(request: NextRequest): {
+  valid: boolean;
+  error?: Response;
+} {
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+
+  // If no origin header, this might be a same-origin request
+  if (!origin) {
+    return { valid: true };
+  }
+
+  // Get allowed origins from environment or use host as default
+  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
+  const allowedOrigins = allowedOriginsEnv
+    ? allowedOriginsEnv.split(',').map((o) => o.trim())
+    : [];
+
+  // Always allow the host itself (same-origin)
+  if (host) {
+    allowedOrigins.push(`https://${host}`);
+    allowedOrigins.push(`http://${host}`);
+    // Also allow localhost variants in development
+    if (process.env.NODE_ENV !== 'production') {
+      allowedOrigins.push('http://localhost:3000');
+      allowedOrigins.push('http://127.0.0.1:3000');
+    }
+  }
+
+  if (!allowedOrigins.includes(origin)) {
+    logWarn('SSE request from invalid origin', { origin, allowedOrigins });
+    return {
+      valid: false,
+      error: forbidden('Invalid origin'),
+    };
+  }
+
+  return { valid: true };
+}
+import {
+  createChat,
+  getChat,
+  addMessage,
+  getChatMessages,
+} from '@/lib/redis/chat';
 import {
   callLLMStreamWithRetry,
   truncateMessagesToFit,
   getFallbackMessage,
   getCircuitBreaker,
 } from '@/lib/llm/service';
-import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 
 const TITLE_MAX_LENGTH = 50;
@@ -27,6 +75,12 @@ const LLM_STREAM_MAX_TOKENS = 2000;
 const LLM_STREAM_TEMPERATURE = 0.7;
 
 async function processChatStream(request: NextRequest) {
+  // SECURITY (MED-04): Validate origin before processing
+  const originCheck = validateOrigin(request);
+  if (!originCheck.valid && originCheck.error) {
+    return originCheck.error;
+  }
+
   try {
     // Require authenticated session
     const session = await requireSession(request);
@@ -71,8 +125,11 @@ async function processChatStream(request: NextRequest) {
       { role: 'user', content: sanitizedContent },
     ];
 
-    const { messages: truncatedMessages, truncated, removedCount } =
-      truncateMessagesToFit(allMessages, CONTEXT_MAX_TOKENS);
+    const {
+      messages: truncatedMessages,
+      truncated,
+      removedCount,
+    } = truncateMessagesToFit(allMessages, CONTEXT_MAX_TOKENS);
 
     if (truncated) {
       logWarn('Context truncated for streaming request', {
@@ -83,8 +140,8 @@ async function processChatStream(request: NextRequest) {
       });
     }
 
-    // Create user message
-    const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    // SECURITY (LOW-04): Use crypto.randomUUID for secure IDs
+    const userMessageId = `msg_${crypto.randomUUID()}`;
     const userMessage: MessageModel = {
       id: userMessageId,
       chatId: chat.id,
@@ -120,7 +177,8 @@ async function processChatStream(request: NextRequest) {
           removedCount,
         });
 
-        const aiMessageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        // SECURITY (LOW-04): Use crypto.randomUUID for secure IDs
+        const aiMessageId = `msg_${crypto.randomUUID()}`;
         let accumulatedContent = '';
         let heartbeatCount = 0;
 
@@ -189,7 +247,7 @@ async function processChatStream(request: NextRequest) {
               {
                 maxTokens: LLM_STREAM_MAX_TOKENS,
                 temperature: LLM_STREAM_TEMPERATURE,
-              }
+              },
             );
 
             const processingTime = Date.now() - startTime;

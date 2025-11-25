@@ -1,21 +1,22 @@
 /**
  * Content Sanitization Utilities
- * Plain-text focused sanitization to prevent XSS in server and client contexts
+ * Uses DOMPurify for robust XSS protection (HIGH-02)
  */
 
-const TAG_REGEX = /<[^>]*>/g;
-const SCRIPT_REGEX = /<script[\s\S]*?>[\s\S]*?<\/script>/gi;
+import DOMPurify from 'isomorphic-dompurify';
 
 /**
- * Sanitize HTML content
+ * Sanitize HTML content - strips all HTML for plain text output
+ * SECURITY (HIGH-02): Using DOMPurify instead of regex-based sanitization
  * @param dirty - Raw HTML string
- * @returns Sanitized HTML string
+ * @returns Sanitized plain text string
  */
 export function sanitizeHtml(dirty: string): string {
-  // Remove script blocks and their contents, strip remaining tags, then escape.
-  const withoutScripts = dirty.replace(SCRIPT_REGEX, '');
-  const withoutTags = withoutScripts.replace(TAG_REGEX, '');
-  return escapeSpecialChars(withoutTags);
+  // Strip ALL HTML tags for plain text contexts
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  });
 }
 
 /**
@@ -29,15 +30,62 @@ export function sanitizePlainText(dirty: string): string {
 
 /**
  * Sanitize user input for chat messages
- * Allows basic formatting but prevents XSS
+ * Strips all HTML to prevent XSS in chat contexts
  */
 export function sanitizeChatMessage(message: string): string {
   return sanitizeHtml(message);
 }
 
 /**
- * Escape special characters for SQL/JSON contexts
- * Note: This is a basic implementation. Use parameterized queries for SQL.
+ * Sanitize HTML allowing safe tags for rich content display
+ * Use this only when you need to preserve some formatting
+ * @param dirty - Raw HTML string
+ * @returns Sanitized HTML with safe tags preserved
+ */
+export function sanitizeRichHtml(dirty: string): string {
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: [
+      'p',
+      'br',
+      'b',
+      'i',
+      'em',
+      'strong',
+      'a',
+      'ul',
+      'ol',
+      'li',
+      'code',
+      'pre',
+      'blockquote',
+    ],
+    ALLOWED_ATTR: ['href', 'title', 'target', 'rel'],
+    // Force all links to have safe attributes
+    ADD_ATTR: ['target', 'rel'],
+    // Callback to ensure safe link attributes
+    FORBID_TAGS: [
+      'script',
+      'style',
+      'iframe',
+      'form',
+      'input',
+      'object',
+      'embed',
+    ],
+    FORBID_ATTR: [
+      'onerror',
+      'onload',
+      'onclick',
+      'onmouseover',
+      'onfocus',
+      'onblur',
+    ],
+  });
+}
+
+/**
+ * Escape special characters for contexts where HTML entities are needed
+ * Note: Prefer DOMPurify sanitization over manual escaping
  */
 export function escapeSpecialChars(str: string): string {
   return str
@@ -52,6 +100,7 @@ export function escapeSpecialChars(str: string): string {
 /**
  * Validate and sanitize URLs
  * Only allows http, https, and mailto protocols
+ * SECURITY: Prevents javascript: URLs and other dangerous protocols
  */
 export function sanitizeUrl(url: string): string | null {
   try {
@@ -59,6 +108,12 @@ export function sanitizeUrl(url: string): string | null {
     const allowedProtocols = ['http:', 'https:', 'mailto:'];
 
     if (!allowedProtocols.includes(parsed.protocol)) {
+      return null;
+    }
+
+    // Additional check for encoded javascript: URLs
+    const decodedHref = decodeURIComponent(parsed.href).toLowerCase();
+    if (decodedHref.includes('javascript:') || decodedHref.includes('data:')) {
       return null;
     }
 

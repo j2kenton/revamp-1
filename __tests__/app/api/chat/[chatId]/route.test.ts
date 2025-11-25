@@ -72,7 +72,7 @@ describe('GET /api/chat/[chatId]', () => {
     expect(response.status).toBe(404);
   });
 
-  it('returns 401 for chats owned by other users', async () => {
+  it('returns 404 for chats owned by other users (prevents IDOR)', async () => {
     (getChat as jest.Mock).mockResolvedValue({
       id: 'chat-123',
       userId: 'other',
@@ -87,6 +87,6 @@ describe('GET /api/chat/[chatId]', () => {
       buildContext('chat-123'),
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(404);
   });
 });

@@ -9,7 +9,10 @@ import { cookies } from 'next/headers';
 
 import { getSession, refreshSession } from '@/lib/redis/session';
 import { isRedisUnavailableError } from '@/lib/redis/errors';
-import { getMsalTokenFromRequest, validateMsalToken } from '@/server/middleware/msal-auth';
+import {
+  getMsalTokenFromRequest,
+  validateMsalToken,
+} from '@/server/middleware/msal-auth';
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
@@ -55,7 +58,9 @@ function createBypassSession(request: NextRequest): SessionModel {
       lastActivityAt: now,
       source: 'bypass-auth',
     },
-    expiresAt: new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * MILLISECONDS_PER_SECOND),
+    expiresAt: new Date(
+      now.getTime() + SESSION_MAX_AGE_SECONDS * MILLISECONDS_PER_SECOND,
+    ),
     createdAt: now,
     updatedAt: now,
   };
@@ -63,7 +68,11 @@ function createBypassSession(request: NextRequest): SessionModel {
 
 async function getSessionFromJwtFallback(
   request: NextRequest,
-  reason: 'redis_unavailable' | 'missing_cookie' | 'invalid_session' | 'expired_session' = 'redis_unavailable',
+  reason:
+    | 'redis_unavailable'
+    | 'missing_cookie'
+    | 'invalid_session'
+    | 'expired_session' = 'redis_unavailable',
 ): Promise<SessionModel | null> {
   const token = getMsalTokenFromRequest(request);
   if (!token) {
@@ -108,7 +117,9 @@ async function getSessionFromJwtFallback(
 export async function getSessionFromRequest(
   request: NextRequest,
 ): Promise<SessionModel | null> {
-  if (shouldBypassAuth(request)) {
+  // SECURITY (CRIT-02): shouldBypassAuth already checks production,
+  // but we add an extra guard here for defense in depth
+  if (process.env.NODE_ENV !== 'production' && shouldBypassAuth(request)) {
     return createBypassSession(request);
   }
 

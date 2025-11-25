@@ -7,12 +7,9 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   devIndicators: false,
   env: {
-    NEXT_PUBLIC_BYPASS_AUTH:
-      process.env.NEXT_PUBLIC_BYPASS_AUTH ?? process.env.BYPASS_AUTH ?? '',
-    NEXT_PUBLIC_TEST_AUTH_MODE:
-      process.env.NEXT_PUBLIC_TEST_AUTH_MODE ??
-      process.env.TEST_AUTH_MODE ??
-      '',
+    // SECURITY (CRIT-03): Removed NEXT_PUBLIC_BYPASS_AUTH and NEXT_PUBLIC_TEST_AUTH_MODE
+    // Auth bypass flags should NEVER be exposed to the client bundle
+    // These are now server-only environment variables
     NEXT_PUBLIC_AZURE_AD_CLIENT_ID:
       process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID ??
       process.env.AZURE_AD_CLIENT_ID ??

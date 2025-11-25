@@ -1,11 +1,76 @@
 /**
  * Rate Limiting Utilities
- * Redis-based sliding window rate limiter
+ * Redis-based sliding window rate limiter with fallback (HIGH-03)
  */
 
 import type { Redis } from 'ioredis';
-import { MILLISECONDS_PER_SECOND, PARSE_INT_RADIX } from '@/lib/constants/common';
-import { logError } from '@/utils/logger';
+import {
+  MILLISECONDS_PER_SECOND,
+  PARSE_INT_RADIX,
+} from '@/lib/constants/common';
+import { logError, logWarn } from '@/utils/logger';
+
+/**
+ * In-memory rate limiter fallback for when Redis is unavailable
+ * SECURITY (HIGH-03): Provides fallback to prevent fail-open on Redis failure
+ */
+const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
+const IN_MEMORY_CLEANUP_INTERVAL_MS = 60000; // Clean up every minute
+
+// Periodically clean up expired entries
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of inMemoryStore.entries()) {
+      if (value.resetAt < now) {
+        inMemoryStore.delete(key);
+      }
+    }
+  }, IN_MEMORY_CLEANUP_INTERVAL_MS);
+}
+
+function inMemoryRateLimiter(
+  identifier: string,
+  config: RateLimitConfig,
+): RateLimitResult {
+  const { maxRequests, windowSeconds, keyPrefix = 'ratelimit' } = config;
+  const key = `${keyPrefix}:${identifier}`;
+  const now = Date.now();
+  const windowMs = windowSeconds * MILLISECONDS_PER_SECOND;
+
+  const existing = inMemoryStore.get(key);
+
+  if (existing && existing.resetAt > now) {
+    // Within window
+    if (existing.count >= maxRequests) {
+      return {
+        allowed: false,
+        limit: maxRequests,
+        remaining: 0,
+        resetAt: new Date(existing.resetAt),
+      };
+    }
+
+    existing.count += 1;
+    return {
+      allowed: true,
+      limit: maxRequests,
+      remaining: maxRequests - existing.count,
+      resetAt: new Date(existing.resetAt),
+    };
+  }
+
+  // New window
+  const resetAt = now + windowMs;
+  inMemoryStore.set(key, { count: 1, resetAt });
+
+  return {
+    allowed: true,
+    limit: maxRequests,
+    remaining: maxRequests - 1,
+    resetAt: new Date(resetAt),
+  };
+}
 
 export interface RateLimitConfig {
   /**
@@ -65,7 +130,9 @@ export async function checkRateLimit(
         }
       }
 
-      const resetAt = new Date(oldestTimestamp + windowSeconds * MILLISECONDS_PER_SECOND);
+      const resetAt = new Date(
+        oldestTimestamp + windowSeconds * MILLISECONDS_PER_SECOND,
+      );
 
       return {
         allowed: false,
@@ -90,15 +157,33 @@ export async function checkRateLimit(
       resetAt,
     };
   } catch (error) {
-    // On Redis failure, fail open (allow request) but log the error
-    logError('Rate limiter error', error, { key, identifier });
+    // SECURITY (HIGH-03): Fail closed for auth endpoints, use in-memory fallback for others
+    logError('Rate limiter Redis error, using fallback', error, {
+      key,
+      identifier,
+    });
 
-    return {
-      allowed: true,
-      limit: maxRequests,
-      remaining: maxRequests,
-      resetAt: new Date(now + windowSeconds * MILLISECONDS_PER_SECOND),
-    };
+    // Check if this is a critical endpoint (auth, login)
+    const isCriticalEndpoint =
+      keyPrefix?.includes('auth') || keyPrefix?.includes('login');
+
+    if (isCriticalEndpoint) {
+      // Fail CLOSED for auth endpoints - deny request when Redis is down
+      logWarn('Rate limiter failing closed for auth endpoint', {
+        key,
+        identifier,
+      });
+      return {
+        allowed: false,
+        limit: maxRequests,
+        remaining: 0,
+        resetAt: new Date(now + windowSeconds * MILLISECONDS_PER_SECOND),
+      };
+    }
+
+    // Use in-memory fallback for non-critical endpoints
+    logWarn('Rate limiter using in-memory fallback', { key, identifier });
+    return inMemoryRateLimiter(identifier, config);
   }
 }
 

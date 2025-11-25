@@ -10,14 +10,24 @@ import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
 import { withChatRateLimit } from '@/server/middleware/rate-limit';
 import { withRequestDedup } from '@/server/middleware/request-dedup';
-import { success, badRequest, unauthorized, serverError } from '@/server/api-response';
-import { createChat, getChat, addMessage, getChatMessages } from '@/lib/redis/chat';
+import {
+  success,
+  badRequest,
+  unauthorized,
+  serverError,
+} from '@/server/api-response';
+import {
+  createChat,
+  getChat,
+  addMessage,
+  getChatMessages,
+} from '@/lib/redis/chat';
 import { withTransaction, txSet } from '@/lib/redis/transactions';
 import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
 import { messageToDTO } from '@/types/models';
-import { RANDOM_STRING_BASE, RANDOM_STRING_SLICE_START } from '@/lib/constants/common';
+// SECURITY (LOW-04): Removed RANDOM_STRING constants, using crypto.randomUUID instead
 
 const IDEMPOTENCY_KEY_TTL_SECONDS = 24 * 60 * 60;
 const LLM_TIMEOUT_MS = 30000;
@@ -41,7 +51,8 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
       });
     }
 
-    const { content, chatId, parentMessageId, idempotencyKey } = validation.data;
+    const { content, chatId, parentMessageId, idempotencyKey } =
+      validation.data;
 
     // Sanitize message content
     const sanitizedContent = sanitizeChatMessage(content);
@@ -74,7 +85,9 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
     if (!chat) {
       // Create new chat with title from first message
-      const title = sanitizedContent.slice(0, TITLE_MAX_LENGTH) + (sanitizedContent.length > TITLE_MAX_LENGTH ? '...' : '');
+      const title =
+        sanitizedContent.slice(0, TITLE_MAX_LENGTH) +
+        (sanitizedContent.length > TITLE_MAX_LENGTH ? '...' : '');
       chat = await createChat(session.userId, title);
     }
 
@@ -87,10 +100,11 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
       { role: 'user', content: sanitizedContent },
     ];
 
-    const { messages: truncatedMessages, truncated, removedCount } = truncateMessagesToFit(
-      allMessages,
-      CONTEXT_MAX_TOKENS
-    );
+    const {
+      messages: truncatedMessages,
+      truncated,
+      removedCount,
+    } = truncateMessagesToFit(allMessages, CONTEXT_MAX_TOKENS);
 
     if (truncated) {
       logWarn('Context truncated for chat request', {
@@ -106,8 +120,8 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
     const clientRequestId = idempotencyKey || null;
 
     const result = await withTransaction(async (ctx) => {
-      // Create user message
-      const userMessageId = `msg_${Date.now()}_${Math.random().toString(RANDOM_STRING_BASE).slice(RANDOM_STRING_SLICE_START)}`;
+      // SECURITY (LOW-04): Use crypto.randomUUID for secure IDs
+      const userMessageId = `msg_${crypto.randomUUID()}`;
       const userMessage: MessageModel = {
         id: userMessageId,
         chatId: chat!.id,
@@ -133,7 +147,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
       try {
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('LLM timeout')), LLM_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('LLM timeout')), LLM_TIMEOUT_MS),
         );
 
         const llmPromise = callLLMWithRetry(truncatedMessages, {
@@ -141,7 +155,10 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
           temperature: LLM_TEMPERATURE,
         });
 
-        aiResponse = await Promise.race([llmPromise, timeoutPromise]) as Awaited<typeof llmPromise>;
+        aiResponse = (await Promise.race([
+          llmPromise,
+          timeoutPromise,
+        ])) as Awaited<typeof llmPromise>;
 
         llmMetadata = {
           model: aiResponse.model,
@@ -162,10 +179,11 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
 
         // Mark user message as failed
         const failedMessage: MessageModel = {
-          id: `msg_${Date.now()}_${Math.random().toString(RANDOM_STRING_BASE).slice(RANDOM_STRING_SLICE_START)}`,
+          id: `msg_${crypto.randomUUID()}`,
           chatId: chat!.id,
           role: 'assistant',
-          content: 'I apologize, but I encountered an error processing your request. Please try again.',
+          content:
+            'I apologize, but I encountered an error processing your request. Please try again.',
           status: 'failed',
           parentMessageId: userMessageId,
           metadata: {
@@ -181,8 +199,8 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
         throw error;
       }
 
-      // Create AI response message
-      const aiMessageId = `msg_${Date.now()}_${Math.random().toString(RANDOM_STRING_BASE).slice(RANDOM_STRING_SLICE_START)}`;
+      // SECURITY (LOW-04): Use crypto.randomUUID for secure IDs
+      const aiMessageId = `msg_${crypto.randomUUID()}`;
       const aiMessage: MessageModel = {
         id: aiMessageId,
         chatId: chat!.id,
@@ -216,7 +234,7 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
           ctx,
           idempotencyKeyStore,
           JSON.stringify(responseData),
-          IDEMPOTENCY_KEY_TTL_SECONDS
+          IDEMPOTENCY_KEY_TTL_SECONDS,
         );
       }
 

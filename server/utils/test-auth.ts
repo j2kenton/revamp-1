@@ -27,6 +27,11 @@ export function isTestAuthRequest(request: NextRequest): boolean {
 }
 
 export function shouldBypassAuth(request: NextRequest): boolean {
+  // SECURITY (CRIT-02): Never allow bypass in production
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
   if (process.env.BYPASS_AUTH === 'true') {
     return true;
   }

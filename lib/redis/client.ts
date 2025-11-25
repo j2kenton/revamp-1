@@ -34,7 +34,10 @@ function getRedisConfig(): {
     const url = new URL(process.env.REDIS_URL);
     return {
       host: url.hostname,
-      port: parseInt(url.port || DEFAULT_REDIS_PORT.toString(), PARSE_INT_RADIX),
+      port: parseInt(
+        url.port || DEFAULT_REDIS_PORT.toString(),
+        PARSE_INT_RADIX,
+      ),
       password: url.password || undefined,
       tls: url.protocol === 'rediss:',
     };
@@ -42,7 +45,10 @@ function getRedisConfig(): {
 
   return {
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || DEFAULT_REDIS_PORT.toString(), PARSE_INT_RADIX),
+    port: parseInt(
+      process.env.REDIS_PORT || DEFAULT_REDIS_PORT.toString(),
+      PARSE_INT_RADIX,
+    ),
     password: process.env.REDIS_PASSWORD,
     tls: process.env.REDIS_TLS === 'true',
   };
@@ -64,9 +70,10 @@ export function createRedisClient(): Redis {
     host: config.host,
     port: config.port,
     password: config.password,
+    // SECURITY (MED-06): Enable TLS validation in all environments
     ...(config.tls && {
       tls: {
-        rejectUnauthorized: process.env.NODE_ENV === 'production',
+        rejectUnauthorized: true, // Always validate TLS certificates
       },
     }),
     retryStrategy: (times) => {
@@ -183,7 +190,9 @@ export async function healthCheck(): Promise<boolean> {
  */
 let healthCheckInterval: NodeJS.Timeout | null = null;
 
-export function startHealthCheck(intervalMs: number = DEFAULT_HEALTH_CHECK_INTERVAL_MS) {
+export function startHealthCheck(
+  intervalMs: number = DEFAULT_HEALTH_CHECK_INTERVAL_MS,
+) {
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
