@@ -1,22 +1,29 @@
 /**
  * Content Sanitization Utilities
- * Uses DOMPurify for robust XSS protection (HIGH-02)
  */
 
-import DOMPurify from 'isomorphic-dompurify';
+import sanitizeHtmlLib, { type Attributes } from 'sanitize-html';
+
+type SanitizeOptions = Parameters<typeof sanitizeHtmlLib>[1];
+
+const SAFE_URL_SCHEMES = ['http', 'https', 'mailto'] as const;
+const SAFE_URL_PROTOCOLS = ['http:', 'https:', 'mailto:'] as const;
+
+const stripAllHtmlOptions: SanitizeOptions = {
+  allowedTags: [],
+  allowedAttributes: {},
+  allowedSchemes: [...SAFE_URL_SCHEMES],
+  allowProtocolRelative: false,
+  enforceHtmlBoundary: true,
+};
 
 /**
  * Sanitize HTML content - strips all HTML for plain text output
- * SECURITY (HIGH-02): Using DOMPurify instead of regex-based sanitization
  * @param dirty - Raw HTML string
  * @returns Sanitized plain text string
  */
 export function sanitizeHtml(dirty: string): string {
-  // Strip ALL HTML tags for plain text contexts
-  return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-  });
+  return sanitizeHtmlLib(dirty, stripAllHtmlOptions);
 }
 
 /**
@@ -43,8 +50,8 @@ export function sanitizeChatMessage(message: string): string {
  * @returns Sanitized HTML with safe tags preserved
  */
 export function sanitizeRichHtml(dirty: string): string {
-  return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: [
+  const richHtmlOptions: SanitizeOptions = {
+    allowedTags: [
       'p',
       'br',
       'b',
@@ -59,28 +66,35 @@ export function sanitizeRichHtml(dirty: string): string {
       'pre',
       'blockquote',
     ],
-    ALLOWED_ATTR: ['href', 'title', 'target', 'rel'],
-    // Force all links to have safe attributes
-    ADD_ATTR: ['target', 'rel'],
-    // Callback to ensure safe link attributes
-    FORBID_TAGS: [
-      'script',
-      'style',
-      'iframe',
-      'form',
-      'input',
-      'object',
-      'embed',
-    ],
-    FORBID_ATTR: [
-      'onerror',
-      'onload',
-      'onclick',
-      'onmouseover',
-      'onfocus',
-      'onblur',
-    ],
-  });
+    allowedAttributes: {
+      a: ['href', 'title', 'target', 'rel'],
+      code: [],
+      pre: [],
+    },
+    allowedSchemes: [...SAFE_URL_SCHEMES],
+    allowProtocolRelative: false,
+    enforceHtmlBoundary: true,
+    transformTags: {
+      a: (_tag: string, attribs: Attributes) => {
+        const safeHref = attribs.href ? sanitizeUrl(attribs.href) : null;
+        const safeAttribs: Record<string, string> = {
+          ...attribs,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        };
+
+        if (safeHref) {
+          safeAttribs.href = safeHref;
+        } else {
+          delete safeAttribs.href;
+        }
+
+        return { tagName: 'a', attribs: safeAttribs };
+      },
+    },
+  };
+
+  return sanitizeHtmlLib(dirty, richHtmlOptions);
 }
 
 /**
@@ -105,9 +119,11 @@ export function escapeSpecialChars(str: string): string {
 export function sanitizeUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
-    const allowedProtocols = ['http:', 'https:', 'mailto:'];
-
-    if (!allowedProtocols.includes(parsed.protocol)) {
+    if (
+      !SAFE_URL_PROTOCOLS.includes(
+        parsed.protocol as (typeof SAFE_URL_PROTOCOLS)[number]
+      )
+    ) {
       return null;
     }
 

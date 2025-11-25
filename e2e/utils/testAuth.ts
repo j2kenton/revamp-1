@@ -13,7 +13,7 @@ const sleep = (ms: number) =>
 
 export async function loginAsTestUser(page: Page): Promise<void> {
   // Seed the bypass flag before any page scripts execute.
-  await page.addInitScript((key) => {
+  await page.addInitScript((key: string) => {
     try {
       window.localStorage.setItem(key, 'true');
     } catch {
