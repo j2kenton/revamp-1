@@ -71,9 +71,8 @@ function getClientIp(request: NextRequest): string {
 /**
  * SECURITY (MED-01): Get all rate limit identifiers to track both user and IP
  * Prevents authenticated users from switching between user/IP rate limits
- * TODO: Integrate this into the rate limiting flow to fully implement MED-01
  */
-function _getRateLimitIdentifiers(
+function getRateLimitIdentifiers(
   request: NextRequest,
   userId?: string,
 ): string[] {
@@ -92,10 +91,47 @@ function _getRateLimitIdentifiers(
 }
 
 /**
- * Get identifier for rate limiting (backwards compatible)
+ * SECURITY (MED-01): Check rate limit for all identifiers
+ * Denies request if ANY identifier is rate limited
+ */
+async function checkAllRateLimits(
+  redis: ReturnType<typeof getRedisClient>,
+  identifiers: string[],
+  config: {
+    maxRequests: number;
+    windowSeconds: number;
+    keyPrefix?: string;
+  },
+): Promise<{
+  allowed: boolean;
+  identifier?: string;
+  limit?: number;
+  resetAt?: Date;
+}> {
+  // Check each identifier - deny if ANY is rate limited
+  for (const identifier of identifiers) {
+    const result = await checkRateLimit(redis, identifier, config);
+    if (!result.allowed) {
+      return {
+        allowed: false,
+        identifier,
+        limit: result.limit,
+        resetAt: result.resetAt,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Get single identifier for rate limiting (backwards compatible, used for logging)
  * Prefers user ID, falls back to IP address
  */
-function getRateLimitIdentifier(request: NextRequest, userId?: string): string {
+function getPrimaryRateLimitIdentifier(
+  request: NextRequest,
+  userId?: string,
+): string {
   if (userId) {
     return `user:${userId}`;
   }
@@ -163,19 +199,23 @@ export async function withRateLimit(
   try {
     const redis = getRedisClient();
     const session = await getSessionFromRequest(request);
-    const identifier = getRateLimitIdentifier(request, session?.userId);
 
-    const result = await checkRateLimit(redis, identifier, config);
+    // SECURITY (MED-01): Check all identifiers (both IP and user if authenticated)
+    // This prevents users from bypassing rate limits by logging in/out
+    const identifiers = getRateLimitIdentifiers(request, session?.userId);
+    const result = await checkAllRateLimits(redis, identifiers, config);
 
     if (!result.allowed) {
       logWarn('Rate limit exceeded', {
-        identifier,
+        identifier: result.identifier,
+        allIdentifiers: identifiers,
         limit: result.limit,
         resetAt: result.resetAt,
       });
 
       const retryAfter = Math.ceil(
-        (result.resetAt.getTime() - Date.now()) / MILLISECONDS_PER_SECOND,
+        ((result.resetAt?.getTime() ?? Date.now()) - Date.now()) /
+          MILLISECONDS_PER_SECOND,
       );
 
       return {
@@ -343,7 +383,7 @@ export function withAuthRateLimit(
   const limitedHandler = requireRateLimit(RATE_LIMITS.AUTH, handler);
 
   return async (request: NextRequest, context?: unknown) => {
-    const identifier = getRateLimitIdentifier(request);
+    const identifier = getPrimaryRateLimitIdentifier(request);
     const { allowed, error } = await enhancedRateLimit(
       request,
       identifier,

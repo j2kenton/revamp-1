@@ -1,9 +1,11 @@
 /**
  * LLM Service
  * Handles communication with Language Model APIs
+ * SECURITY (MED-03): Linked to Redis circuit breaker to prevent LLM abuse when rate limiting is down
  */
 
 import { logError, logInfo, logWarn } from '@/utils/logger';
+import { redisCircuitBreaker } from '@/lib/redis/circuit-breaker';
 import type { MessageModel } from '@/types/models';
 type GoogleGenAIModule = typeof import('@google/genai');
 type GoogleGenAIClient = InstanceType<GoogleGenAIModule['GoogleGenAI']>;
@@ -486,7 +488,8 @@ Each word is sent as a separate chunk to simulate real streaming behavior.`;
   let fullContent = '';
 
   const mockDelay =
-    typeof options.mockDelay === 'number' && options.mockDelay >= MIN_MOCK_DELAY_MS
+    typeof options.mockDelay === 'number' &&
+    options.mockDelay >= MIN_MOCK_DELAY_MS
       ? options.mockDelay
       : MOCK_STREAM_DEFAULT_DELAY_MS;
 
@@ -625,13 +628,27 @@ export function formatMessagesForLLM(
 
 /**
  * Retry LLM call with exponential backoff and circuit breaker
+ * SECURITY (MED-03): Checks Redis circuit breaker to prevent LLM abuse when rate limiting is unavailable
  */
 export async function callLLMWithRetry(
   messages: Array<{ role: string; content: string }>,
   options: LLMRequestOptions = {},
   maxRetries: number = DEFAULT_MAX_RETRIES,
 ): Promise<LLMResponse> {
-  // Check circuit breaker first
+  // SECURITY (MED-03): Check Redis circuit breaker first
+  // If Redis is down, rate limiting is compromised - deny LLM requests to prevent cost abuse
+  if (redisCircuitBreaker.getState() === 'OPEN') {
+    logError(
+      'LLM request denied - Redis circuit breaker open, rate limiting unavailable',
+      null,
+      { messageCount: messages.length },
+    );
+    throw new Error(
+      'Service temporarily unavailable due to rate limiting issues. Please try again in a few moments.',
+    );
+  }
+
+  // Check LLM circuit breaker
   return llmCircuitBreaker.execute(async () => {
     let lastError: Error | null = null;
 
@@ -665,6 +682,7 @@ export async function callLLMWithRetry(
 
 /**
  * Retry LLM streaming call with exponential backoff and circuit breaker
+ * SECURITY (MED-03): Checks Redis circuit breaker to prevent LLM abuse when rate limiting is unavailable
  */
 export async function callLLMStreamWithRetry(
   messages: Array<{ role: string; content: string }>,
@@ -672,7 +690,20 @@ export async function callLLMStreamWithRetry(
   options: LLMStreamOptions = {},
   maxRetries: number = DEFAULT_MAX_RETRIES,
 ): Promise<LLMResponse> {
-  // Check circuit breaker first
+  // SECURITY (MED-03): Check Redis circuit breaker first
+  // If Redis is down, rate limiting is compromised - deny LLM requests to prevent cost abuse
+  if (redisCircuitBreaker.getState() === 'OPEN') {
+    logError(
+      'LLM streaming request denied - Redis circuit breaker open, rate limiting unavailable',
+      null,
+      { messageCount: messages.length },
+    );
+    throw new Error(
+      'Service temporarily unavailable due to rate limiting issues. Please try again in a few moments.',
+    );
+  }
+
+  // Check LLM circuit breaker
   return llmCircuitBreaker.execute(async () => {
     let lastError: Error | null = null;
 
