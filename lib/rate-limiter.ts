@@ -13,9 +13,17 @@ import { logError, logWarn } from '@/utils/logger';
 /**
  * In-memory rate limiter fallback for when Redis is unavailable
  * SECURITY (HIGH-03): Provides fallback to prevent fail-open on Redis failure
+ * SECURITY (LOW-01): Instance-aware limiting accounts for multiple server instances
  */
 const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
 const IN_MEMORY_CLEANUP_INTERVAL_MS = 60000; // Clean up every minute
+
+/**
+ * SECURITY (LOW-01): Estimated number of application instances
+ * In multi-instance deployments, rate limits are per-instance when using in-memory fallback
+ * We reduce the per-instance limit to account for this
+ */
+const INSTANCE_COUNT_ESTIMATE = parseInt(process.env.INSTANCE_COUNT || '1', 10);
 
 // Periodically clean up expired entries
 if (typeof setInterval !== 'undefined') {
@@ -38,14 +46,34 @@ function inMemoryRateLimiter(
   const now = Date.now();
   const windowMs = windowSeconds * MILLISECONDS_PER_SECOND;
 
+  // SECURITY (LOW-01): Adjust rate limit for multi-instance deployments
+  // When using in-memory fallback, each instance has its own store
+  // So we reduce the per-instance limit to approximate the global limit
+  const adjustedMaxRequests = Math.max(
+    1,
+    Math.ceil(maxRequests / INSTANCE_COUNT_ESTIMATE),
+  );
+
+  if (INSTANCE_COUNT_ESTIMATE > 1) {
+    logWarn(
+      'Using adjusted in-memory rate limit for multi-instance deployment',
+      {
+        originalLimit: maxRequests,
+        adjustedLimit: adjustedMaxRequests,
+        instanceCount: INSTANCE_COUNT_ESTIMATE,
+        identifier,
+      },
+    );
+  }
+
   const existing = inMemoryStore.get(key);
 
   if (existing && existing.resetAt > now) {
     // Within window
-    if (existing.count >= maxRequests) {
+    if (existing.count >= adjustedMaxRequests) {
       return {
         allowed: false,
-        limit: maxRequests,
+        limit: adjustedMaxRequests,
         remaining: 0,
         resetAt: new Date(existing.resetAt),
       };
@@ -54,8 +82,8 @@ function inMemoryRateLimiter(
     existing.count += 1;
     return {
       allowed: true,
-      limit: maxRequests,
-      remaining: maxRequests - existing.count,
+      limit: adjustedMaxRequests,
+      remaining: adjustedMaxRequests - existing.count,
       resetAt: new Date(existing.resetAt),
     };
   }
@@ -66,8 +94,8 @@ function inMemoryRateLimiter(
 
   return {
     allowed: true,
-    limit: maxRequests,
-    remaining: maxRequests - 1,
+    limit: adjustedMaxRequests,
+    remaining: adjustedMaxRequests - 1,
     resetAt: new Date(resetAt),
   };
 }
@@ -212,5 +240,15 @@ export const RATE_LIMITS = {
     maxRequests: 5,
     windowSeconds: 300,
     keyPrefix: 'ratelimit:zset:auth',
+  },
+  /**
+   * SECURITY (HIGH-03): Global LLM rate limit shared across all LLM-calling endpoints
+   * This prevents abuse by hitting multiple endpoints (/api/chat and /api/chat/stream)
+   * 15 requests/minute is a reasonable limit that prevents cost abuse while allowing normal usage
+   */
+  LLM_GLOBAL: {
+    maxRequests: 15,
+    windowSeconds: 60,
+    keyPrefix: 'ratelimit:zset:llm-global',
   },
 } as const;

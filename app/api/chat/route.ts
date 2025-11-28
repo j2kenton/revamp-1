@@ -30,6 +30,9 @@ import { messageToDTO } from '@/types/models';
 // SECURITY (LOW-04): Removed RANDOM_STRING constants, using crypto.randomUUID instead
 
 const IDEMPOTENCY_KEY_TTL_SECONDS = 24 * 60 * 60;
+const IDEMPOTENCY_LOCK_TTL_SECONDS = 60; // Lock expires after 60 seconds in case of crash
+const IDEMPOTENCY_POLL_DELAY_MS = 100; // Wait time when another request is processing
+const IDEMPOTENCY_MAX_WAIT_MS = 5000; // Max time to wait for another request to complete
 const LLM_TIMEOUT_MS = 30000;
 const TITLE_MAX_LENGTH = 50;
 const CONTEXT_MAX_TOKENS = 8000;
@@ -37,6 +40,9 @@ const LLM_MAX_TOKENS = 1000;
 const LLM_TEMPERATURE = 0.7;
 
 async function processChatRequest(request: NextRequest): Promise<Response> {
+  // SECURITY (MED-02): Track idempotency lock key for cleanup in catch block
+  let idempotencyLockKey: string | null = null;
+
   try {
     // Require authenticated session
     const session = await requireSession(request);
@@ -57,19 +63,95 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
     // Sanitize message content
     const sanitizedContent = sanitizeChatMessage(content);
 
-    // Check idempotency
+    // SECURITY (MED-02): Check idempotency with atomic lock to prevent race conditions
+    // This prevents duplicate LLM calls when multiple requests arrive simultaneously
     if (idempotencyKey) {
       const idempotencyKeyStore = `idempotency:${session.userId}:${idempotencyKey}`;
+      idempotencyLockKey = `idempotency:lock:${session.userId}:${idempotencyKey}`;
       const { getRedisClient } = await import('@/lib/redis/client');
       const redis = getRedisClient();
-      const existing = await redis.get(idempotencyKeyStore);
 
+      // First check if we already have a completed result
+      const existing = await redis.get(idempotencyKeyStore);
       if (existing) {
         // Return cached response
         return success(JSON.parse(existing), {
           message: 'Message already processed (idempotent)',
         });
       }
+
+      // Try to acquire the idempotency lock atomically (SETNX)
+      const acquired = await redis.setnx(idempotencyLockKey, 'processing');
+
+      if (!acquired) {
+        // Another request is processing - wait for result with timeout
+        logInfo('Idempotency lock already held, waiting for result', {
+          idempotencyKey,
+          userId: session.userId,
+        });
+
+        const startWait = Date.now();
+        while (Date.now() - startWait < IDEMPOTENCY_MAX_WAIT_MS) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, IDEMPOTENCY_POLL_DELAY_MS),
+          );
+
+          // Check if the other request completed
+          const result = await redis.get(idempotencyKeyStore);
+          if (result) {
+            return success(JSON.parse(result), {
+              message: 'Message already processed (idempotent)',
+            });
+          }
+
+          // Check if the lock was released (maybe the other request failed)
+          const lockExists = await redis.exists(idempotencyLockKey);
+          if (!lockExists) {
+            // Lock released but no result - try to acquire again
+            const retryAcquired = await redis.setnx(
+              idempotencyLockKey,
+              'processing',
+            );
+            if (retryAcquired) {
+              await redis.expire(
+                idempotencyLockKey,
+                IDEMPOTENCY_LOCK_TTL_SECONDS,
+              );
+              break; // We got the lock, proceed with processing
+            }
+          }
+        }
+
+        // If we still don't have a result after waiting, check one more time
+        const finalResult = await redis.get(idempotencyKeyStore);
+        if (finalResult) {
+          return success(JSON.parse(finalResult), {
+            message: 'Message already processed (idempotent)',
+          });
+        }
+
+        // If we couldn't acquire the lock and no result, return conflict
+        const stillLocked = await redis.exists(idempotencyLockKey);
+        if (stillLocked) {
+          return badRequest(
+            'Request is being processed. Please wait and retry.',
+          );
+        }
+
+        // Lock was released but no result - try one final time to acquire
+        const finalAcquired = await redis.setnx(
+          idempotencyLockKey,
+          'processing',
+        );
+        if (!finalAcquired) {
+          return badRequest(
+            'Request is being processed. Please wait and retry.',
+          );
+        }
+      }
+
+      // We have the lock - set expiration in case of crash
+      await redis.expire(idempotencyLockKey, IDEMPOTENCY_LOCK_TTL_SECONDS);
     }
 
     // Get or create chat
@@ -245,11 +327,44 @@ async function processChatRequest(request: NextRequest): Promise<Response> {
       };
     });
 
+    // SECURITY (MED-02): Clean up idempotency lock on success
+    // The result is now stored, so we can release the lock
+    if (idempotencyLockKey) {
+      try {
+        const { getRedisClient } = await import('@/lib/redis/client');
+        const redis = getRedisClient();
+        await redis.del(idempotencyLockKey);
+      } catch (cleanupError) {
+        // Lock will expire automatically, log but don't fail
+        logWarn('Failed to clean up idempotency lock', {
+          idempotencyLockKey,
+          error: cleanupError,
+        });
+      }
+    }
+
     return success(result, {
       message: 'Message sent successfully',
     });
   } catch (error) {
     logError('Chat API error', error);
+
+    // SECURITY (MED-02): Clean up idempotency lock on failure
+    // This allows the same request to be retried
+    // Note: idempotencyLockKey is set at the outer scope of the try block
+    if (idempotencyLockKey) {
+      try {
+        const { getRedisClient } = await import('@/lib/redis/client');
+        const redis = getRedisClient();
+        await redis.del(idempotencyLockKey);
+      } catch (cleanupError) {
+        // Lock will expire automatically, log but don't fail
+        logWarn('Failed to clean up idempotency lock on error', {
+          idempotencyLockKey,
+          error: cleanupError,
+        });
+      }
+    }
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
       return unauthorized();
