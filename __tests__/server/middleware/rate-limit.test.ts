@@ -19,9 +19,21 @@ jest.mock('@/lib/redis/client', () => ({
 jest.mock('@/lib/rate-limiter', () => ({
   checkRateLimit: jest.fn(),
   RATE_LIMITS: {
-    API_DEFAULT: { maxRequests: 10, windowSeconds: 60, keyPrefix: 'ratelimit:zset:api' },
-    CHAT_MESSAGE: { maxRequests: 5, windowSeconds: 60, keyPrefix: 'ratelimit:zset:chat' },
-    AUTH: { maxRequests: 5, windowSeconds: 60, keyPrefix: 'ratelimit:zset:auth' },
+    API_DEFAULT: {
+      maxRequests: 10,
+      windowSeconds: 60,
+      keyPrefix: 'ratelimit:zset:api',
+    },
+    CHAT_MESSAGE: {
+      maxRequests: 5,
+      windowSeconds: 60,
+      keyPrefix: 'ratelimit:zset:chat',
+    },
+    AUTH: {
+      maxRequests: 5,
+      windowSeconds: 60,
+      keyPrefix: 'ratelimit:zset:auth',
+    },
   },
 }));
 
@@ -30,7 +42,12 @@ jest.mock('@/server/middleware/session', () => ({
 }));
 
 jest.mock('@/server/api-response', () => ({
-  tooManyRequests: jest.fn((message: string) => new Response(message, { status: 429 })),
+  tooManyRequests: jest.fn(
+    (message: string) => new Response(message, { status: 429 }),
+  ),
+  serverError: jest.fn(
+    (message: string) => new Response(message, { status: 500 }),
+  ),
 }));
 
 const requestFactory = (url = 'http://localhost/api/test'): NextRequest =>
@@ -44,7 +61,9 @@ describe('Rate Limit Middleware', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getRedisClient as jest.Mock).mockReturnValue(redisClient);
-    (getSessionFromRequest as jest.Mock).mockResolvedValue({ userId: 'user-123' });
+    (getSessionFromRequest as jest.Mock).mockResolvedValue({
+      userId: 'user-123',
+    });
   });
 
   describe('withRateLimit', () => {
@@ -55,13 +74,18 @@ describe('Rate Limit Middleware', () => {
         remaining: 9,
         resetAt: new Date(Date.now() + 1000),
       };
-      (checkRateLimit as jest.Mock).mockResolvedValueOnce(allowResult);
+      // Mock for both identifiers (IP and user) checked by checkAllRateLimits
+      (checkRateLimit as jest.Mock).mockResolvedValue(allowResult);
 
-      const result = await withRateLimit(requestFactory(), RATE_LIMITS.API_DEFAULT);
+      const result = await withRateLimit(
+        requestFactory(),
+        RATE_LIMITS.API_DEFAULT,
+      );
 
       expect(result.allowed).toBe(true);
       expect(result.error).toBeUndefined();
-      expect(checkRateLimit).toHaveBeenCalledTimes(1);
+      // Called twice: once for IP identifier, once for user identifier
+      expect(checkRateLimit).toHaveBeenCalledTimes(2);
     });
 
     it('blocks requests that exceed the limit', async () => {
@@ -71,9 +95,13 @@ describe('Rate Limit Middleware', () => {
         remaining: 0,
         resetAt: new Date(Date.now() + 5000),
       };
+      // First identifier (IP) is rate limited - stops checking further
       (checkRateLimit as jest.Mock).mockResolvedValueOnce(denyResult);
 
-      const result = await withRateLimit(requestFactory(), RATE_LIMITS.API_DEFAULT);
+      const result = await withRateLimit(
+        requestFactory(),
+        RATE_LIMITS.API_DEFAULT,
+      );
 
       expect(result.allowed).toBe(false);
       expect(result.error?.status).toBe(429);
