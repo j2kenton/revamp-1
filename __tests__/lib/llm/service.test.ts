@@ -1,4 +1,12 @@
 import * as llmService from '@/lib/llm/service';
+import { redisCircuitBreaker } from '@/lib/redis/circuit-breaker';
+
+// Mock the Redis circuit breaker
+jest.mock('@/lib/redis/circuit-breaker', () => ({
+  redisCircuitBreaker: {
+    getState: jest.fn(() => 'CLOSED'),
+  },
+}));
 
 const baseMessages = [{ role: 'user', content: 'Hello there' }];
 
@@ -119,5 +127,124 @@ describe('LLM service', () => {
     expect(llmService.getFallbackMessage()).toContain(
       'temporarily unavailable',
     );
+  });
+
+  // SECURITY TEST: MED-03 - Redis circuit breaker check in LLM service
+  describe('MED-03: Redis circuit breaker integration', () => {
+    beforeEach(() => {
+      // Reset mock to CLOSED state
+      (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('CLOSED');
+    });
+
+    describe('callLLMWithRetry', () => {
+      it('should allow LLM calls when Redis circuit breaker is CLOSED', async () => {
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('CLOSED');
+
+        const result = await llmService.callLLMWithRetry(baseMessages);
+
+        // Should succeed (mock LLM)
+        expect(result.content).toBeTruthy();
+      });
+
+      it('should deny LLM calls when Redis circuit breaker is OPEN', async () => {
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('OPEN');
+
+        await expect(llmService.callLLMWithRetry(baseMessages)).rejects.toThrow(
+          /Service temporarily unavailable|rate limiting/i,
+        );
+      });
+
+      it('should prevent LLM cost abuse when rate limiting is unavailable', async () => {
+        // This is the key security test for MED-03
+        // When Redis is down, rate limiting cannot work
+        // Therefore LLM calls should be denied to prevent cost abuse
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('OPEN');
+
+        await expect(
+          llmService.callLLMWithRetry(baseMessages),
+        ).rejects.toThrow();
+
+        // Verify circuit breaker was checked
+        expect(redisCircuitBreaker.getState).toHaveBeenCalled();
+      });
+    });
+
+    describe('callLLMStreamWithRetry', () => {
+      it('should allow streaming LLM calls when Redis circuit breaker is CLOSED', async () => {
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('CLOSED');
+
+        const chunks: string[] = [];
+        const result = await llmService.callLLMStreamWithRetry(
+          baseMessages,
+          (chunk: string) => {
+            chunks.push(chunk);
+          },
+          { mockDelay: 0 },
+        );
+
+        expect(result.content).toBeTruthy();
+        expect(chunks.length).toBeGreaterThan(0);
+      });
+
+      it('should deny streaming LLM calls when Redis circuit breaker is OPEN', async () => {
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('OPEN');
+
+        const chunks: string[] = [];
+
+        await expect(
+          llmService.callLLMStreamWithRetry(
+            baseMessages,
+            (chunk: string) => {
+              chunks.push(chunk);
+            },
+            { mockDelay: 0 },
+          ),
+        ).rejects.toThrow(/Service temporarily unavailable|rate limiting/i);
+
+        // No chunks should have been streamed
+        expect(chunks.length).toBe(0);
+      });
+
+      it('should prevent streaming cost abuse when rate limiting is unavailable', async () => {
+        // Streaming calls are even more expensive - must be blocked when Redis is down
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('OPEN');
+
+        await expect(
+          llmService.callLLMStreamWithRetry(baseMessages, () => {}, {
+            mockDelay: 0,
+          }),
+        ).rejects.toThrow();
+
+        expect(redisCircuitBreaker.getState).toHaveBeenCalled();
+      });
+    });
+
+    describe('Circuit breaker states', () => {
+      it('should allow requests in CLOSED state', async () => {
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('CLOSED');
+
+        const result = await llmService.callLLMWithRetry(baseMessages);
+        expect(result.content).toBeTruthy();
+      });
+
+      it('should deny requests in OPEN state', async () => {
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('OPEN');
+
+        await expect(
+          llmService.callLLMWithRetry(baseMessages),
+        ).rejects.toThrow();
+      });
+
+      it('should allow requests in HALF_OPEN state (testing recovery)', async () => {
+        // HALF_OPEN means the circuit breaker is testing if the service recovered
+        // We should allow requests through to test
+        (redisCircuitBreaker.getState as jest.Mock).mockReturnValue(
+          'HALF_OPEN',
+        );
+
+        const result = await llmService.callLLMWithRetry(baseMessages);
+        expect(result.content).toBeTruthy();
+      });
+    });
   });
 });
