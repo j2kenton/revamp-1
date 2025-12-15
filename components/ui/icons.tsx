@@ -9,12 +9,7 @@ type IconProps = SVGProps<SVGSVGElement>;
 
 export function ChatIcon(props: IconProps) {
   return (
-    <svg
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      {...props}
-    >
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -27,12 +22,7 @@ export function ChatIcon(props: IconProps) {
 
 export function ErrorIcon(props: IconProps) {
   return (
-    <svg
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      {...props}
-    >
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -69,12 +59,7 @@ export function CloseIcon(props: IconProps) {
 
 export function SpinnerIcon(props: IconProps) {
   return (
-    <svg
-      className="animate-spin"
-      fill="none"
-      viewBox="0 0 24 24"
-      {...props}
-    >
+    <svg className="animate-spin" fill="none" viewBox="0 0 24 24" {...props}>
       <circle
         className="opacity-25"
         cx="12"
@@ -161,7 +146,11 @@ export function MicrosoftIcon(props: IconProps) {
 }
 
 // Loading spinner with customizable size and color
-export function LoadingSpinner({ className = 'h-4 w-4' }: { className?: string }) {
+export function LoadingSpinner({
+  className = 'h-4 w-4',
+}: {
+  className?: string;
+}) {
   return (
     <div
       className={`${className} animate-spin rounded-full border-2 border-gray-300 border-t-blue-600`}
@@ -177,5 +166,38 @@ export function LoadingDots({ className = '' }: { className?: string }) {
       <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:100ms]" />
       <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:200ms]" />
     </span>
+  );
+}
+
+// Send icon (arrow pointing right)
+export function SendIcon(props: IconProps) {
+  // Paper plane icon (more widely-recognized send metaphor)
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M22 2L11 13" />
+      <path d="M22 2L15 22L11 13L2 9L22 2z" />
+    </svg>
+  );
+}
+
+// Clear icon (trash can)
+export function PlusIcon(props: IconProps) {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
+    </svg>
   );
 }

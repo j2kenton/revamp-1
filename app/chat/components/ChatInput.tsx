@@ -15,6 +15,7 @@ import {
   MESSAGE_LENGTH_WARNING_THRESHOLD,
 } from '@/lib/constants/ui';
 import { STRINGS } from '@/lib/constants/strings';
+import { SendIcon, PlusIcon } from '@/components/ui/icons';
 
 const COUNTDOWN_INTERVAL_MS = 1000;
 const MIN_COUNTDOWN_VALUE = 1;
@@ -238,7 +239,7 @@ export function ChatInput({
               onClick={handleSubmit}
               disabled={!canSubmit}
               className={clsx(
-                'flex-1 rounded-md px-6 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial',
+                'flex-1 rounded-md px-4 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial',
                 {
                   'cursor-pointer bg-blue-600 text-white hover:bg-blue-700':
                     canSubmit,
@@ -254,15 +255,21 @@ export function ChatInput({
                   <span>{STRINGS.status.loading}</span>
                 </div>
               ) : (
-                STRINGS.input.sendButton
+                <div className="flex items-center gap-2">
+                  <SendIcon className="h-5 w-5" />
+                  <span>{STRINGS.input.sendButton}</span>
+                </div>
               )}
             </button>
             {onNewChat && (
               <button
                 onClick={onNewChat}
-                className="flex-1 cursor-pointer rounded-md bg-gray-300 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
+                className="flex-1 cursor-pointer rounded-md bg-gray-300 px-4 py-1 text-sm font-medium text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
               >
-                {STRINGS.actions.clear}
+                <div className="flex items-center gap-2">
+                  <PlusIcon className="h-4 w-4" />
+                  <span>{STRINGS.actions.clear}</span>
+                </div>
               </button>
             )}
           </div>
