@@ -262,7 +262,7 @@ export function ChatInput({
                 onClick={onNewChat}
                 className="flex-1 cursor-pointer rounded-md bg-gray-300 px-6 py-1 text-sm font-medium text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:flex-initial dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
               >
-                {STRINGS.actions.newChat}
+                {STRINGS.actions.clear}
               </button>
             )}
           </div>

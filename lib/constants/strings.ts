@@ -31,7 +31,7 @@ export const STRINGS = {
       logoAlt: 'Gemini 3 logo',
       userMenuAriaLabel: 'Open user menu',
     },
-    newChat: 'New Chat',
+    clear: 'Clear',
   },
 
   // Message roles
@@ -99,7 +99,7 @@ export const STRINGS = {
     goHome: 'Go Home',
     reload: 'Reload page',
     returnToLogin: 'Return to login',
-    newChat: 'New Chat',
+    clear: 'Clear',
     tryAgain: 'Try again',
   },
 
@@ -172,8 +172,7 @@ export const STRINGS = {
     chatBoundaryDescription:
       'An unexpected error occurred while loading the chat experience.',
     appBoundaryTitle: 'Something went wrong!',
-    appBoundaryDescription:
-      'An unexpected error occurred. Please try again.',
+    appBoundaryDescription: 'An unexpected error occurred. Please try again.',
   },
 
   // Test support login
