@@ -6,7 +6,7 @@
 'use client';
 
 import Image from 'next/image';
-import { BellIcon, UserIcon } from '@/components/ui/icons';
+import { UserIcon } from '@/components/ui/icons';
 import type { MessageDTO } from '@/types/models';
 
 interface MessageAvatarProps {
@@ -14,17 +14,23 @@ interface MessageAvatarProps {
   photoUrl?: string | null;
 }
 
-export function MessageAvatar({ role, photoUrl }: MessageAvatarProps) {
-  if (role === 'assistant') {
+export function MessageAvatar({ role, photoUrl }: MessageAvatarProps){
+  if (role === 'assistant'){
     return (
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
-        <BellIcon className="h-6 w-6" />
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600">
+        <Image
+          src="/gemini-style-logo.png"
+          alt="Gemini"
+          width={28}
+          height={28}
+          className="h-7 w-7"
+        />
       </div>
     );
   }
 
   // Show user's profile photo if available
-  if (photoUrl) {
+  if (photoUrl){
     return (
       <Image
         src={photoUrl}
