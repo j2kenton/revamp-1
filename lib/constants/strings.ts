@@ -27,8 +27,8 @@ export const STRINGS = {
     },
     header: {
       brandLead: 'Introducing:',
-      productName: 'Gemini 3',
-      logoAlt: 'Gemini 3 logo',
+      productName: 'Gemini 3.1',
+      logoAlt: 'Gemini logo (mock)',
       userMenuAriaLabel: 'Open user menu',
     },
     clear: 'Clear',

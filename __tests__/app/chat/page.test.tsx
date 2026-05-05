@@ -107,7 +107,7 @@ describe('ChatPage', () => {
 
     render(<ChatPage />);
 
-    expect(screen.getByText('Gemini 3')).toBeInTheDocument();
+    expect(screen.getByText(/Gemini 3/)).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /new chat/i }),
