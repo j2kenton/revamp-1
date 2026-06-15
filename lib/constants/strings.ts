@@ -8,18 +8,18 @@ export const STRINGS = {
   // Landing page
   landing: {
     skipLink: 'Skip to landing content',
-    homeAriaLabel: 'Gemini 3.5 Preview home',
-    productName: 'Gemini 3.5 Preview',
-    eyebrow: 'AI chat workspace',
-    headline: 'Gemini 3.5 Preview',
+    homeAriaLabel: 'Gemini 3.5 Pro (Preview) home',
+    productName: 'Gemini 3.5 Pro (Preview)',
+    eyebrow: 'Free Preview Access',
+    headline: 'Gemini 3.5 Pro',
     description:
-      'A simple place to chat with AI. Sign in with your Microsoft account to get started.',
+      'Unofficial, limited-time access to Gemini 3.5 Pro — one of the most capable AI models available, free for a limited time.',
     primaryCta: 'Sign in with Microsoft',
     featureSectionAriaLabel: 'Landing page basics',
     features: [
       {
-        title: 'Microsoft sign-in',
-        description: 'Use your Microsoft account to access the app.',
+        title: 'Free during preview',
+        description: 'No cost, no subscription. Access Gemini 3.5 Pro for free while the preview is live.',
       },
       {
         title: 'Chat with AI',
