@@ -197,6 +197,18 @@ describe('LOW-02 & LOW-03: Security Headers Tests', () => {
     });
   });
 
+  describe('Legacy Login Redirect', () => {
+    it('should redirect /login to the combined landing and sign-in page', async () => {
+      const { default: mainProxy } = await import('@/proxy');
+      const request = new NextRequest('http://localhost:3000/login');
+      const response = mainProxy(request);
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get('Location')).toBe('http://localhost:3000/');
+      expect(response.headers.get('Content-Security-Policy')).toBeTruthy();
+    });
+  });
+
   describe('Route Matching Configuration', () => {
     it('should export a config with matcher', async () => {
       const proxyModule = await import('@/proxy');

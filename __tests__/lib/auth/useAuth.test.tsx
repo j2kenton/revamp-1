@@ -149,7 +149,7 @@ describe('useAuth', () => {
 
     expect(mockMsalInstance.logoutPopup).toHaveBeenCalledWith({
       account: expect.any(Object),
-      postLogoutRedirectUri: '/login',
+      postLogoutRedirectUri: '/',
     });
   });
 

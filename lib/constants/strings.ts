@@ -5,6 +5,33 @@
  */
 
 export const STRINGS = {
+  // Landing page
+  landing: {
+    skipLink: 'Skip to landing content',
+    homeAriaLabel: 'Gemini 3.5 Preview home',
+    productName: 'Gemini 3.5 Preview',
+    eyebrow: 'AI chat workspace',
+    headline: 'Gemini 3.5 Preview',
+    description:
+      'A simple place to chat with AI. Sign in with your Microsoft account to get started.',
+    primaryCta: 'Sign in with Microsoft',
+    featureSectionAriaLabel: 'Landing page basics',
+    features: [
+      {
+        title: 'Microsoft sign-in',
+        description: 'Use your Microsoft account to access the app.',
+      },
+      {
+        title: 'Chat with AI',
+        description: 'Ask questions and get responses in the chat workspace.',
+      },
+      {
+        title: 'Simple start',
+        description: 'Sign in, open chat, and begin a conversation.',
+      },
+    ],
+  },
+
   // Chat Messages
   chat: {
     emptyState: {
@@ -98,7 +125,7 @@ export const STRINGS = {
     signOut: 'Sign out',
     goHome: 'Go Home',
     reload: 'Reload page',
-    returnToLogin: 'Return to login',
+    returnHome: 'Return home',
     clear: 'Clear',
     tryAgain: 'Try again',
   },

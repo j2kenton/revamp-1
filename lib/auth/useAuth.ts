@@ -195,7 +195,7 @@ export function useAuth(): UseAuthReturn {
       const account = instance.getActiveAccount();
       await instance.logoutPopup({
         account,
-        postLogoutRedirectUri: '/login',
+        postLogoutRedirectUri: '/',
       });
       setAccessToken(null);
       setTokenExpiresAt(null);

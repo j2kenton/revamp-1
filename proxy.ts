@@ -15,6 +15,9 @@ import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const LANDING_ROUTE = '/';
+const LEGACY_LOGIN_ROUTE = '/login';
+
 /**
  * Content Security Policy directives
  * SECURITY (LOW-02): Helps prevent XSS and other injection attacks
@@ -104,6 +107,18 @@ function isProtectedRoute(_pathname: string): boolean {
   return false;
 }
 
+function isLegacyLoginRoute(pathname: string): boolean {
+  return pathname === LEGACY_LOGIN_ROUTE || pathname === `${LEGACY_LOGIN_ROUTE}/`;
+}
+
+function redirectToLanding(request: NextRequest): NextResponse {
+  const redirectUrl = request.nextUrl.clone();
+  redirectUrl.pathname = LANDING_ROUTE;
+  redirectUrl.search = '';
+
+  return addSecurityHeaders(NextResponse.redirect(redirectUrl));
+}
+
 /**
  * Main proxy function for non-auth-protected routes
  * Adds security headers to all responses
@@ -129,7 +144,7 @@ export const authProtectedProxy = withAuth(
       authorized: ({ token }) => !!token,
     },
     pages: {
-      signIn: '/login',
+      signIn: LANDING_ROUTE,
     },
   },
 );
@@ -139,6 +154,10 @@ export const authProtectedProxy = withAuth(
  */
 export default function mainProxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isLegacyLoginRoute(pathname)) {
+    return redirectToLanding(request);
+  }
 
   // For protected routes, use auth-protected proxy
   if (isProtectedRoute(pathname)) {
