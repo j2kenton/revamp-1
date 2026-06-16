@@ -8,18 +8,18 @@ export const STRINGS = {
   // Landing page
   landing: {
     skipLink: 'Skip to landing content',
-    homeAriaLabel: 'Gemini 3.5 Pro (Preview) home',
-    productName: 'Gemini 3.5 Pro (Preview)',
+    homeAriaLabel: 'Gemini 3 Flash (Preview) home',
+    productName: 'Gemini 3 Flash (Preview)',
     eyebrow: 'Free Preview Access',
-    headline: 'Gemini 3.5 Pro',
+    headline: 'Gemini 3 Flash',
     description:
-      'Unofficial, limited-time access to Gemini 3.5 Pro — one of the most capable AI models available, free for a limited time.',
+      'Unofficial, limited-time access to Gemini 3 Flash — always tracking the latest Flash preview, free for a limited time.',
     primaryCta: 'Sign in with Microsoft',
     featureSectionAriaLabel: 'Landing page basics',
     features: [
       {
         title: 'Free during preview',
-        description: 'No cost, no subscription. Access Gemini 3.5 Pro for free while the preview is live.',
+        description: 'No cost, no subscription. Access Gemini 3 Flash for free while the preview is live.',
       },
       {
         title: 'Chat with AI',
@@ -54,7 +54,7 @@ export const STRINGS = {
     },
     header: {
       brandLead: 'Introducing:',
-      productName: 'Gemini 3.5',
+      productName: 'Gemini 3 Flash',
       logoAlt: 'Gemini logo (mock)',
       userMenuAriaLabel: 'Open user menu',
     },

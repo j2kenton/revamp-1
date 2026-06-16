@@ -33,7 +33,7 @@ interface LLMStreamOptions extends LLMRequestOptions {
 }
 
 const DEFAULT_TEMPERATURE = 1;
-const FALLBACK_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const FALLBACK_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5;
 const CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 2;
 const CIRCUIT_BREAKER_TIMEOUT_MS = 60000;
