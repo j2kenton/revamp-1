@@ -1,5 +1,7 @@
 # AI Chat Application - Project Walkthrough
 
+![Chat screenshot](public/screenshots/screenshot-1.jpeg)
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
