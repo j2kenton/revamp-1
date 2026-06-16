@@ -23,7 +23,7 @@ This is a full-stack Next.js application with the following architecture:
 - **Authentication**: Microsoft MSAL (Azure AD)
 - **Backend**: Next.js API Routes
 - **Data Storage**: Redis (sessions, chat data, rate limiting)
-- **AI Integration**: Google Gemini
+- **AI Integration**: Google Gemini — defaults to `gemini-flash-latest`, which always tracks Google's newest Flash model, so the app gets new model upgrades automatically without a code change
 
 ### Directory Structure
 
@@ -262,6 +262,7 @@ NEXTAUTH_URL=http://localhost:3000
 
 # Google Gemini
 GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-flash-latest  # optional, defaults to gemini-flash-latest
 ```
 
 ### Build & Run
