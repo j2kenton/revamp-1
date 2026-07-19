@@ -51,3 +51,11 @@ next-env.d.ts
 .output.md.*
 AGENTS.md
 .claude/settings.local.json
+
+# BEGIN Ensemble managed meta resources
+# Managed by Ensemble. Do not edit this block manually.
+/artifacts/helper/
+/.ensemble/
+/.ensemble/**/chat-v1.json
+/.ensemble/**/chat-v1.corrupt.json
+# END Ensemble managed meta resources
