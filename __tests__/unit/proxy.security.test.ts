@@ -67,6 +67,42 @@ describe('LOW-02 & LOW-03: Security Headers Tests', () => {
       expect(csp).toContain('script-src');
     });
 
+    it('should allow the Google Identity Services script in script-src', async () => {
+      const { proxy } = await import('@/proxy');
+      const request = new NextRequest('http://localhost:3000/test');
+      const response = proxy(request);
+
+      const csp = response.headers.get('Content-Security-Policy');
+      expect(csp).toContain('https://accounts.google.com/gsi/client');
+    });
+
+    it('should allow the Google Identity Services stylesheet in style-src', async () => {
+      const { proxy } = await import('@/proxy');
+      const request = new NextRequest('http://localhost:3000/test');
+      const response = proxy(request);
+
+      const csp = response.headers.get('Content-Security-Policy');
+      expect(csp).toContain('https://accounts.google.com/gsi/style');
+    });
+
+    it('should allow the Google Identity Services prompt iframe via frame-src', async () => {
+      const { proxy } = await import('@/proxy');
+      const request = new NextRequest('http://localhost:3000/test');
+      const response = proxy(request);
+
+      const csp = response.headers.get('Content-Security-Policy');
+      expect(csp).toContain('frame-src https://accounts.google.com/gsi/');
+    });
+
+    it('already covers Google Identity Services network calls via connect-src https:', async () => {
+      const { proxy } = await import('@/proxy');
+      const request = new NextRequest('http://localhost:3000/test');
+      const response = proxy(request);
+
+      const csp = response.headers.get('Content-Security-Policy');
+      expect(csp).toContain("connect-src 'self' https:");
+    });
+
     it('should include frame-ancestors none to prevent clickjacking via CSP', async () => {
       const { proxy } = await import('@/proxy');
       const request = new NextRequest('http://localhost:3000/test');

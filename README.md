@@ -22,7 +22,7 @@ This is a full-stack Next.js application with the following architecture:
 
 - **Frontend**: Next.js 16 (React 19), TailwindCSS, TypeScript, shadcn-ui
 - **State Management**: Redux + TanStack Query (React Query)
-- **Authentication**: Microsoft MSAL (Azure AD)
+- **Authentication**: Google Identity Services (primary) and Microsoft MSAL / Azure AD (secondary)
 - **Backend**: Next.js API Routes
 - **Data Storage**: Redis (sessions, chat data, rate limiting)
 - **AI Integration**: Google Gemini — defaults to `gemini-flash-latest`, which always tracks Google's newest Flash model, so the app gets new model upgrades automatically without a code change
@@ -85,12 +85,14 @@ types/
 
 ## Authentication Flow
 
+The app supports two sign-in providers side by side: **Google** (Google Identity Services / GIS) is the primary, more prominent option, and **Microsoft** (MSAL / Azure AD) is a fully functional secondary option. Exactly one provider is ever "active" per browser session — signing in with one deactivates the other so a stale cached session can never resurrect alongside a fresh one. See `docs/authentication.md` for the full design (bootstrap resolution, provider-switch semantics, renewal, and the server-side issuer dispatch).
+
 ### MSAL Integration
 
 The application uses Microsoft Authentication Library (MSAL) for Azure AD authentication:
 
 1. **User clicks "Sign in with Microsoft"**
-   - `app/login/page.tsx` handles the login UI
+   - `components/landing/LandingSignInButton.tsx` / `app/chat/components/ChatSignInPrompt.tsx` render the login UI
    - `lib/auth/useAuth.ts` provides authentication methods
 
 2. **MSAL Popup Flow**
@@ -105,9 +107,18 @@ The application uses Microsoft Authentication Library (MSAL) for Azure AD authen
    - Retry logic with exponential backoff
 
 4. **Session Creation**
-   - Server validates MSAL token via `server/middleware/session.ts`
-   - Session created in Redis with CSRF token
-   - Session ID stored in httpOnly cookie
+   - Server validates the MSAL access token via `server/middleware/session.ts` (`getSessionFromJwtFallback`, dispatched by issuer)
+   - No cookie or Redis session is created: every request is authenticated statelessly from the `Authorization: Bearer` header, and the CSRF token is derived deterministically as `SHA-256(bearer token)` rather than stored server-side
+
+### Google Sign-In Integration
+
+The application uses Google Identity Services (GIS) for Google sign-in, rendered as the primary option:
+
+1. **User clicks the Google button** rendered by `components/auth/GoogleSignInButton.tsx` (the sole call site of GIS's `renderButton`)
+2. **GIS returns a signed ID token** (JWT) to the credential callback owned by `lib/auth/GoogleAuthProvider.tsx`
+3. **The ID token is used directly as the bearer token** sent to the API — no separate access-token exchange is needed
+4. **Server validates the ID token** via `server/middleware/google-auth.ts` (signature verified against Google's published JWKS, audience/issuer/email-verified checked)
+5. **Session creation** follows the same JWT-fallback path as MSAL (`server/middleware/session.ts`), normalized to `userId = google:<sub>`
 
 ### Authentication Flow Diagram
 
@@ -233,7 +244,19 @@ pnpm test:e2e
 
 - Node.js 20+
 - Redis instance (or Redis Cloud)
-- Azure AD application registration
+- Google Cloud OAuth 2.0 client (for Google sign-in)
+- Azure AD application registration (for Microsoft sign-in)
+
+### Google Cloud Console Setup
+
+1. Create an OAuth 2.0 **Web application** client in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Configure it for **callback/One Tap mode** — Google Identity Services does not use redirect URIs; instead, register **Authorized JavaScript origins** for every environment. The values below are placeholders — replace `your-domain.com` (and the staging subdomain) with the actual domain(s) this app is deployed to; omit the staging entry entirely if no staging environment exists:
+   - `http://localhost:3000` (dev)
+   - `https://staging.your-domain.com` (staging — example only; replace with your real staging host, or remove this line if you don't have one)
+   - `https://your-domain.com` (prod — replace with your real production domain)
+3. Leave "Authorized redirect URIs" empty — GIS returns the credential directly to the page via a callback, not a redirect
+4. Note the **Client ID** (no client secret is needed on the client — GIS ID tokens are verified server-side against Google's public JWKS)
+5. Requested scopes are fixed to `openid email profile` — no additional consent scopes are requested
 
 ### Azure AD Setup
 
@@ -249,7 +272,10 @@ pnpm test:e2e
 Create `.env.local`:
 
 ```bash
-# Azure AD / MSAL
+# Google Identity Services (Sign in with Google) — primary sign-in option
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+
+# Azure AD / MSAL — secondary sign-in option
 NEXT_PUBLIC_AZURE_AD_CLIENT_ID=your_client_id
 NEXT_PUBLIC_AZURE_AD_TENANT_ID=your_tenant_id
 NEXT_PUBLIC_REDIRECT_URI=http://localhost:3000
@@ -266,6 +292,8 @@ NEXTAUTH_URL=http://localhost:3000
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-flash-latest  # optional, defaults to gemini-flash-latest
 ```
+
+No client secret is committed or required for Google sign-in — `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is a public identifier by design (same trust model as the Azure AD client ID above). If `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is unset, the Google button simply doesn't render and Microsoft sign-in continues to work normally.
 
 ### Build & Run
 

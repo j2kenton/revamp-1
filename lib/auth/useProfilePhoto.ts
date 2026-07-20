@@ -1,14 +1,20 @@
 /**
  * Profile Photo Hook
- * Fetches user's profile photo from Microsoft Graph API
+ * Fetches user's profile photo from Microsoft Graph API. Skipped entirely
+ * for Google-authenticated sessions — there is no Graph token to acquire,
+ * and any previously-fetched Microsoft photo is revoked on the transition.
+ *
+ * Mediated entirely through `useAuth()`'s `acquireGraphToken` rather than
+ * calling `useMsal()`/`acquireTokenSilent` directly — `AuthProvider` is the
+ * single owner of MSAL account selection and token acquisition; this hook
+ * has no MSAL SDK access of its own.
  */
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useMsal } from '@azure/msal-react';
-import { InteractionStatus } from '@azure/msal-browser';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isBypassAuthEnabled } from '@/lib/auth/bypass';
+import { useAuth } from '@/lib/auth/useAuth';
 
 interface UseProfilePhotoReturn {
   photoUrl: string | null;
@@ -21,11 +27,18 @@ const GRAPH_PHOTO_ENDPOINT = 'https://graph.microsoft.com/v1.0/me/photo/$value';
 const GRAPH_SCOPES = ['User.Read'];
 
 export function useProfilePhoto(): UseProfilePhotoReturn {
-  const { instance, accounts, inProgress } = useMsal();
+  const { provider, acquireGraphToken } = useAuth();
   const bypassAuth = isBypassAuthEnabled();
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const photoUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    photoUrlRef.current = photoUrl;
+  }, [photoUrl]);
+
+  const isMicrosoftSession = provider === 'microsoft';
 
   const fetchPhoto = useCallback(async () => {
     if (bypassAuth) {
@@ -33,12 +46,7 @@ export function useProfilePhoto(): UseProfilePhotoReturn {
       return;
     }
 
-    if (inProgress !== InteractionStatus.None) {
-      return;
-    }
-
-    const account = instance.getActiveAccount();
-    if (!account) {
+    if (!isMicrosoftSession) {
       return;
     }
 
@@ -47,14 +55,14 @@ export function useProfilePhoto(): UseProfilePhotoReturn {
 
     try {
       // Acquire token specifically for Graph API
-      const tokenResponse = await instance.acquireTokenSilent({
-        scopes: GRAPH_SCOPES,
-        account,
-      });
+      const accessToken = await acquireGraphToken(GRAPH_SCOPES);
+      if (!accessToken) {
+        return;
+      }
 
       const response = await fetch(GRAPH_PHOTO_ENDPOINT, {
         headers: {
-          Authorization: `Bearer ${tokenResponse.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -91,8 +99,8 @@ export function useProfilePhoto(): UseProfilePhotoReturn {
       const blob = await response.blob();
 
       // Revoke previous URL if exists to prevent memory leaks
-      if (photoUrl) {
-        URL.revokeObjectURL(photoUrl);
+      if (photoUrlRef.current) {
+        URL.revokeObjectURL(photoUrlRef.current);
       }
 
       const url = URL.createObjectURL(blob);
@@ -104,31 +112,36 @@ export function useProfilePhoto(): UseProfilePhotoReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [instance, inProgress, bypassAuth, photoUrl]);
+  }, [acquireGraphToken, bypassAuth, isMicrosoftSession]);
 
-  // Fetch photo on mount when authenticated
+  // Fetch photo on mount when authenticated with Microsoft
   useEffect(() => {
-    if (bypassAuth) {
+    if (bypassAuth || !isMicrosoftSession) {
       return;
     }
 
-    if (
-      accounts.length > 0 &&
-      inProgress === InteractionStatus.None &&
-      !photoUrl
-    ) {
+    if (!photoUrlRef.current) {
       fetchPhoto();
     }
-  }, [accounts.length, inProgress, bypassAuth, photoUrl, fetchPhoto]);
+  }, [bypassAuth, isMicrosoftSession, fetchPhoto]);
+
+  // Revoke and clear any Microsoft photo when the session is no longer
+  // Microsoft (Google login, account switch, or sign-out).
+  useEffect(() => {
+    if (!isMicrosoftSession && photoUrlRef.current) {
+      URL.revokeObjectURL(photoUrlRef.current);
+      setPhotoUrl(null);
+    }
+  }, [isMicrosoftSession]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
     return () => {
-      if (photoUrl) {
-        URL.revokeObjectURL(photoUrl);
+      if (photoUrlRef.current) {
+        URL.revokeObjectURL(photoUrlRef.current);
       }
     };
-  }, [photoUrl]);
+  }, []);
 
   if (bypassAuth) {
     return {

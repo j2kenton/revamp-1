@@ -40,6 +40,9 @@ if (!process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE) {
   process.env.NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE =
     'api://test-client/chat.Access';
 }
+if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = 'test-google-client-id';
+}
 if (!process.env.MOCK_REDIS) {
   process.env.MOCK_REDIS = 'true';
 }

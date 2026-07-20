@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
 import { dedupeMessages } from '@/app/chat/utils/messageReconciler';
+import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
 import type { MessageDTO, ChatDTO } from '@/types/models';
 import { STRINGS } from '@/lib/constants/strings';
 import { FIVE_MINUTES_IN_MS, TEN_MINUTES_IN_MS } from '@/lib/constants/common';
@@ -52,10 +53,10 @@ async function fetchChatHistory(
 }
 
 export function useFetchChatHistory(chatId?: string) {
-  const { accessToken } = useAuth();
+  const { accessToken, authIdentityKey } = useAuth();
 
   const query = useQuery({
-    queryKey: ['chat', chatId ?? ''],
+    queryKey: chatHistoryQueryKey(authIdentityKey, chatId),
     queryFn: () => fetchChatHistory(chatId as string, accessToken),
     enabled: Boolean(chatId && accessToken),
     staleTime: STALE_TIME_MS,

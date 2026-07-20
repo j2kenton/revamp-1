@@ -41,6 +41,7 @@ const mockIsBypassAuthEnabled =
   isBypassAuthEnabled as jest.MockedFunction<typeof isBypassAuthEnabled>;
 
 const baseAuthState = {
+  status: 'authenticated' as const,
   accessToken: 'test-token',
   user: {
     id: 'user-1',
@@ -48,11 +49,16 @@ const baseAuthState = {
     name: 'Test User',
   },
   isAuthenticated: true,
+  provider: 'microsoft' as const,
+  authIdentityKey: 'microsoft:user-1',
   login: jest.fn(),
   logout: jest.fn(),
   acquireToken: jest.fn(),
+  acquireGraphToken: jest.fn(),
   isLoading: false,
   error: null,
+  needsReauth: false,
+  clearError: jest.fn(),
 };
 
 const buildFetchResponse = (

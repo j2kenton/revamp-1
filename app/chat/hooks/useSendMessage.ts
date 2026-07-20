@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
 import { reconcileMessages } from '@/app/chat/utils/messageReconciler';
+import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
 import type { MessageDTO } from '@/types/models';
 import {
   RANDOM_STRING_BASE,
@@ -151,7 +152,7 @@ async function sendMessageToAPI(
 
 export function useSendMessage(_chatId?: string | null) {
   const queryClient = useQueryClient();
-  const { accessToken } = useAuth();
+  const { accessToken, authIdentityKey } = useAuth();
 
   const mutation = useMutation<
     SendMessageResponse,
@@ -169,11 +170,12 @@ export function useSendMessage(_chatId?: string | null) {
         return {};
       }
 
-      await queryClient.cancelQueries({ queryKey: ['chat', chatId] });
+      const queryKey = chatHistoryQueryKey(authIdentityKey, chatId);
+      await queryClient.cancelQueries({ queryKey });
 
       const previousData = queryClient.getQueryData<{
         messages: MessageDTO[];
-      }>(['chat', chatId]);
+      }>(queryKey);
 
       const optimisticMessage: MessageDTO = {
         id: `temp_${Date.now()}`,
@@ -190,7 +192,7 @@ export function useSendMessage(_chatId?: string | null) {
       };
 
       queryClient.setQueryData(
-        ['chat', chatId],
+        queryKey,
         (old: { messages?: MessageDTO[] }) => ({
           ...old,
           messages: [...(old?.messages || []), optimisticMessage],
@@ -203,9 +205,10 @@ export function useSendMessage(_chatId?: string | null) {
     // On success, replace optimistic message with server response
     onSuccess: (data, variables, context) => {
       const { chatId } = data;
+      const queryKey = chatHistoryQueryKey(authIdentityKey, chatId);
 
       queryClient.setQueryData(
-        ['chat', chatId],
+        queryKey,
         (old: { messages?: MessageDTO[] }) => {
           const messages = old?.messages || [];
           const reconciled = reconcileMessages({
@@ -222,14 +225,14 @@ export function useSendMessage(_chatId?: string | null) {
         },
       );
 
-      queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+      queryClient.invalidateQueries({ queryKey });
     },
 
     // On error, rollback optimistic update
     onError: (_error, variables, context) => {
       if (context?.previousData && variables.chatId) {
         queryClient.setQueryData(
-          ['chat', variables.chatId],
+          chatHistoryQueryKey(authIdentityKey, variables.chatId),
           context.previousData,
         );
       }

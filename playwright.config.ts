@@ -28,7 +28,7 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: `npx cross-env NEXT_DIST_DIR=${PLAYWRIGHT_DIST_DIR} PORT=${PLAYWRIGHT_PORT} MOCK_REDIS=true TEST_AUTH_MODE=true NEXT_PUBLIC_TEST_AUTH_MODE=true NEXT_PUBLIC_AZURE_AD_CLIENT_ID=playwright-test-client pnpm dev`,
+    command: `npx cross-env NEXT_DIST_DIR=${PLAYWRIGHT_DIST_DIR} PORT=${PLAYWRIGHT_PORT} MOCK_REDIS=true TEST_AUTH_MODE=true NEXT_PUBLIC_TEST_AUTH_MODE=true NEXT_PUBLIC_AZURE_AD_CLIENT_ID=playwright-test-client NEXT_PUBLIC_GOOGLE_CLIENT_ID=playwright-test-google-client next dev`,
     url: `http://localhost:${PLAYWRIGHT_PORT}`,
     reuseExistingServer: false,
     timeout: WEB_SERVER_TIMEOUT_MS,

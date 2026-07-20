@@ -14,7 +14,10 @@ export const STRINGS = {
     headline: 'Gemini 3 Flash',
     description:
       'Unofficial, limited-time access to Gemini 3 Flash — always tracking the latest Flash preview, free for a limited time.',
-    primaryCta: 'Sign in with Microsoft',
+    primaryCta: 'Sign in with Google',
+    secondaryCta: 'Sign in with Microsoft',
+    signInSectionAriaLabel: 'Sign-in options',
+    orDivider: 'or',
     featureSectionAriaLabel: 'Landing page basics',
     features: [
       {
@@ -49,7 +52,7 @@ export const STRINGS = {
     authPrompt: {
       title: 'Sign in to start chatting',
       description:
-        'Connect with your Microsoft account to continue. Your identity is required for secure chat history and rate limiting.',
+        'Connect with your Google or Microsoft account to continue. Your identity is required for secure chat history and rate limiting.',
       skipLink: 'Skip to chat content',
     },
     header: {
@@ -114,11 +117,16 @@ export const STRINGS = {
     emptyResponse: 'Empty response received from server.',
     unexpected: 'An unexpected error occurred. Please try again.',
     chatHistoryFailed: 'Failed to fetch chat history',
+    googleScriptLoadFailed:
+      "Couldn't load Google Sign-In. Check your connection and try again.",
+    googleEmailNotVerified:
+      'Your Google account email is not verified. Please verify it with Google and try again.',
   },
 
   // Actions
   actions: {
     retry: 'Retry',
+    dismiss: 'Dismiss',
     retryChat: 'Retry chat',
     send: 'Send',
     signIn: 'Sign in',
@@ -142,11 +150,15 @@ export const STRINGS = {
   // Auth/Login
   auth: {
     signInTitle: 'Sign in to your account',
-    signInDescription: 'Sign in with your Microsoft account',
+    signInDescription: 'Sign in with your Google or Microsoft account',
     signInButton: 'Sign in with Microsoft',
     signingIn: 'Signing in...',
+    resolvingSession: 'Checking your session…',
     disclaimer:
-      'By signing in, you agree to use your organizational Microsoft account for authentication.',
+      'By signing in, you agree to use your Google or Microsoft account for authentication.',
+    reauthBanner:
+      "We couldn't renew your Google session automatically. You'll be asked to sign in again if it expires.",
+    reauthAction: 'Sign in again',
   },
 
   // Dashboard

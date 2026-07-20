@@ -9,6 +9,16 @@ jest.mock('@/app/chat/hooks/useFetchChatHistory', () => ({
   useFetchChatHistory: jest.fn(),
 }));
 
+// MessageList reads the signed-in user's photo via `useProfilePhoto`, which
+// is a thin `useAuth()` consumer requiring an `<AuthProvider>` ancestor in
+// the real app. This suite only exercises message rendering, not identity or
+// photo behavior (see `__tests__/lib/auth/useProfilePhoto.test.ts` for that),
+// so the hook is mocked directly rather than standing up the full provider
+// tree here.
+jest.mock('@/lib/auth/useProfilePhoto', () => ({
+  useProfilePhoto: jest.fn(() => ({ photoUrl: null })),
+}));
+
 jest.mock('@tanstack/react-virtual', () => {
   return {
     useVirtualizer: jest.fn((config: { count: number }) => {

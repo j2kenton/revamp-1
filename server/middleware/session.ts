@@ -11,8 +11,11 @@ import { getSession, refreshSession } from '@/lib/redis/session';
 import { isRedisUnavailableError } from '@/lib/redis/errors';
 import {
   getMsalTokenFromRequest,
+  isMsalIssuer,
   validateMsalToken,
 } from '@/server/middleware/msal-auth';
+import { isGoogleIssuer, validateGoogleToken } from '@/server/middleware/google-auth';
+import { decodeUnverifiedJwtPayload } from '@/server/middleware/jwt-utils';
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
@@ -76,6 +79,50 @@ async function getSessionFromJwtFallback(
 ): Promise<SessionModel | null> {
   const token = getMsalTokenFromRequest(request);
   if (!token) {
+    return null;
+  }
+
+  // Peek the (unverified) issuer to decide which provider-specific
+  // validator to run. Neither validator runs for a token matching neither
+  // shape — it is rejected outright.
+  const unverifiedPayload = decodeUnverifiedJwtPayload(token);
+  const unverifiedIssuer = unverifiedPayload?.iss;
+
+  if (isGoogleIssuer(unverifiedIssuer)) {
+    const googlePayload = await validateGoogleToken(token);
+    if (!googlePayload) {
+      return null;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(googlePayload.exp * MILLISECONDS_PER_SECOND);
+    const csrfToken = createHash('sha256').update(token).digest('hex');
+    const userId = `google:${googlePayload.sub}`;
+
+    logWarn('Using JWT payload for session fallback', {
+      userId,
+      reason,
+    });
+
+    return {
+      id: `${JWT_FALLBACK_PREFIX}:${userId}`,
+      userId,
+      csrfToken,
+      data: {
+        userAgent: request.headers.get('user-agent') ?? undefined,
+        ipAddress: getClientIp(request),
+        email: googlePayload.email,
+        name: googlePayload.name || googlePayload.email.split('@')[0],
+        lastActivityAt: now,
+        source: 'jwt-fallback',
+      },
+      expiresAt,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  if (!isMsalIssuer(unverifiedIssuer)) {
     return null;
   }
 

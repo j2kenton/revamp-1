@@ -32,16 +32,22 @@ describe('Home page', () => {
     mockLogin.mockResolvedValue(undefined);
     mockUseRouter.mockReturnValue({
       push: mockPush,
-    } as ReturnType<typeof useRouter>);
+    } as unknown as ReturnType<typeof useRouter>);
     mockUseAuth.mockReturnValue({
+      status: 'unauthenticated',
       isAuthenticated: false,
+      provider: null,
+      authIdentityKey: null,
       user: null,
       accessToken: null,
       login: mockLogin,
       logout: jest.fn(),
       acquireToken: jest.fn(),
+      acquireGraphToken: jest.fn(),
       isLoading: false,
       error: null,
+      needsReauth: false,
+      clearError: jest.fn(),
     });
   });
 
@@ -55,8 +61,11 @@ describe('Home page', () => {
       }),
     ).toBeInTheDocument();
 
+    // Microsoft remains a fully functional secondary option (Google is
+    // rendered by the real GoogleSignInButton, which no-ops without a
+    // configured GoogleAuthProvider ancestor in this unit test).
     expect(
-      screen.getByRole('button', { name: STRINGS.landing.primaryCta }),
+      screen.getByRole('button', { name: STRINGS.landing.secondaryCta }),
     ).toBeInTheDocument();
 
     for (const feature of STRINGS.landing.features) {
@@ -74,12 +83,43 @@ describe('Home page', () => {
     render(<HomePage />);
 
     await user.click(
-      screen.getByRole('button', { name: STRINGS.landing.primaryCta }),
+      screen.getByRole('button', { name: STRINGS.landing.secondaryCta }),
     );
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledTimes(1);
+      expect(mockLogin).toHaveBeenCalledWith('microsoft');
     });
     expect(mockPush).toHaveBeenCalledWith('/chat');
+  });
+
+  it('shows an inert placeholder instead of a live Google button while resolving', () => {
+    mockUseAuth.mockReturnValue({
+      status: 'resolving',
+      isAuthenticated: false,
+      provider: null,
+      authIdentityKey: null,
+      user: null,
+      accessToken: null,
+      login: mockLogin,
+      logout: jest.fn(),
+      acquireToken: jest.fn(),
+      acquireGraphToken: jest.fn(),
+      isLoading: false,
+      error: null,
+      needsReauth: false,
+      clearError: jest.fn(),
+    });
+
+    render(<HomePage />);
+
+    expect(
+      screen.queryByTestId('google-signin-button'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId('google-signin-placeholder'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: STRINGS.landing.secondaryCta }),
+    ).toBeDisabled();
   });
 });

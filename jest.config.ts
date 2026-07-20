@@ -16,6 +16,15 @@ const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'jsdom',
 
+  // Use a project-local cache directory instead of the OS temp dir.
+  // On Windows the shared temp haste-map cache can end up locked/owned by
+  // another process (AV scanning, a previous interrupted run, OneDrive
+  // sync, etc.), which surfaces as an EPERM error when Jest tries to write
+  // to it. Keeping the cache inside the repo avoids that shared location.
+  // Overridable via JEST_CACHE_DIRECTORY for CI/sandboxed environments where
+  // even the repo path isn't writable (e.g. a read-only checkout).
+  cacheDirectory: process.env.JEST_CACHE_DIRECTORY || '<rootDir>/.jest-cache',
+
   // Setup files
   setupFiles: ['<rootDir>/jest.polyfills.ts'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],

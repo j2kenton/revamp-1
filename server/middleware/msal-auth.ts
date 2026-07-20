@@ -102,6 +102,33 @@ if (TENANT_ID === 'common') {
   );
 }
 
+const MSAL_ISSUER_PATTERN = /^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0$/;
+
+/**
+ * Predicate for whether a bearer token's (unverified) `iss` claim looks
+ * like an Entra ID v2 issuer this app should attempt to validate as MSAL.
+ * Honors the same tenancy policy as `validateMsalToken`: a configured
+ * tenant pins to exactly that tenant; `common` mode accepts any single-tenant
+ * issuer shape (preserving today's any-Entra-tenant acceptance).
+ */
+export function isMsalIssuer(issuer: unknown): boolean {
+  if (typeof issuer !== 'string') {
+    return false;
+  }
+
+  const match = MSAL_ISSUER_PATTERN.exec(issuer);
+  if (!match) {
+    return false;
+  }
+
+  const tenantSegment = match[1];
+  if (TENANT_ID === 'common') {
+    return tenantSegment.length > 0;
+  }
+
+  return tenantSegment === TENANT_ID;
+}
+
 // Cache for JWKS sets by tenant ID to improve performance
 type JoseModule = typeof import('jose');
 type RemoteJwks = ReturnType<JoseModule['createRemoteJWKSet']>;

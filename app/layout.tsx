@@ -5,6 +5,8 @@ import { TestAuthBypass } from '@/components/test-auth-bypass/TestAuthBypass';
 import { ReduxProvider } from '@/lib/redux/ReduxProvider';
 import { SessionProvider } from '@/lib/auth/SessionProvider';
 import { MsalProvider } from '@/lib/auth/MsalProvider';
+import { AuthProvider } from '@/lib/auth/AuthProvider';
+import { IdentityCacheReset } from '@/components/auth/IdentityCacheReset';
 import { TanStackQueryProvider } from '@/lib/tanstack-query/provider';
 import { WebVitalsReporter } from '@/components/WebVitalsReporter';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
@@ -39,11 +41,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <WebVitalsReporter />
           <MsalProvider>
-            <SessionProvider>
-              <TanStackQueryProvider>
-                <ReduxProvider>{children}</ReduxProvider>
-              </TanStackQueryProvider>
-            </SessionProvider>
+            <AuthProvider>
+              <SessionProvider>
+                <TanStackQueryProvider>
+                  <IdentityCacheReset />
+                  <ReduxProvider>{children}</ReduxProvider>
+                </TanStackQueryProvider>
+              </SessionProvider>
+            </AuthProvider>
           </MsalProvider>
         </ThemeProvider>
       </body>

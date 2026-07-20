@@ -9,6 +9,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
+import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
 import type { MessageDTO } from '@/types/models';
 import {
   BYPASS_ACCESS_TOKEN,
@@ -61,7 +62,7 @@ interface UseStreamingResponseOptions {
 
 export function useStreamingResponse(options: UseStreamingResponseOptions) {
   const { chatId, onMessageCreated, onComplete, onError, onFallback } = options;
-  const { accessToken } = useAuth();
+  const { accessToken, authIdentityKey } = useAuth();
   const bypassAuth = isBypassAuthEnabled();
   const queryClient = useQueryClient();
   const isAutomatedTestMode = process.env.NEXT_PUBLIC_TEST_AUTH_MODE === 'true';
@@ -136,7 +137,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       }
 
       queryClient.setQueryData(
-        ['chat', targetChatId],
+        chatHistoryQueryKey(authIdentityKey, targetChatId),
         (old: { messages?: MessageDTO[] } | undefined) => {
           const existingMessages = old?.messages ?? [];
           const targetIndex = existingMessages.findIndex(
@@ -186,19 +187,32 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         },
       );
     },
-    [queryClient],
+    [queryClient, authIdentityKey],
   );
 
   const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const reconnectAttempts = useRef(0);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
-   * Close SSE connection
+   * Close SSE connection / abort the in-flight streaming fetch. Also cancels
+   * any pending reconnect-with-backoff timer — without this, a scheduled
+   * reconnect could still fire after unmount/an account switch and start a
+   * new request using the prior account's captured token and chat ID.
    */
   const closeConnection = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
     setIsStreaming(false);
   }, []);
@@ -347,6 +361,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           ? BYPASS_CSRF_TOKEN
           : await deriveCsrfToken(token);
 
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+
         // Initiate streaming request
         const response = await fetch('/api/chat/stream', {
           method: 'POST',
@@ -356,6 +373,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
           },
           body: JSON.stringify(payload),
+          signal: abortController.signal,
         });
 
         if (response.status === STATUS_TOO_MANY_REQUESTS) {
@@ -633,7 +651,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                 // Update cache
                 if (resolvedChatId) {
                   queryClient.invalidateQueries({
-                    queryKey: ['chat', resolvedChatId],
+                    queryKey: chatHistoryQueryKey(authIdentityKey, resolvedChatId),
                   });
                 }
 
@@ -684,7 +702,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                     ...fallbackMessage,
                   });
                   queryClient.invalidateQueries({
-                    queryKey: ['chat', resolvedChatId],
+                    queryKey: chatHistoryQueryKey(authIdentityKey, resolvedChatId),
                   });
                   if (shouldTrackLiveMessage(resolvedChatId)) {
                     upsertLiveMessage(fallbackMessage);
@@ -719,6 +737,12 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
         reconnectAttempts.current = 0;
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Deliberately aborted (e.g. unmount/account switch) — not a
+          // stream failure, so no error state and no reconnect attempt.
+          return;
+        }
+
         lastUserMessageRef.current = {
           content: '',
           parentMessageId: null,
@@ -737,11 +761,13 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           const delay = calculateReconnectDelay(reconnectAttempts.current);
           reconnectAttempts.current++;
 
-          setTimeout(() => {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
             void sendStreamingMessage(content, parentMessageId);
           }, delay);
         }
       } finally {
+        abortControllerRef.current = null;
         setIsStreaming(false);
       }
     },
@@ -759,6 +785,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       onComplete,
       queryClient,
       onFallback,
+      authIdentityKey,
     ],
   );
 
