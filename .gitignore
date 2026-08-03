@@ -54,6 +54,9 @@ next-env.d.ts
 AGENTS.md
 .claude/settings.local.json
 
+# personal notes (not part of the project)
+INTERVIEW_WALKTHROUGH.md
+
 # BEGIN Ensemble managed meta resources
 # Managed by Ensemble. Do not edit this block manually.
 /artifacts/helper/
