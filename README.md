@@ -130,8 +130,9 @@ The application uses Google Identity Services (GIS) for Google sign-in, rendered
 
 1. **User sends message**
    - `ChatInput` component captures input
-   - `useSendMessage` hook sends to `/api/chat`
-   - Optimistic update shows message immediately
+   - `useStreamingResponse` hook posts to `/api/chat/stream`
+   - The message renders immediately from in-memory live state, before the
+     server confirms it
 
 2. **Server processing**
    - CSRF validation (critical!)
