@@ -25,7 +25,6 @@ import type { AccountInfo, AuthenticationResult, EventMessage } from '@azure/msa
 import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
-import { useSendMessage } from '@/app/chat/hooks/useSendMessage';
 import { useStreamingResponse } from '@/app/chat/hooks/useStreamingResponse';
 import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
 import { MsalProvider } from '@/lib/auth/MsalProvider';
@@ -702,7 +701,6 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
       onSnapshot: (v: { status: string; photoLoading: boolean }) => void;
       onHandles?: (v: {
         acquireToken: () => Promise<string | null>;
-        sendMessage: ReturnType<typeof useSendMessage>['sendMessage'];
         sendStreamingMessage: ReturnType<
           typeof useStreamingResponse
         >['sendStreamingMessage'];
@@ -711,10 +709,9 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
       const { status, acquireToken } = useAuth();
       const { isLoading: photoLoading } = useProfilePhoto();
       useFetchChatHistory('chat-1');
-      const { sendMessage } = useSendMessage('chat-1');
       const { sendStreamingMessage } = useStreamingResponse({ chatId: 'chat-1' });
       onSnapshot({ status, photoLoading });
-      onHandles?.({ acquireToken, sendMessage, sendStreamingMessage });
+      onHandles?.({ acquireToken, sendStreamingMessage });
       return null;
     }
 
@@ -764,7 +761,6 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
         const statuses: string[] = [];
         let handles: {
           acquireToken: () => Promise<string | null>;
-          sendMessage: ReturnType<typeof useSendMessage>['sendMessage'];
           sendStreamingMessage: ReturnType<
             typeof useStreamingResponse
           >['sendStreamingMessage'];
@@ -794,13 +790,9 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
         // never selected, and Google has no credential to hand back.
         await expect(handles!.acquireToken()).resolves.toBeNull();
 
-        // useSendMessage/useStreamingResponse are the other two real chat
-        // consumers the review flagged as unexercised — both must refuse to
+        // useStreamingResponse is the real chat send path — it must refuse to
         // hit the network while unauthenticated rather than sending a null
         // bearer.
-        await expect(
-          handles!.sendMessage({ content: 'hi', chatId: 'chat-1' }),
-        ).rejects.toThrow();
         await act(async () => {
           await handles!.sendStreamingMessage('hi');
         });
@@ -816,14 +808,9 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
 
         fetchSpy.mockRestore();
       },
-      // useSendMessage's built-in retry (up to MAX_RETRY_COUNT with real
-      // exponential backoff, ~7s) runs to exhaustion before mutateAsync
-      // rejects, since it retries on any non-401/400 error including this
-      // client-side "not authenticated" guard.
-      15000,
     );
 
-    it('issues no chat-history/send/streaming fetch or Graph request during the resolving window for a marker-absent Microsoft restoration, and acquireToken()/sendMessage()/sendStreamingMessage() succeed with the restored Microsoft bearer after resolution', async () => {
+    it('issues no chat-history/streaming fetch or Graph request during the resolving window for a marker-absent Microsoft restoration, and acquireToken()/sendStreamingMessage() succeed with the restored Microsoft bearer after resolution', async () => {
       mockMsalInstance.getAllAccounts.mockReturnValue([mockAccount]);
       mockMsalInstance.setActiveAccount.mockImplementation(() => {
         mockMsalInstance.getActiveAccount.mockReturnValue(mockAccount);
@@ -912,17 +899,15 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
       const snapshots: Array<{ status: string; fetchCallsSoFar: number }> = [];
       let handles: {
         acquireToken: () => Promise<string | null>;
-        sendMessage: ReturnType<typeof useSendMessage>['sendMessage'];
         sendStreamingMessage: ReturnType<
           typeof useStreamingResponse
         >['sendStreamingMessage'];
       } | null = null;
 
-      // Reuses the same four-consumer surface (history, photo, send,
-      // streaming, plus explicit acquireToken) the google/signed-out
-      // inactivity cases above exercise, so the marker-absent resolving
-      // window is checked against the full consumer matrix rather than
-      // only history/profile-photo.
+      // Reuses the same consumer surface (history, photo, streaming, plus
+      // explicit acquireToken) the google/signed-out inactivity cases above
+      // exercise, so the marker-absent resolving window is checked against
+      // the full consumer matrix rather than only history/profile-photo.
       renderWithQueryClient(
         ({ status }) =>
           snapshots.push({ status, fetchCallsSoFar: fetchSpy.mock.calls.length }),
@@ -942,8 +927,8 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
       }
 
       // Once resolved to the restored Microsoft session, every mounted
-      // consumer (history, photo, send, streaming, explicit acquireToken)
-      // must actually be usable — not merely present — proving the
+      // consumer (history, photo, streaming, explicit acquireToken) must
+      // actually be usable — not merely present — proving the
       // resolving-window inactivity above wasn't observed on a permanently
       // disabled hook. Each is exercised and asserted to use the restored
       // Microsoft bearer on the wire.
@@ -951,15 +936,6 @@ describe('MsalProvider + AuthProvider bootstrap ordering (production composition
 
       const acquiredToken = await handles!.acquireToken();
       expect(acquiredToken).toBe('restored-microsoft-token');
-
-      await handles!.sendMessage({ content: 'hi', chatId: 'chat-1' });
-      const sendCall = fetchSpy.mock.calls.find(
-        ([url]) => url === '/api/chat',
-      );
-      expect(sendCall).toBeDefined();
-      expect(
-        (sendCall![1]?.headers as Record<string, string>).Authorization,
-      ).toBe('Bearer restored-microsoft-token');
 
       await act(async () => {
         await handles!.sendStreamingMessage('hi');

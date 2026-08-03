@@ -465,7 +465,7 @@ describe('useAuth', () => {
 
   it('shares the acquired Microsoft token across independent useAuth() call sites', async () => {
     // Regression test for the split-owner bug: every consumer (ChatPage,
-    // useFetchChatHistory, useSendMessage, useStreamingResponse, ...) calls
+    // useFetchChatHistory, useStreamingResponse, ...) calls
     // useAuth() independently. They must all observe the same token the
     // instant one of them acquires it, and a concurrent acquisition from a
     // second consumer must not issue a second MSAL request.

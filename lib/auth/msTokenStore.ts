@@ -1,7 +1,7 @@
 /**
  * Shared Microsoft Access Token Store
  * `useAuth()` is called independently by several components/hooks
- * (`ChatPage`, `useFetchChatHistory`, `useSendMessage`, `useStreamingResponse`,
+ * (`ChatPage`, `useFetchChatHistory`, `useStreamingResponse`,
  * `useProfilePhoto`'s sibling `useAuth` calls, etc). Microsoft's account
  * state is already shared via MSAL's own instance/event system
  * (`useMsal()`), but the *access token* this app acquires on top of it

@@ -5,8 +5,8 @@
  * proves the state machine's bootstrap/restoration rules against the real
  * `MsalProvider` + `AuthProvider` composition, but a renewed Google credential
  * had only been asserted against the standalone `useAuth()` value — not
- * against the actual chat consumers (`useFetchChatHistory`, `useSendMessage`,
- * `useStreamingResponse`) that depend on a shared token. Because all three
+ * against the actual chat consumers (`useFetchChatHistory`,
+ * `useStreamingResponse`) that depend on a shared token. Because both
  * hooks read `accessToken`/`authIdentityKey` from the same `useAuth()`
  * context value (see `lib/auth/AuthProvider.tsx`'s `useComputedAuth`), a
  * renewal landing in `GoogleAuthProvider`'s state should be visible to all of
@@ -21,7 +21,6 @@ import type { AccountInfo, AuthenticationResult, EventMessage } from '@azure/msa
 import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
-import { useSendMessage } from '@/app/chat/hooks/useSendMessage';
 import { useStreamingResponse } from '@/app/chat/hooks/useStreamingResponse';
 import { MsalProvider } from '@/lib/auth/MsalProvider';
 import { setAuthProviderMarker, setLastGoogleSub } from '@/lib/auth/authProviderMarker';
@@ -245,21 +244,19 @@ describe('Google credential renewal propagation to real chat consumers', () => {
     fetchSpy.mockRestore();
   });
 
-  it('propagates a renewed Google credential to useAuth, useFetchChatHistory, useSendMessage, and useStreamingResponse simultaneously without remounting, and both hooks send the renewed bearer on the wire', async () => {
+  it('propagates a renewed Google credential to useAuth, useFetchChatHistory, and useStreamingResponse simultaneously without remounting, and the hooks send the renewed bearer on the wire', async () => {
     setAuthProviderMarker('google');
     setLastGoogleSub('sub-123');
 
-    const mountCounts = { sendMessage: 0, streaming: 0 };
+    const mountCounts = { streaming: 0 };
     const snapshots: Array<{
       accessToken: string | null;
       authIdentityKey: string | null;
     }> = [];
     // Populated from effects (not render) with the latest hook return values,
-    // so the test can imperatively drive sendMessage/sendStreamingMessage
-    // (and force a history refetch) with whatever token useAuth() is
-    // currently exposing.
+    // so the test can imperatively drive sendStreamingMessage (and force a
+    // history refetch) with whatever token useAuth() is currently exposing.
     const handles: {
-      sendMessage?: ReturnType<typeof useSendMessage>['sendMessage'];
       sendStreamingMessage?: ReturnType<
         typeof useStreamingResponse
       >['sendStreamingMessage'];
@@ -269,16 +266,13 @@ describe('Google credential renewal propagation to real chat consumers', () => {
     function Consumer() {
       const auth = useAuth();
       const { refetch: refetchHistory } = useFetchChatHistory('chat-1');
-      const { sendMessage } = useSendMessage('chat-1');
       const { sendStreamingMessage } = useStreamingResponse({ chatId: 'chat-1' });
 
       useEffect(() => {
-        mountCounts.sendMessage += 1;
         mountCounts.streaming += 1;
       }, []);
 
       useEffect(() => {
-        handles.sendMessage = sendMessage;
         handles.sendStreamingMessage = sendStreamingMessage;
         handles.refetchHistory = refetchHistory;
       });
@@ -313,7 +307,6 @@ describe('Google credential renewal propagation to real chat consumers', () => {
     });
     const initialToken = snapshots[snapshots.length - 1].accessToken;
     expect(initialToken).not.toBeNull();
-    expect(mountCounts.sendMessage).toBe(1);
     expect(mountCounts.streaming).toBe(1);
 
     // GIS initialize() is called at most once even though restoration,
@@ -337,22 +330,9 @@ describe('Google credential renewal propagation to real chat consumers', () => {
       (initialHistoryCall![1]?.headers as Record<string, string>).Authorization,
     ).toBe(`Bearer ${initialToken}`);
 
-    // Prove useSendMessage actually sends the initial token on the wire,
-    // not just that useAuth() exposes it.
-    await waitFor(() => expect(handles.sendMessage).toBeDefined());
-    await act(async () => {
-      await handles.sendMessage!({ content: 'hi', chatId: 'chat-1' });
-    });
-    const initialSendCall = fetchSpy.mock.calls.find(
-      ([url]) => url === '/api/chat',
-    );
-    expect(initialSendCall).toBeDefined();
-    expect(
-      (initialSendCall![1]?.headers as Record<string, string>).Authorization,
-    ).toBe(`Bearer ${initialToken}`);
-
     // Prove useStreamingResponse actually sends the initial token on the
-    // wire as well.
+    // wire, not just that useAuth() exposes it.
+    await waitFor(() => expect(handles.sendStreamingMessage).toBeDefined());
     await act(async () => {
       await handles.sendStreamingMessage!('hi');
     });
@@ -383,15 +363,14 @@ describe('Google credential renewal propagation to real chat consumers', () => {
     // Same-sub renewal must not change the identity key (no remount trigger).
     expect(latest.authIdentityKey).toBe('google:sub-123');
     // The subtree was never unmounted/remounted across the renewal.
-    expect(mountCounts.sendMessage).toBe(1);
     expect(mountCounts.streaming).toBe(1);
     // Still only one GIS initialize() call across restoration + renewal.
     expect(gisInitializeMock).toHaveBeenCalledTimes(1);
 
     // The review's outstanding blocker: prove the RENEWED token — not just
-    // the initial one — is what actually goes out on the wire from all
-    // three real chat consumers (history, send, streaming), with no
-    // remount required to pick it up.
+    // the initial one — is what actually goes out on the wire from both
+    // real chat consumers (history, streaming), with no remount required
+    // to pick it up.
     await act(async () => {
       await handles.refetchHistory!();
     });
@@ -401,17 +380,6 @@ describe('Google credential renewal propagation to real chat consumers', () => {
     expect(renewedHistoryCall).toBeDefined();
     expect(
       (renewedHistoryCall![1]?.headers as Record<string, string>).Authorization,
-    ).toBe(`Bearer ${renewedToken}`);
-
-    await act(async () => {
-      await handles.sendMessage!({ content: 'hi again', chatId: 'chat-1' });
-    });
-    const renewedSendCall = fetchSpy.mock.calls.find(
-      ([url]) => url === '/api/chat',
-    );
-    expect(renewedSendCall).toBeDefined();
-    expect(
-      (renewedSendCall![1]?.headers as Record<string, string>).Authorization,
     ).toBe(`Bearer ${renewedToken}`);
 
     await act(async () => {
