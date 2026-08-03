@@ -10,6 +10,7 @@ import { STRINGS } from '@/lib/constants/strings';
 import type { MessageDTO } from '@/types/models';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
+import { SkipLink } from '@/components/SkipLink';
 import { ChatHeader } from './ChatHeader';
 import { ChatMain } from './ChatMain';
 import { ReauthBanner } from './ReauthBanner';
@@ -74,9 +75,9 @@ export function AuthenticatedChat({ user, onLogout }: AuthenticatedChatProps) {
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--background)] dark:bg-gray-900">
-      <a href="#chat-main" className="skip-link">
+      <SkipLink targetId="chat-main">
         {STRINGS.chat.authPrompt.skipLink}
-      </a>
+      </SkipLink>
       <ChatHeader user={user} photoUrl={photoUrl} onLogout={onLogout} />
 
       {needsReauth ? <ReauthBanner onReauth={handleReauth} /> : null}

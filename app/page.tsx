@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 import { LandingSignInButton } from '@/components/landing/LandingSignInButton';
+import { SkipLink } from '@/components/SkipLink';
 import { STRINGS } from '@/lib/constants/strings';
 
 export default function HomePage() {
@@ -9,9 +10,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-50">
-      <a href="#landing-content" className="skip-link">
-        {landing.skipLink}
-      </a>
+      <SkipLink targetId="landing-content">{landing.skipLink}</SkipLink>
 
       <header className="mx-auto flex w-full max-w-5xl items-center px-6 py-5">
         <Link
