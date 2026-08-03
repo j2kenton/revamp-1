@@ -29,21 +29,12 @@ jest.mock('@/app/chat/components/MessageList', () => ({
 jest.mock('@/app/chat/components/ChatInput', () => ({
   ChatInput: ({
     onSendMessage,
-    onNewChat,
   }: {
     onSendMessage: (value: string) => void;
-    onNewChat?: () => void;
   }) => (
-    <>
-      <button type="button" onClick={() => onSendMessage('hello')}>
-        Send Message
-      </button>
-      {onNewChat && (
-        <button type="button" onClick={onNewChat}>
-          New Chat
-        </button>
-      )}
-    </>
+    <button type="button" onClick={() => onSendMessage('hello')}>
+      Send Message
+    </button>
   ),
 }));
 
@@ -130,7 +121,7 @@ describe('ChatPage', () => {
     expect(screen.getByText(/Gemini 3/)).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /new chat/i }),
+      screen.getByRole('button', { name: /start new chat/i }),
     ).toBeInTheDocument();
   });
 

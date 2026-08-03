@@ -42,7 +42,6 @@ export function ChatMain({
             isStreaming={isStreaming}
             error={error}
             rateLimitSeconds={rateLimitSeconds}
-            onNewChat={onNewChat}
           />
         </div>
       </main>

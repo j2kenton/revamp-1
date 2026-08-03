@@ -7,7 +7,6 @@
 
 import { CharacterCounter } from './CharacterCounter';
 import { SendButton } from './SendButton';
-import { NewChatButton } from './NewChatButton';
 
 interface ChatInputActionsProps {
   debouncedLength: number;
@@ -16,7 +15,6 @@ interface ChatInputActionsProps {
   isStreaming: boolean;
   canSubmit: boolean;
   onSubmit: () => void;
-  onNewChat?: () => void;
 }
 
 export function ChatInputActions({
@@ -26,7 +24,6 @@ export function ChatInputActions({
   isStreaming,
   canSubmit,
   onSubmit,
-  onNewChat,
 }: ChatInputActionsProps) {
   return (
     <div className="flex flex-col justify-end gap-2">
@@ -40,7 +37,6 @@ export function ChatInputActions({
         canSubmit={canSubmit}
         onSubmit={onSubmit}
       />
-      {onNewChat ? <NewChatButton onNewChat={onNewChat} /> : null}
     </div>
   );
 }

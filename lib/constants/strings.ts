@@ -60,6 +60,8 @@ export const STRINGS = {
       productName: 'Gemini 3 Flash',
       logoAlt: 'Gemini logo (mock)',
       userMenuAriaLabel: 'Open user menu',
+      newChatAriaLabel: 'Start new chat',
+      newChatTooltip: 'Clear this conversation and start a new one',
     },
     clear: 'Clear',
   },
@@ -134,7 +136,7 @@ export const STRINGS = {
     goHome: 'Go Home',
     reload: 'Reload page',
     returnHome: 'Return home',
-    clear: 'Clear',
+    newChat: 'New Chat',
     tryAgain: 'Try again',
   },
 

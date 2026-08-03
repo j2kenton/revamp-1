@@ -15,7 +15,6 @@ interface ChatInputProps {
   isStreaming: boolean;
   error?: Error | null;
   rateLimitSeconds?: number | null;
-  onNewChat?: () => void;
 }
 
 export function ChatInput({
@@ -23,7 +22,6 @@ export function ChatInput({
   isStreaming,
   error,
   rateLimitSeconds,
-  onNewChat,
 }: ChatInputProps) {
   const {
     message,
@@ -68,7 +66,6 @@ export function ChatInput({
             isStreaming={isStreaming}
             canSubmit={canSubmit}
             onSubmit={handleSubmit}
-            onNewChat={onNewChat}
           />
         </div>
       </div>

@@ -72,7 +72,12 @@ export function AuthenticatedChat({ user, onLogout }: AuthenticatedChatProps) {
       <SkipLink targetId="chat-main">
         {STRINGS.chat.authPrompt.skipLink}
       </SkipLink>
-      <ChatHeader user={user} photoUrl={photoUrl} onLogout={onLogout} />
+      <ChatHeader
+        user={user}
+        photoUrl={photoUrl}
+        onLogout={onLogout}
+        onNewChat={handleNewChat}
+      />
 
       {needsReauth ? <ReauthBanner onReauth={handleReauth} /> : null}
 
