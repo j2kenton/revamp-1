@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { MessageDTO } from '@/types/models';
 import {
@@ -13,7 +13,7 @@ import {
   VIRTUAL_SCROLL_OVERSCAN_COUNT,
 } from '@/lib/constants/ui';
 import { STRINGS } from '@/lib/constants/strings';
-import { ChatMessage } from './ChatMessage';
+import { VirtualMessageRow } from './VirtualMessageRow';
 
 interface VirtualizedMessageListProps {
   messages: MessageDTO[];
@@ -36,15 +36,12 @@ export function VirtualizedMessageList({
     overscan: VIRTUAL_SCROLL_OVERSCAN_COUNT,
   });
 
-  const measureElementRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      const measure = rowVirtualizer.measureElement;
-      if (typeof measure === 'function') {
-        measure(node);
-      }
-    },
-    [rowVirtualizer],
-  );
+  const measureElementRef = (node: HTMLDivElement | null) => {
+    const measure = rowVirtualizer.measureElement;
+    if (typeof measure === 'function') {
+      measure(node);
+    }
+  };
 
   useEffect(() => {
     if (parentRef.current && messages.length > 0) {
@@ -72,32 +69,15 @@ export function VirtualizedMessageList({
           position: 'relative',
         }}
       >
-        {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-          const message = messages[virtualItem.index];
-          const streamInProgress = message.status === 'sending';
-
-          return (
-            <div
-              key={virtualItem.key}
-              data-index={virtualItem.index}
-              ref={measureElementRef}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-              className="pb-4"
-            >
-              <ChatMessage
-                message={message}
-                isStreaming={streamInProgress}
-                userPhotoUrl={userPhotoUrl}
-              />
-            </div>
-          );
-        })}
+        {rowVirtualizer.getVirtualItems().map((virtualItem) => (
+          <VirtualMessageRow
+            key={virtualItem.key}
+            virtualItem={virtualItem}
+            message={messages[virtualItem.index]}
+            measureElementRef={measureElementRef}
+            userPhotoUrl={userPhotoUrl}
+          />
+        ))}
       </div>
     </div>
   );

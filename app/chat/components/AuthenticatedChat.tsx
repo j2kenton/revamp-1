@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { STRINGS } from '@/lib/constants/strings';
 import type { MessageDTO } from '@/types/models';
 import { useAuth } from '@/lib/auth/useAuth';
@@ -33,23 +33,17 @@ export function AuthenticatedChat({ user, onLogout }: AuthenticatedChatProps) {
     void login('google');
   };
 
-  const handleMessageCreated = useCallback(
-    (_messageId: string, serverChatId: string) => {
-      if (!chatId && serverChatId) {
-        setChatId(serverChatId);
-      }
-    },
-    [chatId],
-  );
+  const handleMessageCreated = (_messageId: string, serverChatId: string) => {
+    if (!chatId && serverChatId) {
+      setChatId(serverChatId);
+    }
+  };
 
-  const handleStreamComplete = useCallback(
-    (message: MessageDTO) => {
-      if (!chatId && message.chatId) {
-        setChatId(message.chatId);
-      }
-    },
-    [chatId],
-  );
+  const handleStreamComplete = (message: MessageDTO) => {
+    if (!chatId && message.chatId) {
+      setChatId(message.chatId);
+    }
+  };
 
   const {
     sendStreamingMessage,
