@@ -7,7 +7,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
-import { dedupeMessages } from '@/app/chat/utils/messageReconciler';
+import { dedupeMessages } from '@/app/chat/utils/dedupeMessages';
 import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
 import type { MessageDTO, ChatDTO } from '@/types/models';
 import { STRINGS } from '@/lib/constants/strings';

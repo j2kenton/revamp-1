@@ -1,34 +1,10 @@
 /**
- * Chat message reconciliation utilities.
- * Handles duplicate detection and optimistic update replacement.
+ * Chat message deduplication.
+ * Collapses repeated message IDs to their newest copy and orders the result
+ * chronologically.
  */
 
 import type { MessageDTO } from '@/types/models';
-
-interface ReconcileMessagesParams {
-  existingMessages: MessageDTO[];
-  incomingMessages: MessageDTO[];
-  clientRequestId?: string;
-  optimisticMessageId?: string;
-}
-
-function matchesClientRequest(
-  message: MessageDTO,
-  clientRequestId?: string,
-  optimisticMessageId?: string,
-): boolean {
-  if (optimisticMessageId && message.id === optimisticMessageId) {
-    return true;
-  }
-
-  if (!clientRequestId) {
-    return false;
-  }
-
-  const metadataId = message.metadata?.clientRequestId;
-
-  return typeof metadataId === 'string' && metadataId === clientRequestId;
-}
 
 /**
  * Keep the newest copy of each message ID (by `updatedAt`), preserving each
@@ -100,51 +76,4 @@ function compareByRecency(
 export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
   const { normalized, orderIndices } = buildDedupedMessages(messages);
   return normalized.sort((a, b) => compareByRecency(a, b, orderIndices));
-}
-
-/**
- * Replace the message matching this client request/optimistic ID with
- * `incomingMessage`, or append it if no match is found.
- */
-function replaceOptimisticMessage(
-  messages: MessageDTO[],
-  incomingMessage: MessageDTO,
-  clientRequestId?: string,
-  optimisticMessageId?: string,
-): MessageDTO[] {
-  const replacementIndex = messages.findIndex((message) =>
-    matchesClientRequest(message, clientRequestId, optimisticMessageId),
-  );
-
-  if (replacementIndex >= 0) {
-    const next = [...messages];
-    next.splice(replacementIndex, 1, incomingMessage);
-    return next;
-  }
-
-  return [...messages, incomingMessage];
-}
-
-/**
- * Reconcile optimistic messages with server responses using request IDs.
- */
-export function reconcileMessages({
-  existingMessages,
-  incomingMessages,
-  clientRequestId,
-  optimisticMessageId,
-}: ReconcileMessagesParams): MessageDTO[] {
-  if (incomingMessages.length === 0) {
-    return dedupeMessages(existingMessages);
-  }
-
-  const [firstIncoming, ...restIncoming] = incomingMessages;
-  const withFirstReplaced = replaceOptimisticMessage(
-    existingMessages,
-    firstIncoming,
-    clientRequestId,
-    optimisticMessageId,
-  );
-
-  return dedupeMessages([...withFirstReplaced, ...restIncoming]);
 }
