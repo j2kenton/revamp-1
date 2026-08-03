@@ -36,7 +36,7 @@ export function ChatMain({
           <MessageList chatId={chatId} liveMessages={liveMessages} />
         </div>
 
-        <div className="border-t border-gray-200 bg-[var(--background)] dark:border-gray-700 dark:bg-gray-900">
+        <div className="border-t border-gray-200 dark:border-gray-700">
           <ChatInput
             onSendMessage={onSendMessage}
             isStreaming={isStreaming}
