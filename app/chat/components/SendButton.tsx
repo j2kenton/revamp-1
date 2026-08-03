@@ -6,8 +6,8 @@
 'use client';
 
 import clsx from 'clsx';
-import { LoadingSpinner, SendIcon } from '@/components/ui/icons';
 import { STRINGS } from '@/lib/constants/strings';
+import { SendButtonLabel } from './SendButtonLabel';
 
 interface SendButtonProps {
   isStreaming: boolean;
@@ -35,17 +35,7 @@ export function SendButton({
       aria-label={STRINGS.input.sendButtonAria}
       aria-disabled={!canSubmit}
     >
-      {isStreaming ? (
-        <div className="flex items-center gap-2">
-          <LoadingSpinner className="h-4 w-4 border-white border-t-transparent" />
-          <span>{STRINGS.status.loading}</span>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <SendIcon className="h-5 w-5" />
-          <span>{STRINGS.input.sendButton}</span>
-        </div>
-      )}
+      <SendButtonLabel isStreaming={isStreaming} />
     </button>
   );
 }
