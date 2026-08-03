@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import type { MessageDTO } from '@/types/models';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
 import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
+import { mergeMessages } from '@/app/chat/utils/mergeMessages';
 import { MessageListEmptyState } from './MessageListEmptyState';
 import { MessageListErrorState } from './MessageListErrorState';
 import { MessageListLoadingState } from './MessageListLoadingState';
@@ -17,37 +18,6 @@ import { VirtualizedMessageList } from './VirtualizedMessageList';
 interface MessageListProps {
   chatId?: string;
   liveMessages?: MessageDTO[];
-}
-
-function mergeMessages(
-  liveMessages: MessageDTO[] | undefined,
-  persistedMessages: MessageDTO[],
-): MessageDTO[] {
-  if (!liveMessages?.length) {
-    return persistedMessages;
-  }
-
-  const merged = [...persistedMessages];
-  const indexMap = new Map<string, number>();
-
-  merged.forEach((message, index) => {
-    indexMap.set(message.id, index);
-  });
-
-  liveMessages.forEach((message) => {
-    const existingIndex = indexMap.get(message.id);
-    if (typeof existingIndex === 'number') {
-      merged[existingIndex] = message;
-    } else {
-      indexMap.set(message.id, merged.length);
-      merged.push(message);
-    }
-  });
-
-  return merged.sort(
-    (a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
 }
 
 export function MessageList({ chatId, liveMessages }: MessageListProps) {
