@@ -31,9 +31,13 @@ function matchesClientRequest(
 }
 
 /**
- * Remove duplicate messages while preserving original order when possible.
+ * Keep the newest copy of each message ID (by `updatedAt`), preserving each
+ * survivor's original position for use as a stable sort tiebreak.
  */
-export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
+function buildDedupedMessages(messages: MessageDTO[]): {
+  normalized: MessageDTO[];
+  orderIndices: Map<string, number>;
+} {
   const seen = new Map<string, MessageDTO>();
   const normalized: MessageDTO[] = [];
   const orderIndices = new Map<string, number>();
@@ -61,23 +65,64 @@ export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
     }
   });
 
-  return normalized.sort((a, b) => {
-    const createdDiff =
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    if (createdDiff !== 0) {
-      return createdDiff;
-    }
+  return { normalized, orderIndices };
+}
 
-    const updatedDiff =
-      new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
-    if (updatedDiff !== 0) {
-      return updatedDiff;
-    }
+/**
+ * Stable chronological comparator: `createdAt`, then `updatedAt`, then
+ * original insertion order as the final tiebreak.
+ */
+function compareByRecency(
+  a: MessageDTO,
+  b: MessageDTO,
+  orderIndices: Map<string, number>,
+): number {
+  const createdDiff =
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
 
-    const orderA = orderIndices.get(a.id) ?? 0;
-    const orderB = orderIndices.get(b.id) ?? 0;
-    return orderA - orderB;
-  });
+  const updatedDiff =
+    new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+  if (updatedDiff !== 0) {
+    return updatedDiff;
+  }
+
+  const orderA = orderIndices.get(a.id) ?? 0;
+  const orderB = orderIndices.get(b.id) ?? 0;
+  return orderA - orderB;
+}
+
+/**
+ * Remove duplicate messages while preserving original order when possible.
+ */
+export function dedupeMessages(messages: MessageDTO[]): MessageDTO[] {
+  const { normalized, orderIndices } = buildDedupedMessages(messages);
+  return normalized.sort((a, b) => compareByRecency(a, b, orderIndices));
+}
+
+/**
+ * Replace the message matching this client request/optimistic ID with
+ * `incomingMessage`, or append it if no match is found.
+ */
+function replaceOptimisticMessage(
+  messages: MessageDTO[],
+  incomingMessage: MessageDTO,
+  clientRequestId?: string,
+  optimisticMessageId?: string,
+): MessageDTO[] {
+  const replacementIndex = messages.findIndex((message) =>
+    matchesClientRequest(message, clientRequestId, optimisticMessageId),
+  );
+
+  if (replacementIndex >= 0) {
+    const next = [...messages];
+    next.splice(replacementIndex, 1, incomingMessage);
+    return next;
+  }
+
+  return [...messages, incomingMessage];
 }
 
 /**
@@ -89,23 +134,17 @@ export function reconcileMessages({
   clientRequestId,
   optimisticMessageId,
 }: ReconcileMessagesParams): MessageDTO[] {
-  const nextMessages = [...existingMessages];
-
-  if (incomingMessages.length > 0) {
-    const replacementIndex = nextMessages.findIndex((message) =>
-      matchesClientRequest(message, clientRequestId, optimisticMessageId),
-    );
-
-    if (replacementIndex >= 0) {
-      nextMessages.splice(replacementIndex, 1, incomingMessages[0]);
-    } else {
-      nextMessages.push(incomingMessages[0]);
-    }
-
-    for (let i = 1; i < incomingMessages.length; i++) {
-      nextMessages.push(incomingMessages[i]);
-    }
+  if (incomingMessages.length === 0) {
+    return dedupeMessages(existingMessages);
   }
 
-  return dedupeMessages(nextMessages);
+  const [firstIncoming, ...restIncoming] = incomingMessages;
+  const withFirstReplaced = replaceOptimisticMessage(
+    existingMessages,
+    firstIncoming,
+    clientRequestId,
+    optimisticMessageId,
+  );
+
+  return dedupeMessages([...withFirstReplaced, ...restIncoming]);
 }
