@@ -5,7 +5,6 @@
 
 'use client';
 
-import { useMemo } from 'react';
 import type { MessageDTO } from '@/types/models';
 import { useFetchChatHistory } from '@/app/chat/hooks/useFetchChatHistory';
 import { useProfilePhoto } from '@/lib/auth/useProfilePhoto';
@@ -24,10 +23,7 @@ export function MessageList({ chatId, liveMessages }: MessageListProps) {
   const { messages, isLoading, error } = useFetchChatHistory(chatId);
   const { photoUrl: userPhotoUrl } = useProfilePhoto();
 
-  const allMessages = useMemo(
-    () => mergeMessages(liveMessages, messages),
-    [liveMessages, messages],
-  );
+  const allMessages = mergeMessages(liveMessages, messages);
 
   if (!chatId) {
     return <MessageListEmptyState variant="no-chat" />;

@@ -230,4 +230,25 @@ describe('useStreamingResponse', () => {
 
     jest.useRealTimers();
   });
+
+  it('keeps closeConnection referentially stable across re-renders so the unmount-cleanup effect never fires mid-stream', () => {
+    // `closeConnection` is a dependency of an effect that calls it on
+    // cleanup (see the effect at the bottom of useStreamingResponse.ts). If
+    // this function's identity changed on every render, that effect would
+    // tear down and re-run on every render too — aborting the in-flight SSE
+    // connection on every content_delta during an active stream, not just on
+    // unmount. This must stay stable across re-renders regardless of
+    // whether memoization is written by hand or inferred by the React
+    // Compiler.
+    const { result, rerender } = renderHook(
+      (props) => useStreamingResponse(props),
+      { wrapper: createWrapper(), initialProps: { chatId: 'chat-123' } },
+    );
+
+    const firstCloseConnection = result.current.closeConnection;
+    rerender({ chatId: 'chat-123' });
+    const secondCloseConnection = result.current.closeConnection;
+
+    expect(secondCloseConnection).toBe(firstCloseConnection);
+  });
 });

@@ -17,10 +17,7 @@ import {
   isBypassAuthEnabled,
 } from '@/lib/auth/bypass';
 import { STRINGS } from '@/lib/constants/strings';
-import {
-  ONE_SECOND_IN_MS,
-  PARSE_INT_RADIX,
-} from '@/lib/constants/common';
+import { ONE_SECOND_IN_MS, PARSE_INT_RADIX } from '@/lib/constants/common';
 
 const MAX_RECONNECT_ATTEMPTS = 3;
 const TEST_STREAM_CHUNK_DELAY_MS = 15;
@@ -107,7 +104,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     previousChatIdRef.current = chatId;
   }, [chatId]);
 
-  const upsertLiveMessage = useCallback((message: MessageDTO) => {
+  const upsertLiveMessage = (message: MessageDTO) => {
     setLiveMessages((prev) => {
       const index = prev.findIndex((entry) => entry.id === message.id);
       if (index >= 0) {
@@ -117,83 +114,77 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       }
       return [...prev, message];
     });
-  }, []);
+  };
 
-  const shouldTrackLiveMessage = useCallback(
-    (messageChatId: string) => {
-      const activeChatId = activeChatIdRef.current || chatId;
-      return Boolean(
-        messageChatId && activeChatId && messageChatId === activeChatId,
-      );
-    },
-    [chatId],
-  );
+  const shouldTrackLiveMessage = (messageChatId: string) => {
+    const activeChatId = activeChatIdRef.current || chatId;
+    return Boolean(
+      messageChatId && activeChatId && messageChatId === activeChatId,
+    );
+  };
 
-  const upsertMessageInCache = useCallback(
-    (update: MessageCacheUpdate) => {
-      const targetChatId = update.chatId;
-      if (!targetChatId) {
-        return;
-      }
+  const upsertMessageInCache = (update: MessageCacheUpdate) => {
+    const targetChatId = update.chatId;
+    if (!targetChatId) {
+      return;
+    }
 
-      queryClient.setQueryData(
-        chatHistoryQueryKey(authIdentityKey, targetChatId),
-        (old: { messages?: MessageDTO[] } | undefined) => {
-          const existingMessages = old?.messages ?? [];
-          const targetIndex = existingMessages.findIndex(
-            (entry) => entry.id === update.id,
-          );
-          const baseline: MessageDTO =
-            targetIndex >= 0
-              ? existingMessages[targetIndex]
-              : {
-                  id: update.id,
-                  chatId: targetChatId,
-                  role: 'assistant',
-                  content: '',
-                  status: 'sending',
-                  parentMessageId: null,
-                  metadata: null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
+    queryClient.setQueryData(
+      chatHistoryQueryKey(authIdentityKey, targetChatId),
+      (old: { messages?: MessageDTO[] } | undefined) => {
+        const existingMessages = old?.messages ?? [];
+        const targetIndex = existingMessages.findIndex(
+          (entry) => entry.id === update.id,
+        );
+        const baseline: MessageDTO =
+          targetIndex >= 0
+            ? existingMessages[targetIndex]
+            : {
+                id: update.id,
+                chatId: targetChatId,
+                role: 'assistant',
+                content: '',
+                status: 'sending',
+                parentMessageId: null,
+                metadata: null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
 
-          const nextMessage: MessageDTO = {
-            ...baseline,
-            ...update,
-            metadata:
-              update.metadata === undefined
-                ? baseline.metadata
-                : update.metadata,
-            parentMessageId:
-              update.parentMessageId === undefined
-                ? baseline.parentMessageId
-                : update.parentMessageId,
-          };
+        const nextMessage: MessageDTO = {
+          ...baseline,
+          ...update,
+          metadata:
+            update.metadata === undefined ? baseline.metadata : update.metadata,
+          parentMessageId:
+            update.parentMessageId === undefined
+              ? baseline.parentMessageId
+              : update.parentMessageId,
+        };
 
-          const nextMessages =
-            targetIndex >= 0
-              ? [
-                  ...existingMessages.slice(0, targetIndex),
-                  nextMessage,
-                  ...existingMessages.slice(targetIndex + 1),
-                ]
-              : [...existingMessages, nextMessage];
+        const nextMessages =
+          targetIndex >= 0
+            ? [
+                ...existingMessages.slice(0, targetIndex),
+                nextMessage,
+                ...existingMessages.slice(targetIndex + 1),
+              ]
+            : [...existingMessages, nextMessage];
 
-          return {
-            ...old,
-            messages: nextMessages,
-          };
-        },
-      );
-    },
-    [queryClient, authIdentityKey],
-  );
+        return {
+          ...old,
+          messages: nextMessages,
+        };
+      },
+    );
+  };
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const reconnectAttempts = useRef(0);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   /**
    * Close SSE connection / abort the in-flight streaming fetch. Also cancels
@@ -201,6 +192,15 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
    * reconnect could still fire after unmount/an account switch and start a
    * new request using the prior account's captured token and chat ID.
    */
+  // Kept as a manual useCallback (unlike the other functions in this hook):
+  // its identity is a dependency of the unmount-cleanup effect below, so
+  // instability here isn't just a wasted render — it would abort the live
+  // SSE connection on every re-render during an active stream, not just on
+  // unmount. Jest runs via ts-jest, which never applies the React Compiler
+  // (only the real Next.js/Turbopack build does), so this correctness
+  // guarantee can't be verified by our test suite the way the compiler's
+  // other memoization can — leaving it manual here is the safe choice
+  // regardless of what the compiler does in production.
   const closeConnection = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -220,8 +220,118 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   /**
    * Send message and start streaming response
    */
-  const simulateTestStream = useCallback(
-    async (content: string, parentMessageId?: string) => {
+  const simulateTestStream = async (
+    content: string,
+    parentMessageId?: string,
+  ) => {
+    setError(null);
+    setIsStreaming(true);
+    setStreamingMessage(null);
+    setRateLimitSeconds(null);
+    setContextTruncated(false);
+    setMessagesRemoved(0);
+    contextTruncatedRef.current = false;
+    messagesRemovedRef.current = 0;
+
+    const resolvedChatId =
+      activeChatIdRef.current || chatId || `test-chat-${Date.now()}`;
+    activeChatIdRef.current = resolvedChatId;
+
+    const userMessageId = `test-user-${Date.now()}`;
+    const assistantMessageId = `test-assistant-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+
+    const userMessage: MessageDTO = {
+      id: userMessageId,
+      chatId: resolvedChatId,
+      role: 'user',
+      content,
+      status: 'sent',
+      parentMessageId: parentMessageId ?? null,
+      metadata: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    onMessageCreated?.(userMessageId, resolvedChatId, false, 0);
+    upsertMessageInCache(userMessage);
+    upsertLiveMessage(userMessage);
+
+    const simulatedChunks = [
+      STRINGS.streaming.testIntro(content),
+      STRINGS.streaming.testChunk,
+    ];
+
+    let accumulated = '';
+    for (const chunk of simulatedChunks) {
+      accumulated = accumulated ? `${accumulated} ${chunk}` : chunk;
+      const partialMessage: MessageDTO = {
+        id: assistantMessageId,
+        chatId: resolvedChatId,
+        role: 'assistant',
+        content: accumulated,
+        status: 'sending',
+        parentMessageId: userMessageId,
+        metadata: null,
+        createdAt: nowIso,
+        updatedAt: new Date().toISOString(),
+      };
+      setStreamingMessage({
+        id: assistantMessageId,
+        content: accumulated,
+        isComplete: false,
+      });
+      upsertLiveMessage(partialMessage);
+      // Small delay to mimic streaming without slowing tests noticeably
+      await new Promise((resolve) =>
+        setTimeout(resolve, TEST_STREAM_CHUNK_DELAY_MS),
+      );
+    }
+
+    const assistantMessage: MessageDTO = {
+      id: assistantMessageId,
+      chatId: resolvedChatId,
+      role: 'assistant',
+      content: accumulated,
+      status: 'sent',
+      parentMessageId: userMessageId,
+      metadata: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    upsertMessageInCache(assistantMessage);
+    upsertLiveMessage(assistantMessage);
+
+    // Mark as complete and keep state for UI/tests
+    setStreamingMessage({
+      id: assistantMessageId,
+      content: accumulated,
+      isComplete: true,
+    });
+
+    onComplete?.(assistantMessage);
+    setIsStreaming(false);
+  };
+
+  const sendStreamingMessage = async (
+    content: string,
+    parentMessageId?: string,
+  ) => {
+    if (isAutomatedTestMode) {
+      await simulateTestStream(content, parentMessageId);
+      return;
+    }
+
+    const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
+    if (!token) {
+      const authError = new Error(STRINGS.errors.notAuthenticated);
+      setError(authError);
+      onError?.(authError);
+      return;
+    }
+
+    try {
       setError(null);
       setIsStreaming(true);
       setStreamingMessage(null);
@@ -230,294 +340,192 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       setMessagesRemoved(0);
       contextTruncatedRef.current = false;
       messagesRemovedRef.current = 0;
-
-      const resolvedChatId =
-        activeChatIdRef.current || chatId || `test-chat-${Date.now()}`;
-      activeChatIdRef.current = resolvedChatId;
-
-      const userMessageId = `test-user-${Date.now()}`;
-      const assistantMessageId = `test-assistant-${Date.now()}`;
-      const nowIso = new Date().toISOString();
-
-      const userMessage: MessageDTO = {
-        id: userMessageId,
-        chatId: resolvedChatId,
-        role: 'user',
+      lastUserMessageRef.current = {
         content,
-        status: 'sent',
         parentMessageId: parentMessageId ?? null,
-        metadata: null,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        messageId: null,
       };
 
-      onMessageCreated?.(userMessageId, resolvedChatId, false, 0);
-      upsertMessageInCache(userMessage);
-      upsertLiveMessage(userMessage);
-
-      const simulatedChunks = [
-        STRINGS.streaming.testIntro(content),
-        STRINGS.streaming.testChunk,
-      ];
-
-      let accumulated = '';
-      for (const chunk of simulatedChunks) {
-        accumulated = accumulated ? `${accumulated} ${chunk}` : chunk;
-        const partialMessage: MessageDTO = {
-          id: assistantMessageId,
-          chatId: resolvedChatId,
-          role: 'assistant',
-          content: accumulated,
-          status: 'sending',
-          parentMessageId: userMessageId,
-          metadata: null,
-          createdAt: nowIso,
-          updatedAt: new Date().toISOString(),
-        };
-        setStreamingMessage({
-          id: assistantMessageId,
-          content: accumulated,
-          isComplete: false,
-        });
-        upsertLiveMessage(partialMessage);
-        // Small delay to mimic streaming without slowing tests noticeably
-        await new Promise((resolve) =>
-          setTimeout(resolve, TEST_STREAM_CHUNK_DELAY_MS),
-        );
-      }
-
-      const assistantMessage: MessageDTO = {
-        id: assistantMessageId,
-        chatId: resolvedChatId,
-        role: 'assistant',
-        content: accumulated,
-        status: 'sent',
-        parentMessageId: userMessageId,
-        metadata: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      // Create FormData or JSON payload
+      const payload = {
+        content,
+        chatId: chatId || undefined,
+        parentMessageId,
       };
 
-      upsertMessageInCache(assistantMessage);
-      upsertLiveMessage(assistantMessage);
+      const csrfToken = bypassAuth
+        ? BYPASS_CSRF_TOKEN
+        : await deriveCsrfToken(token);
 
-      // Mark as complete and keep state for UI/tests
-      setStreamingMessage({
-        id: assistantMessageId,
-        content: accumulated,
-        isComplete: true,
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      // Initiate streaming request
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+        },
+        body: JSON.stringify(payload),
+        signal: abortController.signal,
       });
 
-      onComplete?.(assistantMessage);
-      setIsStreaming(false);
-    },
-    [
-      chatId,
-      onComplete,
-      onMessageCreated,
-      upsertLiveMessage,
-      upsertMessageInCache,
-    ],
-  );
+      if (response.status === STATUS_TOO_MANY_REQUESTS) {
+        let errorMessage: string = STRINGS.errors.rateLimited;
+        let retryAfter = parseInt(
+          response.headers.get('Retry-After') ?? RETRY_AFTER_FALLBACK,
+          PARSE_INT_RADIX,
+        );
 
-  const sendStreamingMessage = useCallback(
-    async (content: string, parentMessageId?: string) => {
-      if (isAutomatedTestMode) {
-        await simulateTestStream(content, parentMessageId);
+        try {
+          const errorBody = await response.json();
+          errorMessage = errorBody.error?.message || errorMessage;
+          const detailRetry = errorBody.error?.details?.retryAfter;
+          if (typeof detailRetry === 'number') {
+            retryAfter = detailRetry;
+          }
+        } catch {
+          // Ignore parsing failures
+        }
+
+        const normalizedRetry = Number.isFinite(retryAfter)
+          ? Math.max(retryAfter, MIN_RETRY_AFTER_SECONDS)
+          : DEFAULT_RETRY_AFTER_SECONDS;
+
+        setRateLimitSeconds(normalizedRetry);
+
+        const rateLimitError = new Error(errorMessage);
+        rateLimitError.name = 'RateLimitError';
+        setError(rateLimitError);
+        onError?.(rateLimitError);
+        setIsStreaming(false);
         return;
       }
 
-      const token = accessToken ?? (bypassAuth ? BYPASS_ACCESS_TOKEN : null);
-      if (!token) {
-        const authError = new Error(STRINGS.errors.notAuthenticated);
-        setError(authError);
-        onError?.(authError);
-        return;
+      if (!response.ok) {
+        let errorMessage: string = STRINGS.errors.streamingStartFailed;
+        try {
+          const errorBody = await response.json();
+          errorMessage = errorBody.error?.message || errorMessage;
+        } catch {
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+          } catch {
+            // ignore parse failure
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      try {
-        setError(null);
-        setIsStreaming(true);
-        setStreamingMessage(null);
-        setRateLimitSeconds(null);
-        setContextTruncated(false);
-        setMessagesRemoved(0);
-        contextTruncatedRef.current = false;
-        messagesRemovedRef.current = 0;
-        lastUserMessageRef.current = {
-          content,
-          parentMessageId: parentMessageId ?? null,
-          messageId: null,
-        };
+      // Get the readable stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
 
-        // Create FormData or JSON payload
-        const payload = {
-          content,
-          chatId: chatId || undefined,
-          parentMessageId,
-        };
+      if (!reader) {
+        throw new Error(STRINGS.errors.emptyResponse);
+      }
 
-        const csrfToken = bypassAuth
-          ? BYPASS_CSRF_TOKEN
-          : await deriveCsrfToken(token);
+      // Process SSE stream
+      let buffer = '';
+      let accumulatedContent = '';
 
-        const abortController = new AbortController();
-        abortControllerRef.current = abortController;
+      while (true) {
+        const { done, value } = await reader.read();
 
-        // Initiate streaming request
-        const response = await fetch('/api/chat/stream', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-          },
-          body: JSON.stringify(payload),
-          signal: abortController.signal,
-        });
-
-        if (response.status === STATUS_TOO_MANY_REQUESTS) {
-          let errorMessage: string = STRINGS.errors.rateLimited;
-          let retryAfter = parseInt(
-            response.headers.get('Retry-After') ?? RETRY_AFTER_FALLBACK,
-            PARSE_INT_RADIX,
-          );
-
-          try {
-            const errorBody = await response.json();
-            errorMessage = errorBody.error?.message || errorMessage;
-            const detailRetry = errorBody.error?.details?.retryAfter;
-            if (typeof detailRetry === 'number') {
-              retryAfter = detailRetry;
-            }
-          } catch {
-            // Ignore parsing failures
-          }
-
-          const normalizedRetry = Number.isFinite(retryAfter)
-            ? Math.max(retryAfter, MIN_RETRY_AFTER_SECONDS)
-            : DEFAULT_RETRY_AFTER_SECONDS;
-
-          setRateLimitSeconds(normalizedRetry);
-
-          const rateLimitError = new Error(errorMessage);
-          rateLimitError.name = 'RateLimitError';
-          setError(rateLimitError);
-          onError?.(rateLimitError);
-          setIsStreaming(false);
-          return;
+        if (done) {
+          break;
         }
 
-        if (!response.ok) {
-          let errorMessage: string = STRINGS.errors.streamingStartFailed;
-          try {
-            const errorBody = await response.json();
-            errorMessage = errorBody.error?.message || errorMessage;
-          } catch {
-            try {
-              const errorText = await response.text();
-              errorMessage = errorText || errorMessage;
-            } catch {
-              // ignore parse failure
-            }
-          }
-          throw new Error(errorMessage);
-        }
+        buffer += decoder.decode(value, { stream: true });
+        const eventBlocks = buffer.split('\n\n');
+        buffer = eventBlocks.pop() || '';
 
-        // Get the readable stream
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error(STRINGS.errors.emptyResponse);
-        }
-
-        // Process SSE stream
-        let buffer = '';
-        let accumulatedContent = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            break;
+        for (const rawEvent of eventBlocks) {
+          const trimmedEvent = rawEvent.trim();
+          if (!trimmedEvent) {
+            continue;
           }
 
-          buffer += decoder.decode(value, { stream: true });
-          const eventBlocks = buffer.split('\n\n');
-          buffer = eventBlocks.pop() || '';
+          const lines = trimmedEvent.split('\n');
+          let eventType = 'message';
+          let dataPayload = '';
 
-          for (const rawEvent of eventBlocks) {
-            const trimmedEvent = rawEvent.trim();
-            if (!trimmedEvent) {
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith(':')) {
               continue;
             }
 
-            const lines = trimmedEvent.split('\n');
-            let eventType = 'message';
-            let dataPayload = '';
+            if (line.startsWith('event:')) {
+              eventType = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              const valuePart = line.slice(5).trim();
+              dataPayload = dataPayload
+                ? `${dataPayload}\n${valuePart}`
+                : valuePart;
+            }
+          }
 
-            for (const rawLine of lines) {
-              const line = rawLine.trim();
-              if (!line || line.startsWith(':')) {
-                continue;
+          if (!dataPayload) {
+            continue;
+          }
+
+          let parsedData: unknown;
+          try {
+            parsedData = JSON.parse(dataPayload);
+          } catch (parseError) {
+            console.error('Failed to parse streaming payload', parseError);
+            continue;
+          }
+
+          if (typeof parsedData !== 'object' || parsedData === null) {
+            continue;
+          }
+
+          const data = parsedData as Record<string, unknown>;
+
+          switch (eventType) {
+            case 'message_created': {
+              const isTruncated = Boolean(data.truncated);
+              const removedCount =
+                isTruncated && typeof data.removedCount === 'number'
+                  ? data.removedCount
+                  : 0;
+              const resolvedChatId: string =
+                (typeof data.chatId === 'string' && data.chatId) ||
+                activeChatIdRef.current ||
+                '';
+              const messageId =
+                typeof data.messageId === 'string' ? data.messageId : '';
+
+              if (resolvedChatId) {
+                activeChatIdRef.current = resolvedChatId;
               }
 
-              if (line.startsWith('event:')) {
-                eventType = line.slice(6).trim();
-              } else if (line.startsWith('data:')) {
-                const valuePart = line.slice(5).trim();
-                dataPayload = dataPayload
-                  ? `${dataPayload}\n${valuePart}`
-                  : valuePart;
-              }
-            }
+              setContextTruncated(isTruncated);
+              setMessagesRemoved(removedCount);
+              contextTruncatedRef.current = isTruncated;
+              messagesRemovedRef.current = removedCount;
+              if (resolvedChatId && messageId) {
+                lastUserMessageRef.current.messageId = messageId;
+                const timestamp = new Date().toISOString();
 
-            if (!dataPayload) {
-              continue;
-            }
-
-            let parsedData: unknown;
-            try {
-              parsedData = JSON.parse(dataPayload);
-            } catch (parseError) {
-              console.error('Failed to parse streaming payload', parseError);
-              continue;
-            }
-
-            if (typeof parsedData !== 'object' || parsedData === null) {
-              continue;
-            }
-
-            const data = parsedData as Record<string, unknown>;
-
-            switch (eventType) {
-              case 'message_created': {
-                const isTruncated = Boolean(data.truncated);
-                const removedCount =
-                  isTruncated && typeof data.removedCount === 'number'
-                    ? data.removedCount
-                    : 0;
-                const resolvedChatId: string =
-                  (typeof data.chatId === 'string' && data.chatId) ||
-                  activeChatIdRef.current ||
-                  '';
-                const messageId =
-                  typeof data.messageId === 'string' ? data.messageId : '';
-
-                if (resolvedChatId) {
-                  activeChatIdRef.current = resolvedChatId;
-                }
-
-                setContextTruncated(isTruncated);
-                setMessagesRemoved(removedCount);
-                contextTruncatedRef.current = isTruncated;
-                messagesRemovedRef.current = removedCount;
-                if (resolvedChatId && messageId) {
-                  lastUserMessageRef.current.messageId = messageId;
-                  const timestamp = new Date().toISOString();
-
-                  upsertMessageInCache({
+                upsertMessageInCache({
+                  id: messageId,
+                  chatId: resolvedChatId,
+                  role: 'user',
+                  content: lastUserMessageRef.current.content,
+                  status: 'sent',
+                  parentMessageId: lastUserMessageRef.current.parentMessageId,
+                  metadata: null,
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                });
+                if (shouldTrackLiveMessage(resolvedChatId)) {
+                  upsertLiveMessage({
                     id: messageId,
                     chatId: resolvedChatId,
                     role: 'user',
@@ -528,47 +536,50 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                     createdAt: timestamp,
                     updatedAt: timestamp,
                   });
-                  if (shouldTrackLiveMessage(resolvedChatId)) {
-                    upsertLiveMessage({
-                      id: messageId,
-                      chatId: resolvedChatId,
-                      role: 'user',
-                      content: lastUserMessageRef.current.content,
-                      status: 'sent',
-                      parentMessageId:
-                        lastUserMessageRef.current.parentMessageId,
-                      metadata: null,
-                      createdAt: timestamp,
-                      updatedAt: timestamp,
-                    });
-                  }
                 }
-
-                onMessageCreated?.(
-                  messageId,
-                  resolvedChatId,
-                  Boolean(data.truncated),
-                  typeof data.removedCount === 'number'
-                    ? data.removedCount
-                    : undefined,
-                );
-                break;
               }
 
-              case 'content_delta': {
-                accumulatedContent =
-                  typeof data.accumulatedContent === 'string'
-                    ? data.accumulatedContent
-                    : accumulatedContent;
-                const messageId =
-                  typeof data.messageId === 'string' ? data.messageId : '';
-                const isContextTruncated = contextTruncatedRef.current;
-                const removedMessagesCount = isContextTruncated
-                  ? messagesRemovedRef.current
-                  : undefined;
-                const resolvedChatId = activeChatIdRef.current || chatId || '';
-                if (messageId && resolvedChatId) {
-                  upsertMessageInCache({
+              onMessageCreated?.(
+                messageId,
+                resolvedChatId,
+                Boolean(data.truncated),
+                typeof data.removedCount === 'number'
+                  ? data.removedCount
+                  : undefined,
+              );
+              break;
+            }
+
+            case 'content_delta': {
+              accumulatedContent =
+                typeof data.accumulatedContent === 'string'
+                  ? data.accumulatedContent
+                  : accumulatedContent;
+              const messageId =
+                typeof data.messageId === 'string' ? data.messageId : '';
+              const isContextTruncated = contextTruncatedRef.current;
+              const removedMessagesCount = isContextTruncated
+                ? messagesRemovedRef.current
+                : undefined;
+              const resolvedChatId = activeChatIdRef.current || chatId || '';
+              if (messageId && resolvedChatId) {
+                upsertMessageInCache({
+                  id: messageId,
+                  chatId: resolvedChatId,
+                  role: 'assistant',
+                  content: accumulatedContent,
+                  status: 'sending',
+                  parentMessageId: lastUserMessageRef.current.messageId ?? null,
+                  metadata: isContextTruncated
+                    ? {
+                        contextTruncated: true,
+                        messagesRemoved: removedMessagesCount,
+                      }
+                    : undefined,
+                  updatedAt: new Date().toISOString(),
+                });
+                if (shouldTrackLiveMessage(resolvedChatId)) {
+                  upsertLiveMessage({
                     id: messageId,
                     chatId: resolvedChatId,
                     role: 'assistant',
@@ -581,213 +592,183 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
                           contextTruncated: true,
                           messagesRemoved: removedMessagesCount,
                         }
-                      : undefined,
+                      : null,
+                    createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                   });
-                  if (shouldTrackLiveMessage(resolvedChatId)) {
-                    upsertLiveMessage({
-                      id: messageId,
-                      chatId: resolvedChatId,
-                      role: 'assistant',
-                      content: accumulatedContent,
-                      status: 'sending',
-                      parentMessageId:
-                        lastUserMessageRef.current.messageId ?? null,
-                      metadata: isContextTruncated
-                        ? {
-                            contextTruncated: true,
-                            messagesRemoved: removedMessagesCount,
-                          }
-                        : null,
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    });
-                  }
                 }
-                setStreamingMessage({
-                  id: messageId,
-                  content: accumulatedContent,
-                  isComplete: false,
-                  contextTruncated: isContextTruncated,
-                  messagesRemoved: removedMessagesCount,
-                });
-                break;
               }
-
-              case 'message_complete': {
-                const resolvedChatId = activeChatIdRef.current || chatId || '';
-                const messageId =
-                  typeof data.messageId === 'string' ? data.messageId : '';
-                const content =
-                  typeof data.content === 'string' ? data.content : '';
-                const metadata =
-                  (data.metadata as MessageDTO['metadata']) || null;
-                const parentForAssistant = lastUserMessageRef.current.messageId;
-                setStreamingMessage(null);
-
-                // Create complete message DTO
-                const completeMessage: MessageDTO = {
-                  id: messageId,
-                  chatId: resolvedChatId,
-                  role: 'assistant',
-                  content,
-                  status: 'sent',
-                  parentMessageId: parentForAssistant,
-                  metadata,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
-
-                onComplete?.(completeMessage);
-                if (resolvedChatId) {
-                  upsertMessageInCache({
-                    ...completeMessage,
-                  });
-                  if (shouldTrackLiveMessage(resolvedChatId)) {
-                    upsertLiveMessage(completeMessage);
-                  }
-                }
-
-                // Update cache
-                if (resolvedChatId) {
-                  queryClient.invalidateQueries({
-                    queryKey: chatHistoryQueryKey(authIdentityKey, resolvedChatId),
-                  });
-                }
-
-                // Reset truncation state
-                setContextTruncated(false);
-                setMessagesRemoved(0);
-                contextTruncatedRef.current = false;
-                messagesRemovedRef.current = 0;
-                lastUserMessageRef.current = {
-                  content: '',
-                  parentMessageId: null,
-                  messageId: null,
-                };
-
-                break;
-              }
-
-              case 'fallback': {
-                const resolvedChatId =
-                  (typeof data.chatId === 'string' && data.chatId) ||
-                  activeChatIdRef.current ||
-                  chatId ||
-                  '';
-                // Circuit breaker is open - received fallback message
-                const fallbackMetadata = {
-                  ...(data.metadata as MessageDTO['metadata'] | null),
-                  circuitBreakerOpen: true,
-                };
-                const fallbackMessage: MessageDTO = {
-                  id: typeof data.messageId === 'string' ? data.messageId : '',
-                  chatId: resolvedChatId,
-                  role: 'assistant',
-                  content: typeof data.message === 'string' ? data.message : '',
-                  status: 'sent',
-                  parentMessageId: lastUserMessageRef.current.messageId,
-                  metadata: fallbackMetadata,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
-                setStreamingMessage(null);
-                setContextTruncated(false);
-                setMessagesRemoved(0);
-                contextTruncatedRef.current = false;
-                messagesRemovedRef.current = 0;
-                onComplete?.(fallbackMessage);
-                if (resolvedChatId) {
-                  upsertMessageInCache({
-                    ...fallbackMessage,
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: chatHistoryQueryKey(authIdentityKey, resolvedChatId),
-                  });
-                  if (shouldTrackLiveMessage(resolvedChatId)) {
-                    upsertLiveMessage(fallbackMessage);
-                  }
-                }
-                onFallback?.(fallbackMessage.content);
-                lastUserMessageRef.current = {
-                  content: '',
-                  parentMessageId: null,
-                  messageId: null,
-                };
-                break;
-              }
-
-              case 'error': {
-                const streamError = new Error(
-                  typeof data.message === 'string'
-                    ? data.message
-                    : STRINGS.errors.streamingGeneric,
-                );
-                setStreamingMessage(null);
-                setError(streamError);
-                onError?.(streamError);
-                break;
-              }
-
-              default:
-                break;
+              setStreamingMessage({
+                id: messageId,
+                content: accumulatedContent,
+                isComplete: false,
+                contextTruncated: isContextTruncated,
+                messagesRemoved: removedMessagesCount,
+              });
+              break;
             }
+
+            case 'message_complete': {
+              const resolvedChatId = activeChatIdRef.current || chatId || '';
+              const messageId =
+                typeof data.messageId === 'string' ? data.messageId : '';
+              const content =
+                typeof data.content === 'string' ? data.content : '';
+              const metadata =
+                (data.metadata as MessageDTO['metadata']) || null;
+              const parentForAssistant = lastUserMessageRef.current.messageId;
+              setStreamingMessage(null);
+
+              // Create complete message DTO
+              const completeMessage: MessageDTO = {
+                id: messageId,
+                chatId: resolvedChatId,
+                role: 'assistant',
+                content,
+                status: 'sent',
+                parentMessageId: parentForAssistant,
+                metadata,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+
+              onComplete?.(completeMessage);
+              if (resolvedChatId) {
+                upsertMessageInCache({
+                  ...completeMessage,
+                });
+                if (shouldTrackLiveMessage(resolvedChatId)) {
+                  upsertLiveMessage(completeMessage);
+                }
+              }
+
+              // Update cache
+              if (resolvedChatId) {
+                queryClient.invalidateQueries({
+                  queryKey: chatHistoryQueryKey(
+                    authIdentityKey,
+                    resolvedChatId,
+                  ),
+                });
+              }
+
+              // Reset truncation state
+              setContextTruncated(false);
+              setMessagesRemoved(0);
+              contextTruncatedRef.current = false;
+              messagesRemovedRef.current = 0;
+              lastUserMessageRef.current = {
+                content: '',
+                parentMessageId: null,
+                messageId: null,
+              };
+
+              break;
+            }
+
+            case 'fallback': {
+              const resolvedChatId =
+                (typeof data.chatId === 'string' && data.chatId) ||
+                activeChatIdRef.current ||
+                chatId ||
+                '';
+              // Circuit breaker is open - received fallback message
+              const fallbackMetadata = {
+                ...(data.metadata as MessageDTO['metadata'] | null),
+                circuitBreakerOpen: true,
+              };
+              const fallbackMessage: MessageDTO = {
+                id: typeof data.messageId === 'string' ? data.messageId : '',
+                chatId: resolvedChatId,
+                role: 'assistant',
+                content: typeof data.message === 'string' ? data.message : '',
+                status: 'sent',
+                parentMessageId: lastUserMessageRef.current.messageId,
+                metadata: fallbackMetadata,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+              setStreamingMessage(null);
+              setContextTruncated(false);
+              setMessagesRemoved(0);
+              contextTruncatedRef.current = false;
+              messagesRemovedRef.current = 0;
+              onComplete?.(fallbackMessage);
+              if (resolvedChatId) {
+                upsertMessageInCache({
+                  ...fallbackMessage,
+                });
+                queryClient.invalidateQueries({
+                  queryKey: chatHistoryQueryKey(
+                    authIdentityKey,
+                    resolvedChatId,
+                  ),
+                });
+                if (shouldTrackLiveMessage(resolvedChatId)) {
+                  upsertLiveMessage(fallbackMessage);
+                }
+              }
+              onFallback?.(fallbackMessage.content);
+              lastUserMessageRef.current = {
+                content: '',
+                parentMessageId: null,
+                messageId: null,
+              };
+              break;
+            }
+
+            case 'error': {
+              const streamError = new Error(
+                typeof data.message === 'string'
+                  ? data.message
+                  : STRINGS.errors.streamingGeneric,
+              );
+              setStreamingMessage(null);
+              setError(streamError);
+              onError?.(streamError);
+              break;
+            }
+
+            default:
+              break;
           }
         }
-
-        reconnectAttempts.current = 0;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          // Deliberately aborted (e.g. unmount/account switch) — not a
-          // stream failure, so no error state and no reconnect attempt.
-          return;
-        }
-
-        lastUserMessageRef.current = {
-          content: '',
-          parentMessageId: null,
-          messageId: null,
-        };
-        setStreamingMessage(null);
-        const streamError =
-          err instanceof Error
-            ? err
-            : new Error(STRINGS.errors.streamingGeneric);
-        setError(streamError);
-        onError?.(streamError);
-
-        // Attempt reconnection with exponential backoff
-        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-          const delay = calculateReconnectDelay(reconnectAttempts.current);
-          reconnectAttempts.current++;
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectTimeoutRef.current = null;
-            void sendStreamingMessage(content, parentMessageId);
-          }, delay);
-        }
-      } finally {
-        abortControllerRef.current = null;
-        setIsStreaming(false);
       }
-    },
-    [
-      isAutomatedTestMode,
-      accessToken,
-      bypassAuth,
-      simulateTestStream,
-      onError,
-      chatId,
-      onMessageCreated,
-      upsertMessageInCache,
-      shouldTrackLiveMessage,
-      upsertLiveMessage,
-      onComplete,
-      queryClient,
-      onFallback,
-      authIdentityKey,
-    ],
-  );
+
+      reconnectAttempts.current = 0;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // Deliberately aborted (e.g. unmount/account switch) — not a
+        // stream failure, so no error state and no reconnect attempt.
+        return;
+      }
+
+      lastUserMessageRef.current = {
+        content: '',
+        parentMessageId: null,
+        messageId: null,
+      };
+      setStreamingMessage(null);
+      const streamError =
+        err instanceof Error ? err : new Error(STRINGS.errors.streamingGeneric);
+      setError(streamError);
+      onError?.(streamError);
+
+      // Attempt reconnection with exponential backoff
+      if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+        const delay = calculateReconnectDelay(reconnectAttempts.current);
+        reconnectAttempts.current++;
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          void sendStreamingMessage(content, parentMessageId);
+        }, delay);
+      }
+    } finally {
+      abortControllerRef.current = null;
+      setIsStreaming(false);
+    }
+  };
 
   /**
    * Cleanup on unmount
