@@ -70,24 +70,69 @@ endpoint is an explicit trust boundary with one place to enforce policy.
 
 ---
 
-## ADR-004 — Two message stores: live state and the query cache
+## ADR-004 — Two client replicas of the message list
 
-**Context.** During a stream, message content changes on every token. The
-persisted conversation lives in a TanStack Query cache.
+**Context.** Redis is the single source of truth for a conversation. On the
+client, message content changes on every token during a stream, and persisted
+history is served through a TanStack Query cache.
 
-**Decision.** Keep in-flight messages in component state (`liveMessages`) and
-merge them over the persisted cache at render time (`mergeMessages`).
+**Decision.** Keep two client-side copies — `liveMessages` in component state
+(`useStreamingResponse`) and the Query cache entry for the chat. Every stream
+event writes to both. `MessageList` merges live over cached at render time
+via `mergeMessages`.
 
-**Why.** Writing every token into the query cache alone would make the cache
-the hot path for high-frequency updates it isn't designed for, and would blur
-"confirmed by the server" with "optimistic". Keeping them separate makes the
-distinction explicit: live messages are unconfirmed, the cache is truth.
+**Why two.** They differ in **lifetime and scope, not in trustworthiness**:
 
-**Consequences.** A merge step on every render, keyed by message ID with the
-live copy winning. The merge sorts fully rather than doing a linear merge of
-two ordered lists — a deliberate trade, because a full sort is robust against
-clock skew between optimistic client timestamps and server timestamps, and
+- `liveMessages` is scoped to the stream in flight and cleared when `chatId`
+  changes. Crucially it works *before a `chatId` exists*: on a brand-new chat
+  `useFetchChatHistory` is `enabled: false`, so the cache isn't being read at
+  all, and `liveMessages` is the only thing rendering the first exchange.
+- The Query cache entry is namespaced per identity and survives unmount, so
+  navigating away mid-stream and back doesn't lose the partial reply.
+
+**Exactly one thing is optimistic: the user's own message.** On send, the
+message renders immediately under a client-minted `temp_` ID with
+`status: 'sending'` — before the server has seen it. That echo lives **only
+in `liveMessages`**, never in the Query cache: the cache is written
+exclusively from SSE event handlers, so everything in it is server-sent data.
+The echo's lifecycle:
+
+- `message_created` — the server persisted the message and assigned the real
+  ID. The echo is removed and the server's copy (`status: 'sent'`) replaces
+  it. From here the message on screen is known-persisted.
+- Send rejected (rate limit), stream error before creation, or retries
+  exhausted — the echo flips to `status: 'failed'` in place, so the failure
+  is visible on the message itself rather than only in a detached banner.
+- Reconnect-with-backoff retries the same content and **reuses** the existing
+  echo rather than minting a second one.
+
+Assistant partial content is a different category again: genuine server
+output relayed from the model, but not yet written to Redis —
+**unpersisted, not optimistic**. `handleContentDelta` writes it into both
+stores with `status: 'sending'`, so the cache entry is not "confirmed
+persisted state" mid-stream either. `invalidateQueries` in
+`handleMessageComplete` is the single reconciliation point, refetching so
+real server state overwrites everything.
+
+**Why optimistic for user messages but not beyond.** The user's own text is
+the one thing the client knows with certainty before the server does — there
+is nothing to guess, so echoing it costs no correctness, and waiting a full
+round trip to show someone their own words makes the app feel broken. The
+rollback problem that makes optimism dangerous is handled by the explicit
+`failed` state: a message never silently disappears, it visibly fails.
+
+**Consequences.** A merge on every render, keyed by message ID with the live
+copy winning. The merge sorts fully rather than doing a linear merge of two
+ordered lists — a deliberate trade, because a full sort is robust against
+clock skew between client-generated timestamps and server timestamps, and
 conversation lengths make the difference unmeasurable.
+
+**The honest weak point.** The dual write maintains the same data in two
+places on every token, and the merge is a no-op whenever both already hold it.
+This is the part of the design worth revisiting first. The narrower version —
+write only `liveMessages` during the stream and touch the cache once on
+completion — costs the mid-stream-remount case above. That trade hasn't been
+forced yet, so it hasn't been made.
 
 ---
 

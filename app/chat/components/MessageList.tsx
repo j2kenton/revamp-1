@@ -25,7 +25,10 @@ export function MessageList({ chatId, liveMessages }: MessageListProps) {
 
   const allMessages = mergeMessages(liveMessages, messages);
 
-  if (!chatId) {
+  // No chat selected AND nothing in flight. On a brand-new conversation the
+  // optimistic echo exists before the server has assigned a chatId, so the
+  // presence of live messages must win over the "no chat" empty state.
+  if (!chatId && allMessages.length === 0) {
     return <MessageListEmptyState variant="no-chat" />;
   }
 

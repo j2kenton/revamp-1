@@ -231,6 +231,183 @@ describe('useStreamingResponse', () => {
     jest.useRealTimers();
   });
 
+  describe('optimistic echo', () => {
+    /** Encode SSE event blocks the way `/api/chat/stream` frames them. */
+    const encodeSseEvents = (events: Array<{ event: string; data: unknown }>) =>
+      new TextEncoder().encode(
+        events
+          .map((e) => `event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`)
+          .join(''),
+      );
+
+    const streamingResponseWith = (
+      events: Array<{ event: string; data: unknown }>,
+    ) => {
+      const chunk = encodeSseEvents(events);
+      let delivered = false;
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: {
+          getReader: () => ({
+            read: async () => {
+              if (!delivered) {
+                delivered = true;
+                return { done: false, value: chunk };
+              }
+              return { done: true, value: undefined };
+            },
+          }),
+        },
+      } as unknown as Response;
+    };
+
+    it('renders the user message immediately, before the server responds', async () => {
+      process.env.NEXT_PUBLIC_TEST_AUTH_MODE = 'false';
+      // A fetch that never settles: the send is in flight and no server
+      // event has arrived. The echo must already be visible.
+      (global.fetch as jest.MockedFunction<typeof fetch>).mockReturnValueOnce(
+        new Promise(() => {}),
+      );
+
+      const { result } = renderHook(
+        () => useStreamingResponse({ chatId: 'chat-123' }),
+        { wrapper: createWrapper() },
+      );
+
+      await act(async () => {
+        void result.current.sendStreamingMessage('Hello optimistically');
+      });
+
+      expect(result.current.liveMessages).toHaveLength(1);
+      const echo = result.current.liveMessages[0];
+      expect(echo.id).toMatch(/^temp_/);
+      expect(echo.role).toBe('user');
+      expect(echo.content).toBe('Hello optimistically');
+      expect(echo.status).toBe('sending');
+    });
+
+    it('swaps the echo for the server copy when message_created arrives', async () => {
+      process.env.NEXT_PUBLIC_TEST_AUTH_MODE = 'false';
+      (
+        global.fetch as jest.MockedFunction<typeof fetch>
+      ).mockResolvedValueOnce(
+        streamingResponseWith([
+          {
+            event: 'message_created',
+            data: { chatId: 'chat-123', messageId: 'msg-real-1' },
+          },
+        ]),
+      );
+
+      const { result } = renderHook(
+        () => useStreamingResponse({ chatId: 'chat-123' }),
+        { wrapper: createWrapper() },
+      );
+
+      await act(async () => {
+        await result.current.sendStreamingMessage('Hello');
+      });
+
+      const userMessages = result.current.liveMessages.filter(
+        (m) => m.role === 'user',
+      );
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].id).toBe('msg-real-1');
+      expect(userMessages[0].status).toBe('sent');
+      expect(
+        result.current.liveMessages.some((m) => m.id.startsWith('temp_')),
+      ).toBe(false);
+    });
+
+    it('marks the echo failed when the send is rate limited', async () => {
+      process.env.NEXT_PUBLIC_TEST_AUTH_MODE = 'false';
+      (
+        global.fetch as jest.MockedFunction<typeof fetch>
+      ).mockResolvedValueOnce({
+        status: 429,
+        ok: false,
+        headers: { get: () => '5' },
+        json: async () => ({
+          error: { message: 'Too many requests', details: { retryAfter: 5 } },
+        }),
+      } as unknown as Response);
+
+      const { result } = renderHook(
+        () => useStreamingResponse({ chatId: 'chat-123' }),
+        { wrapper: createWrapper() },
+      );
+
+      await act(async () => {
+        await result.current.sendStreamingMessage('Hello');
+      });
+
+      expect(result.current.error?.name).toBe('RateLimitError');
+      expect(result.current.liveMessages).toHaveLength(1);
+      expect(result.current.liveMessages[0].id).toMatch(/^temp_/);
+      expect(result.current.liveMessages[0].status).toBe('failed');
+    });
+
+    it('reuses the same echo across a reconnect retry instead of duplicating it', async () => {
+      jest.useFakeTimers();
+      process.env.NEXT_PUBLIC_TEST_AUTH_MODE = 'false';
+
+      // First attempt: connects, then the read fails (not an abort) —
+      // schedules a backoff retry of the same content. Second attempt:
+      // succeeds and reconciles. At no point may two copies of the user's
+      // message exist.
+      (global.fetch as jest.MockedFunction<typeof fetch>)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          body: {
+            getReader: () => ({
+              read: jest.fn().mockRejectedValue(new Error('stream broke')),
+            }),
+          },
+        } as unknown as Response)
+        .mockResolvedValueOnce(
+          streamingResponseWith([
+            {
+              event: 'message_created',
+              data: { chatId: 'chat-123', messageId: 'msg-real-2' },
+            },
+          ]),
+        );
+
+      const { result } = renderHook(
+        () => useStreamingResponse({ chatId: 'chat-123' }),
+        { wrapper: createWrapper() },
+      );
+
+      await act(async () => {
+        await result.current.sendStreamingMessage('Hello again');
+      });
+
+      // Failed once; echo still pending a retry, not duplicated.
+      expect(
+        result.current.liveMessages.filter((m) => m.role === 'user'),
+      ).toHaveLength(1);
+
+      // Fire the backoff timer to run the retry.
+      await act(async () => {
+        jest.advanceTimersByTime(60_000);
+      });
+      await act(async () => {
+        jest.runOnlyPendingTimers();
+      });
+
+      const userMessages = result.current.liveMessages.filter(
+        (m) => m.role === 'user',
+      );
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].id).toBe('msg-real-2');
+
+      jest.useRealTimers();
+    });
+  });
+
   it('keeps closeConnection referentially stable across re-renders so the unmount-cleanup effect never fires mid-stream', () => {
     // `closeConnection` is a dependency of an effect that calls it on
     // cleanup (see the effect at the bottom of useStreamingResponse.ts). If

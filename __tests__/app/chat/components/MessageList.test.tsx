@@ -120,6 +120,31 @@ describe('MessageList', () => {
     expect(screen.getByText('Hi there!')).toBeInTheDocument();
   });
 
+  it('renders the optimistic echo before a chatId exists', () => {
+    // On a brand-new conversation the server hasn't assigned a chatId yet,
+    // so the history query is disabled — the echo in liveMessages must win
+    // over the "no chat" onboarding state.
+    render(
+      <MessageList
+        liveMessages={[
+          buildMessage({
+            id: 'temp_abc',
+            chatId: '',
+            content: 'First message, optimistically',
+            status: 'sending',
+          }),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText('First message, optimistically'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: STRINGS.chat.emptyState.title }),
+    ).not.toBeInTheDocument();
+  });
+
   it('appends live messages when provided', () => {
     mockUseFetchChatHistory.mockReturnValue(createHookResult());
 

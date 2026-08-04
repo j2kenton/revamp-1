@@ -86,10 +86,13 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     content: string;
     parentMessageId: string | null;
     messageId: string | null;
+    /** Client-minted ID of the optimistic echo, until the server's real ID replaces it. */
+    tempId: string | null;
   }>({
     content: '',
     parentMessageId: null,
     messageId: null,
+    tempId: null,
   });
 
   useEffect(() => {
@@ -111,11 +114,21 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   }, [chatId]);
 
   /**
-   * Insert-or-update a message in `liveMessages` — the in-memory list of
-   * messages for the stream currently in flight. This is deliberately
-   * separate from the TanStack Query cache (the persisted source of truth):
-   * live messages render immediately as tokens arrive, then `MessageList`
-   * merges them over the persisted history by ID.
+   * Insert-or-update a message in `liveMessages` — the in-memory list for the
+   * stream currently in flight, cleared whenever `chatId` changes.
+   *
+   * Kept alongside the TanStack Query cache rather than replacing it. The two
+   * differ in lifetime AND in trust level. `liveMessages` is the copy that
+   * works before a `chatId` exists — on a new chat the history query is
+   * disabled, so this is the only thing rendering the first exchange — and it
+   * is the only store that ever holds the *optimistic echo*: the user's
+   * message rendered under a client-minted `temp_` ID before the server
+   * confirms it. The cache is written exclusively from SSE handlers (i.e.
+   * server-sent data) and survives unmount.
+   *
+   * Redis stays the source of truth: `message_created` swaps the echo for the
+   * server's confirmed copy, and `invalidateQueries` on completion lets
+   * refetched server state overwrite everything. See ADR-004.
    */
   const upsertLiveMessage = (message: MessageDTO) => {
     setLiveMessages((prev) => {
@@ -127,6 +140,30 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       }
       return [...prev, message];
     });
+  };
+
+  const removeLiveMessage = (messageId: string) => {
+    setLiveMessages((prev) => prev.filter((entry) => entry.id !== messageId));
+  };
+
+  /**
+   * The send failed before the server confirmed persistence — flip the
+   * optimistic echo to `failed` so the user sees exactly which message
+   * didn't make it, in place, rather than a detached error banner alone.
+   * No-op once `message_created` has reconciled the echo away.
+   */
+  const markOptimisticMessageFailed = () => {
+    const { tempId } = lastUserMessageRef.current;
+    if (!tempId) {
+      return;
+    }
+    setLiveMessages((prev) =>
+      prev.map((entry) =>
+        entry.id === tempId
+          ? { ...entry, status: 'failed', updatedAt: new Date().toISOString() }
+          : entry,
+      ),
+    );
   };
 
   const shouldTrackLiveMessage = (messageChatId: string) => {
@@ -204,6 +241,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       content: '',
       parentMessageId: null,
       messageId: null,
+      tempId: null,
     };
   };
 
@@ -251,8 +289,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
   /**
    * The server has persisted the user's message and assigned it an ID. Adopt
-   * the server's chat ID (first message of a new chat) and reconcile the
-   * optimistic user message with its real ID.
+   * the server's chat ID (first message of a new chat) and swap the optimistic
+   * echo for the server's confirmed copy under its real ID. From this point
+   * the user's message on screen is known-persisted. See ADR-004.
    */
   const handleMessageCreated = (data: Record<string, unknown>) => {
     const isTruncated = Boolean(data.truncated);
@@ -279,6 +318,14 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     if (resolvedChatId && messageId) {
       lastUserMessageRef.current.messageId = messageId;
       const timestamp = new Date().toISOString();
+
+      // Reconcile the optimistic echo: the server's copy (real ID, confirmed
+      // persisted) replaces the client-minted one.
+      const { tempId } = lastUserMessageRef.current;
+      if (tempId) {
+        removeLiveMessage(tempId);
+        lastUserMessageRef.current.tempId = null;
+      }
 
       upsertMessageInCache({
         id: messageId,
@@ -475,6 +522,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         : STRINGS.errors.streamingGeneric,
     );
     setStreamingMessage(null);
+    // If the error arrived before `message_created`, the user's message was
+    // never persisted — surface that on the echo. No-op after reconciliation.
+    markOptimisticMessageFailed();
     setError(streamError);
     onError?.(streamError);
   };
@@ -588,11 +638,35 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
     try {
       resetStateForNewStream();
+
+      // Optimistic echo: render the user's message immediately under a
+      // client-minted ID, before the server has seen it. `message_created`
+      // reconciles it away in favour of the server's copy; failure paths
+      // flip it to `failed` instead. A reconnect retry of the same content
+      // reuses the existing echo rather than minting a duplicate.
+      const previous = lastUserMessageRef.current;
+      const tempId =
+        previous.tempId && previous.content === content
+          ? previous.tempId
+          : `temp_${crypto.randomUUID()}`;
       lastUserMessageRef.current = {
         content,
         parentMessageId: parentMessageId ?? null,
         messageId: null,
+        tempId,
       };
+      const optimisticTimestamp = new Date().toISOString();
+      upsertLiveMessage({
+        id: tempId,
+        chatId: activeChatIdRef.current || chatId || '',
+        role: 'user',
+        content,
+        status: 'sending',
+        parentMessageId: parentMessageId ?? null,
+        metadata: null,
+        createdAt: optimisticTimestamp,
+        updatedAt: optimisticTimestamp,
+      });
 
       // Create FormData or JSON payload
       const payload = {
@@ -643,6 +717,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           : DEFAULT_RETRY_AFTER_SECONDS;
 
         setRateLimitSeconds(normalizedRetry);
+
+        // The server rejected the send outright — the message was never
+        // persisted, so the echo must not keep claiming "sending".
+        markOptimisticMessageFailed();
 
         const rateLimitError = new Error(errorMessage);
         rateLimitError.name = 'RateLimitError';
@@ -730,7 +808,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         return;
       }
 
-      clearLastUserMessage();
       setStreamingMessage(null);
       const streamError =
         err instanceof Error ? err : new Error(STRINGS.errors.streamingGeneric);
@@ -739,6 +816,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
       // Attempt reconnection with exponential backoff
       if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+        // Keep `lastUserMessageRef` (and its `tempId`) intact: the retry
+        // resends the same content and must reuse the existing optimistic
+        // echo, not mint a second one.
         const delay = calculateReconnectDelay(reconnectAttempts.current);
         reconnectAttempts.current++;
 
@@ -746,6 +826,11 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           reconnectTimeoutRef.current = null;
           void sendStreamingMessage(content, parentMessageId);
         }, delay);
+      } else {
+        // Out of retries — the message never reached the server. The echo
+        // flips to `failed` so the failure is visible on the message itself.
+        markOptimisticMessageFailed();
+        clearLastUserMessage();
       }
     } finally {
       abortControllerRef.current = null;
