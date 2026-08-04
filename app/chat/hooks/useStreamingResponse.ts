@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth/useAuth';
 import { deriveCsrfToken } from '@/lib/auth/csrf';
 import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
 import { parseSseEvents } from '@/lib/sse/parseSseEvents';
+import { withJitter } from '@/lib/utils/backoff';
 import type { MessageDTO } from '@/types/models';
 import {
   BYPASS_ACCESS_TOKEN,
@@ -28,8 +29,12 @@ const MIN_RETRY_AFTER_SECONDS = 1;
 const DEFAULT_RETRY_AFTER_SECONDS = 30;
 const RECONNECT_BACKOFF_MULTIPLIER = 2;
 const RECONNECT_BACKOFF_BASE_MS = ONE_SECOND_IN_MS;
+// Jittered so that many clients dropped by the same server blip don't all
+// reconnect on the same tick.
 const calculateReconnectDelay = (attempt: number) =>
-  Math.pow(RECONNECT_BACKOFF_MULTIPLIER, attempt) * RECONNECT_BACKOFF_BASE_MS;
+  withJitter(
+    Math.pow(RECONNECT_BACKOFF_MULTIPLIER, attempt) * RECONNECT_BACKOFF_BASE_MS,
+  );
 
 interface MessageCacheUpdate
   extends Partial<Omit<MessageDTO, 'id' | 'chatId'>> {
@@ -211,7 +216,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     resetTruncationState();
   };
 
-  const eventSourceRef = useRef<EventSource | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -219,10 +223,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   );
 
   /**
-   * Close SSE connection / abort the in-flight streaming fetch. Also cancels
-   * any pending reconnect-with-backoff timer — without this, a scheduled
-   * reconnect could still fire after unmount/an account switch and start a
-   * new request using the prior account's captured token and chat ID.
+   * Abort the in-flight streaming fetch. Also cancels any pending
+   * reconnect-with-backoff timer — without this, a scheduled reconnect could
+   * still fire after unmount/an account switch and start a new request using
+   * the prior account's captured token and chat ID.
    */
   // Kept as a manual useCallback (unlike the other functions in this hook):
   // its identity is a dependency of the unmount-cleanup effect below, so
@@ -234,10 +238,6 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   // other memoization can — leaving it manual here is the safe choice
   // regardless of what the compiler does in production.
   const closeConnection = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;

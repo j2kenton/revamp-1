@@ -6,6 +6,7 @@
 
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import { redisCircuitBreaker } from '@/lib/redis/circuit-breaker';
+import { withJitter } from '@/lib/utils/backoff';
 import type { MessageModel } from '@/types/models';
 type GoogleGenAIModule = typeof import('@google/genai');
 type GoogleGenAIClient = InstanceType<GoogleGenAIModule['GoogleGenAI']>;
@@ -664,9 +665,11 @@ export async function callLLMWithRetry(
         }
 
         if (attempt < maxRetries - 1) {
-          // Exponential backoff: 1s, 2s, 4s
-          const delay =
-            Math.pow(BACKOFF_EXPONENT, attempt) * BACKOFF_BASE_DELAY_MS;
+          // Exponential backoff (1s, 2s, 4s) with jitter so concurrent
+          // failures don't all retry against the provider on the same tick.
+          const delay = withJitter(
+            Math.pow(BACKOFF_EXPONENT, attempt) * BACKOFF_BASE_DELAY_MS,
+          );
           logInfo(`Retrying LLM call in ${delay}ms`, {
             attempt: attempt + 1,
             maxRetries,
@@ -719,9 +722,11 @@ export async function callLLMStreamWithRetry(
         }
 
         if (attempt < maxRetries - 1) {
-          // Exponential backoff: 1s, 2s, 4s
-          const delay =
-            Math.pow(BACKOFF_EXPONENT, attempt) * BACKOFF_BASE_DELAY_MS;
+          // Exponential backoff (1s, 2s, 4s) with jitter so concurrent
+          // failures don't all retry against the provider on the same tick.
+          const delay = withJitter(
+            Math.pow(BACKOFF_EXPONENT, attempt) * BACKOFF_BASE_DELAY_MS,
+          );
           logInfo(`Retrying LLM streaming call in ${delay}ms`, {
             attempt: attempt + 1,
             maxRetries,

@@ -18,7 +18,10 @@ export async function createChat(
   userId: string,
   title: string = 'New Chat'
 ): Promise<ChatModel> {
-  const chatId = `chat_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  // SECURITY (LOW-04): Use crypto.randomUUID for secure IDs — matches the
+  // message ID generation in the chat route handlers. A timestamp+Math.random
+  // ID is guessable, and chat IDs appear in URLs and API paths.
+  const chatId = `chat_${crypto.randomUUID()}`;
 
   const chat: ChatModel = {
     id: chatId,

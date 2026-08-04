@@ -55,10 +55,15 @@ jest.mock('@/lib/rate-limiter', () => ({
       windowSeconds: 60,
       keyPrefix: 'ratelimit:zset:auth',
     },
-    LLM_GLOBAL: {
+    LLM_PER_IDENTITY: {
       maxRequests: 15,
       windowSeconds: 60,
-      keyPrefix: 'ratelimit:zset:llm-global',
+      keyPrefix: 'ratelimit:zset:llm-per-identity',
+    },
+    LLM_AGGREGATE: {
+      maxRequests: 500,
+      windowSeconds: 3600,
+      keyPrefix: 'ratelimit:zset:llm-aggregate',
     },
   },
 }));
@@ -645,9 +650,9 @@ describe('Rate Limit Middleware', () => {
       });
     });
 
-    // SECURITY TEST: HIGH-03 - Global LLM rate limit
-    describe('HIGH-03: Global LLM rate limit', () => {
-      it('should check global LLM rate limit before chat-specific rate limit', async () => {
+    // SECURITY TEST: HIGH-03 - LLM cost limits (per-identity + aggregate)
+    describe('HIGH-03: LLM cost limits', () => {
+      it('should check the per-identity LLM limit before chat-specific rate limit', async () => {
         const allowResult: RateLimitResult = {
           allowed: true,
           limit: 15,
@@ -664,17 +669,75 @@ describe('Rate Limit Middleware', () => {
 
         await limitedHandler(requestFactory());
 
-        // Should check global LLM rate limit (checkRateLimit with LLM_GLOBAL config)
+        // Should check the per-identity LLM limit (checkRateLimit with LLM_PER_IDENTITY config)
         expect(checkRateLimit).toHaveBeenCalledWith(
           expect.anything(),
           expect.any(String),
-          expect.objectContaining({ keyPrefix: 'ratelimit:zset:llm-global' }),
+          expect.objectContaining({ keyPrefix: 'ratelimit:zset:llm-per-identity' }),
         );
         // Then check chat-specific rate limit
         expect(chatRateLimit).toHaveBeenCalled();
       });
 
-      it('should deny request if global LLM rate limit is exceeded', async () => {
+      it('checks the deployment-wide aggregate ceiling on a single shared key, not a per-caller one', async () => {
+        const allowResult: RateLimitResult = {
+          allowed: true,
+          limit: 15,
+          remaining: 14,
+          resetAt: new Date(Date.now() + 1000),
+        };
+        (checkRateLimit as jest.Mock).mockResolvedValue(allowResult);
+        (chatRateLimit as jest.Mock).mockResolvedValue({ allowed: true });
+
+        const handler = jest.fn(
+          async () => new Response('ok', { status: 200 }),
+        );
+        const limitedHandler = withChatRateLimit(handler);
+
+        await limitedHandler(requestFactory());
+
+        const aggregateCall = (checkRateLimit as jest.Mock).mock.calls.find(
+          ([, , config]) =>
+            config?.keyPrefix === 'ratelimit:zset:llm-aggregate',
+        );
+
+        expect(aggregateCall).toBeDefined();
+        // The identifier must NOT vary per user/IP — that is the whole point:
+        // an attacker rotating identity still lands in this one bucket.
+        expect(aggregateCall![1]).toBe('all');
+      });
+
+      it('denies the request when the deployment-wide LLM ceiling is reached, even though the per-identity limit still has room', async () => {
+        (checkRateLimit as jest.Mock).mockImplementation(
+          async (_redis, _identifier, config) => {
+            if (config.keyPrefix === 'ratelimit:zset:llm-aggregate') {
+              return {
+                allowed: false,
+                limit: 500,
+                remaining: 0,
+                resetAt: new Date(Date.now() + 60_000),
+              } satisfies RateLimitResult;
+            }
+            // A freshly-rotated identity has a full per-identity allowance.
+            return {
+              allowed: true,
+              limit: 15,
+              remaining: 14,
+              resetAt: new Date(Date.now() + 1000),
+            } satisfies RateLimitResult;
+          },
+        );
+
+        const handler = jest.fn();
+        const limitedHandler = withChatRateLimit(handler);
+
+        const response = await limitedHandler(requestFactory());
+
+        expect(response.status).toBe(429);
+        expect(handler).not.toHaveBeenCalled();
+      });
+
+      it('should deny request if the per-identity LLM limit is exceeded', async () => {
         const denyResult: RateLimitResult = {
           allowed: false,
           limit: 15,
@@ -717,15 +780,15 @@ describe('Rate Limit Middleware', () => {
       });
 
       it('should use shared global rate limit across different LLM endpoints', async () => {
-        // This test verifies the LLM_GLOBAL rate limit config exists
-        expect(RATE_LIMITS.LLM_GLOBAL).toBeDefined();
-        expect(RATE_LIMITS.LLM_GLOBAL.keyPrefix).toBe(
-          'ratelimit:zset:llm-global',
+        // This test verifies the LLM_PER_IDENTITY rate limit config exists
+        expect(RATE_LIMITS.LLM_PER_IDENTITY).toBeDefined();
+        expect(RATE_LIMITS.LLM_PER_IDENTITY.keyPrefix).toBe(
+          'ratelimit:zset:llm-per-identity',
         );
-        expect(RATE_LIMITS.LLM_GLOBAL.maxRequests).toBe(15);
+        expect(RATE_LIMITS.LLM_PER_IDENTITY.maxRequests).toBe(15);
       });
 
-      it('should fail closed when Redis circuit breaker is open for global LLM limit', async () => {
+      it('should fail closed when Redis circuit breaker is open for LLM cost limits', async () => {
         (redisCircuitBreaker.getState as jest.Mock).mockReturnValue('OPEN');
 
         const handler = jest.fn();

@@ -16,6 +16,7 @@ import {
 } from '@/server/middleware/msal-auth';
 import { isGoogleIssuer, validateGoogleToken } from '@/server/middleware/google-auth';
 import { decodeUnverifiedJwtPayload } from '@/server/middleware/jwt-utils';
+import { getSessionClientIp } from '@/server/middleware/client-ip';
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
@@ -37,16 +38,6 @@ export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
 const BYPASS_SESSION_ID = `${JWT_FALLBACK_PREFIX}:bypass-user`;
 const BYPASS_CSRF_TOKEN = 'bypass-csrf-token';
 
-function getClientIp(request: NextRequest): string | undefined {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim();
-  }
-
-  const realIp = request.headers.get('x-real-ip');
-  return realIp ?? undefined;
-}
-
 function createBypassSession(request: NextRequest): SessionModel {
   const now = new Date();
   return {
@@ -55,7 +46,7 @@ function createBypassSession(request: NextRequest): SessionModel {
     csrfToken: BYPASS_CSRF_TOKEN,
     data: {
       userAgent: request.headers.get('user-agent') ?? undefined,
-      ipAddress: getClientIp(request),
+      ipAddress: getSessionClientIp(request),
       email: 'test-user@example.com',
       name: 'Test User',
       lastActivityAt: now,
@@ -110,7 +101,7 @@ async function getSessionFromJwtFallback(
       csrfToken,
       data: {
         userAgent: request.headers.get('user-agent') ?? undefined,
-        ipAddress: getClientIp(request),
+        ipAddress: getSessionClientIp(request),
         email: googlePayload.email,
         name: googlePayload.name || googlePayload.email.split('@')[0],
         lastActivityAt: now,
@@ -146,7 +137,7 @@ async function getSessionFromJwtFallback(
     csrfToken,
     data: {
       userAgent: request.headers.get('user-agent') ?? undefined,
-      ipAddress: getClientIp(request),
+      ipAddress: getSessionClientIp(request),
       email: payload.preferred_username,
       name: payload.name,
       lastActivityAt: now,

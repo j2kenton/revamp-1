@@ -242,13 +242,39 @@ export const RATE_LIMITS = {
     keyPrefix: 'ratelimit:zset:auth',
   },
   /**
-   * SECURITY (HIGH-03): Global LLM rate limit shared across all LLM-calling endpoints
-   * This prevents abuse by hitting multiple endpoints (/api/chat and /api/chat/stream)
-   * 15 requests/minute is a reasonable limit that prevents cost abuse while allowing normal usage
+   * SECURITY (HIGH-03): Per-identity LLM rate limit, shared across every
+   * LLM-calling endpoint. One bucket per user (or per IP when signed out)
+   * covers `/api/chat` and `/api/chat/stream` together, so an abuser can't
+   * get a fresh allowance by switching endpoints.
+   *
+   * NOTE: this is deliberately *not* an app-wide aggregate cap — it bounds
+   * what any single identity can spend, not what the deployment can spend in
+   * total. An attacker rotating both identity and IP is bounded by this only
+   * per-identity; a true spend ceiling would need a single un-keyed counter.
    */
-  LLM_GLOBAL: {
+  LLM_PER_IDENTITY: {
     maxRequests: 15,
     windowSeconds: 60,
-    keyPrefix: 'ratelimit:zset:llm-global',
+    keyPrefix: 'ratelimit:zset:llm-per-identity',
+  },
+  /**
+   * SECURITY (HIGH-03): Deployment-wide LLM spend ceiling.
+   *
+   * Per-identity limits bound what one account or IP can spend, but an
+   * attacker who rotates both gets a fresh allowance every time — you don't
+   * win that arms race by tightening per-identity limits. This is the
+   * backstop: a single counter with no identifier in the key, so *every*
+   * LLM request in the deployment shares one budget.
+   *
+   * Sized as an operational cost ceiling, not a UX limit — a legitimate
+   * user base should never reach it, and reaching it means something is
+   * wrong. Requests over the ceiling are rejected with a 429 carrying
+   * `type: 'llm_aggregate'`; unlike the LLM circuit breaker, there is no
+   * degraded fallback reply, because the point is to stop spending.
+   */
+  LLM_AGGREGATE: {
+    maxRequests: 500,
+    windowSeconds: 3600,
+    keyPrefix: 'ratelimit:zset:llm-aggregate',
   },
 } as const;

@@ -25,6 +25,8 @@ import {
   BACKOFF_EXPONENT,
   MIN_RETRY_AFTER_SECONDS,
 } from '@/lib/constants/retry';
+import { withJitter } from '@/lib/utils/backoff';
+import { getClientIp } from './client-ip';
 
 const DEFAULT_WINDOW_MS = ONE_MINUTE_IN_MS;
 const DEFAULT_MAX_REQUESTS = 10;
@@ -67,35 +69,15 @@ const DEFAULT_CONFIG: RateLimitConfig = {
 function calculateProgressiveDelay(attemptCount: number): number {
   if (attemptCount <= 0) return NO_DELAY;
 
-  // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
-  return Math.min(
-    Math.pow(BACKOFF_EXPONENT, attemptCount - BACKOFF_INITIAL_ATTEMPT) *
-      MILLISECONDS_PER_SECOND,
-    MAX_BACKOFF_MS,
+  // Exponential backoff: 1s, 2s, 4s, 8s, max 30s — jittered so a wave of
+  // throttled clients doesn't come back in lockstep when the delay expires.
+  return withJitter(
+    Math.min(
+      Math.pow(BACKOFF_EXPONENT, attemptCount - BACKOFF_INITIAL_ATTEMPT) *
+        MILLISECONDS_PER_SECOND,
+      MAX_BACKOFF_MS,
+    ),
   );
-}
-
-/**
- * Enhanced rate limiting with progressive delays and lockout
- */
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim() ?? 'unknown';
-  }
-
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
-  }
-
-  // Next.js Request doesn't expose .ip; fall back to remote address on the socket when available
-  const anyReq = request as unknown as { socket?: { remoteAddress?: string } };
-  if (anyReq.socket?.remoteAddress) {
-    return anyReq.socket.remoteAddress;
-  }
-
-  return 'unknown';
 }
 
 /**

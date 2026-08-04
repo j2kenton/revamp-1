@@ -9,6 +9,7 @@ import RedisMock from 'ioredis-mock';
 import { logError, logInfo } from '@/utils/logger';
 import { PARSE_INT_RADIX } from '@/lib/constants/common';
 import { DEFAULT_REDIS_PORT, IP_VERSION_IPV4 } from '@/lib/constants/network';
+import { withJitter } from '@/lib/utils/backoff';
 
 const RETRY_DELAY_BASE_MS = 100;
 const RETRY_DELAY_MAX_MS = 5000;
@@ -77,8 +78,11 @@ export function createRedisClient(): Redis {
       },
     }),
     retryStrategy: (times) => {
-      // Exponential backoff with max 5 seconds
-      const delay = Math.min(times * RETRY_DELAY_BASE_MS, RETRY_DELAY_MAX_MS);
+      // Linear backoff capped at 5 seconds, jittered so that every app
+      // instance reconnecting after a Redis blip doesn't reconnect in unison.
+      const delay = withJitter(
+        Math.min(times * RETRY_DELAY_BASE_MS, RETRY_DELAY_MAX_MS),
+      );
       logInfo('Redis retry attempt', { attempt: times, delay });
       return delay;
     },
