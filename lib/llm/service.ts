@@ -31,6 +31,17 @@ interface LLMRequestOptions {
 
 interface LLMStreamOptions extends LLMRequestOptions {
   mockDelay?: number;
+  /**
+   * Lets a caller that has lost the reason it started this call (e.g. the
+   * chat route's idempotency lock) actually stop it, rather than only being
+   * able to ignore its output. Threaded into the Gemini SDK's own
+   * `abortSignal` config, which the SDK documents as client-only: aborting
+   * stops *this process* from continuing to read/relay the stream, but
+   * does not cancel generation on Google's side or guarantee the call
+   * isn't billed. See `callLLMStreamWithRetry`'s doc comment for how this
+   * interacts with retries.
+   */
+  signal?: AbortSignal;
 }
 
 const DEFAULT_TEMPERATURE = 1;
@@ -371,6 +382,7 @@ export async function callLLMStream(
       temperature?: number;
       maxOutputTokens?: number;
       systemInstruction?: string;
+      abortSignal?: AbortSignal;
     } = {
       temperature:
         typeof options.temperature === 'number'
@@ -386,6 +398,10 @@ export async function callLLMStream(
       config.systemInstruction = systemMessage.content;
     }
 
+    if (options.signal) {
+      config.abortSignal = options.signal;
+    }
+
     const stream = await client.models.generateContentStream({
       model: modelName,
       contents,
@@ -395,11 +411,29 @@ export async function callLLMStream(
     let fullContent = '';
 
     for await (const chunk of stream) {
+      // Belt-and-braces alongside `config.abortSignal` above: that signal
+      // is passed straight through to the SDK's own fetch call, but
+      // nothing here guarantees it stops this async generator promptly in
+      // every case. Checking it on every iteration means an abort takes
+      // effect on the very next chunk regardless.
+      if (options.signal?.aborted) {
+        break;
+      }
       const chunkText = chunk.text;
       if (chunkText) {
         fullContent += chunkText;
         onChunk(chunkText);
       }
+    }
+
+    if (options.signal?.aborted) {
+      // `.retryable` isn't set here: this function's own catch block below
+      // unconditionally overwrites it via `isRetryableApiError`, so it
+      // can't carry this signal reliably. `callLLMStreamWithRetry` checks
+      // `options.signal.aborted` directly instead — see its doc comment.
+      throw new Error(
+        'LLM streaming call aborted: caller no longer holds the reason it started this call.',
+      );
     }
 
     const finalContent = fullContent.trim();
@@ -495,6 +529,11 @@ Each word is sent as a separate chunk to simulate real streaming behavior.`;
       : MOCK_STREAM_DEFAULT_DELAY_MS;
 
   for (let i = 0; i < words.length; i++) {
+    if (options.signal?.aborted) {
+      throw new Error(
+        'Mock LLM streaming call aborted: caller no longer holds the reason it started this call.',
+      );
+    }
     const word = `${words[i]} `;
     fullContent += word;
     onChunk(word);
@@ -715,6 +754,18 @@ export async function callLLMStreamWithRetry(
         return await callLLMStream(messages, onChunk, options);
       } catch (error) {
         lastError = error as Error;
+
+        // Checked ahead of `retryable`, not instead of it: `callLLMStream`'s
+        // own catch block unconditionally overwrites `.retryable` via
+        // `isRetryableApiError` (currently a stub that always returns
+        // `true`), so a thrown abort error can't reliably signal
+        // non-retryability through that field by the time it gets here.
+        // Retrying a call the caller deliberately aborted would defeat the
+        // point of aborting it — likely retrying against the very
+        // condition (lock lost) that caused the abort in the first place.
+        if (options.signal?.aborted) {
+          throw error;
+        }
 
         const llmError = error as LLMError;
         if (!llmError.retryable) {

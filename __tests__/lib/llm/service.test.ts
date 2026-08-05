@@ -247,4 +247,61 @@ describe('LLM service', () => {
       });
     });
   });
+
+  // Lets the chat route stop a request that's lost the reason it started
+  // (e.g. its idempotency lock) — see route.ts's `lockAbortController`.
+  // There's no GEMINI_API_KEY in this test environment, so every call here
+  // goes through the mock LLM path, which is deliberately wired to respect
+  // `options.signal` the same way the real Gemini path threads it into the
+  // SDK's own `abortSignal` config.
+  describe('Cancellation via AbortSignal', () => {
+    it('callLLMStream stops relaying and rejects once the signal is aborted mid-stream', async () => {
+      const controller = new AbortController();
+      const chunks: string[] = [];
+      const onChunk = (chunk: string) => {
+        chunks.push(chunk);
+        if (chunks.length === 2) {
+          controller.abort();
+        }
+      };
+
+      await expect(
+        llmService.callLLMStream(baseMessages, onChunk, {
+          signal: controller.signal,
+          mockDelay: 0,
+        }),
+      ).rejects.toThrow(/aborted/i);
+
+      // Stopped partway through the mock response's word list — proves the
+      // loop actually stopped, not that it finished and failed for some
+      // unrelated reason.
+      expect(chunks.length).toBe(2);
+    });
+
+    it('callLLMStreamWithRetry never retries a call aborted before it even started', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const onChunk = jest.fn();
+
+      await expect(
+        llmService.callLLMStreamWithRetry(
+          baseMessages,
+          onChunk,
+          { signal: controller.signal, mockDelay: 0 },
+          3,
+        ),
+      ).rejects.toThrow(/aborted/i);
+
+      expect(onChunk).not.toHaveBeenCalled();
+      // A retry backs off via setTimeout before trying again — this file's
+      // outer `beforeEach` spies on setTimeout precisely so that delay
+      // resolves instantly instead of consuming real time, which means a
+      // plain wall-clock check can't distinguish "no retry" from "retried
+      // instantly." Zero setTimeout calls at all is the reliable signal:
+      // neither a retry backoff nor even the mock's own per-word delay
+      // ever ran, because the abort check short-circuits before either.
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -88,12 +88,41 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     messageId: string | null;
     /** Client-minted ID of the optimistic echo, until the server's real ID replaces it. */
     tempId: string | null;
+    /**
+     * The idempotency key sent to the server for this logical send. Looks
+     * redundant with `tempId` — both start as the same freshly-minted value
+     * — but the two must be cleared on different schedules. `tempId` is
+     * cleared by `handleMessageCreated` the moment the echo is reconciled
+     * (its job is done: the real message has replaced it in the UI). This
+     * key stays alive until a true terminal event (`handleMessageComplete`/
+     * `handleFallback`), specifically so it survives past `message_created`.
+     * If it didn't, a connection that dies after the server persisted the
+     * user message but before it stored an outcome would have no key left
+     * to resend with — a later resend would mint a fresh one, the server
+     * would see no record for it, and process it as brand new: a duplicate
+     * user turn, even though the original is sitting in Redis half-done and
+     * the server's resume path exists specifically to pick it back up.
+     */
+    idempotencyKey: string | null;
   }>({
     content: '',
     parentMessageId: null,
     messageId: null,
     tempId: null,
+    idempotencyKey: null,
   });
+  /**
+   * Identity of the assistant message currently mid-stream — written by
+   * `handleContentDelta` at `status: 'sending'`, cleared by whichever
+   * terminal handler (`handleMessageComplete`/`handleFallback`/
+   * `handleStreamError`) reconciles it. If a failure reaches the catch block
+   * while this is still set, the partial reply was left unreconciled and
+   * must be marked `failed` rather than left showing a permanent spinner.
+   */
+  const pendingAssistantMessageRef = useRef<{
+    id: string;
+    chatId: string;
+  } | null>(null);
 
   useEffect(() => {
     activeChatIdRef.current = chatId ?? null;
@@ -164,6 +193,35 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
           : entry,
       ),
     );
+  };
+
+  /**
+   * The assistant's reply was interrupted after at least one `content_delta`
+   * arrived but before any terminal event reconciled it — flip that partial
+   * reply to `failed` in both stores instead of leaving it at `sending`
+   * forever (which otherwise renders as a permanent loading spinner next to
+   * the error banner). No-op once a terminal handler already cleared it.
+   */
+  const markAssistantMessageFailed = () => {
+    const pending = pendingAssistantMessageRef.current;
+    if (!pending) {
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    upsertMessageInCache({
+      id: pending.id,
+      chatId: pending.chatId,
+      status: 'failed',
+      updatedAt: timestamp,
+    });
+    setLiveMessages((prev) =>
+      prev.map((entry) =>
+        entry.id === pending.id
+          ? { ...entry, status: 'failed', updatedAt: timestamp }
+          : entry,
+      ),
+    );
+    pendingAssistantMessageRef.current = null;
   };
 
   const shouldTrackLiveMessage = (messageChatId: string) => {
@@ -242,6 +300,7 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       parentMessageId: null,
       messageId: null,
       tempId: null,
+      idempotencyKey: null,
     };
   };
 
@@ -252,6 +311,13 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     setStreamingMessage(null);
     setRateLimitSeconds(null);
     resetTruncationState();
+    // Defensive, not load-bearing: the catch block's retry path already
+    // reconciles a pending partial reply (`markAssistantMessageFailed`,
+    // which itself nulls this ref) before ever scheduling a retry, so this
+    // should already be null by the time a retry gets here. Reset anyway
+    // so a genuinely new send never inherits stale tracking from an
+    // unrelated prior stream.
+    pendingAssistantMessageRef.current = null;
   };
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -261,10 +327,25 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
   );
 
   /**
-   * Abort the in-flight streaming fetch. Also cancels any pending
-   * reconnect-with-backoff timer — without this, a scheduled reconnect could
-   * still fire after unmount/an account switch and start a new request using
-   * the prior account's captured token and chat ID.
+   * Abort the in-flight streaming fetch and abandon everything that
+   * belonged to it. Also cancels any pending reconnect-with-backoff timer —
+   * without this, a scheduled reconnect could still fire after
+   * unmount/an account switch and start a new request using the prior
+   * account's captured token and chat ID.
+   *
+   * Also clears `liveMessages`/`streamingMessage`/the optimistic-echo ref —
+   * not just the network connection. This matters for "New Chat" clicked
+   * while the very first send is still pending: `chatId` is `undefined`
+   * both before and after, so `setChatId(undefined)` in the caller is a
+   * no-op that never changes the `chatId` prop, and the effect that would
+   * otherwise clear `liveMessages` on a `chatId` change never reruns.
+   * Without this, the abandoned optimistic echo (or a partial assistant
+   * reply) would stay visible indefinitely.
+   *
+   * Also resets `reconnectAttempts`: abandoning a send mid-retry-sequence
+   * must not leave the counter elevated for whatever the caller sends next
+   * — otherwise an unrelated future message silently gets fewer retries,
+   * or none at all if the abandoned sequence had already reached the cap.
    */
   // Kept as a manual useCallback (unlike the other functions in this hook):
   // its identity is a dependency of the unmount-cleanup effect below, so
@@ -285,6 +366,12 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       reconnectTimeoutRef.current = null;
     }
     setIsStreaming(false);
+    setStreamingMessage(null);
+    setLiveMessages([]);
+    activeChatIdRef.current = null;
+    clearLastUserMessage();
+    pendingAssistantMessageRef.current = null;
+    reconnectAttempts.current = 0;
   }, []);
 
   /**
@@ -320,7 +407,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       const timestamp = new Date().toISOString();
 
       // Reconcile the optimistic echo: the server's copy (real ID, confirmed
-      // persisted) replaces the client-minted one.
+      // persisted) replaces the client-minted one. Deliberately clears only
+      // `tempId`, not `idempotencyKey` — the echo's job is done, but the
+      // send isn't over until a terminal event; see the field's doc comment.
       const { tempId } = lastUserMessageRef.current;
       if (tempId) {
         removeLiveMessage(tempId);
@@ -382,6 +471,12 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
     const resolvedChatId = activeChatIdRef.current || chatId || '';
 
     if (messageId && resolvedChatId) {
+      // Tracks this reply as "in flight, unreconciled" until a terminal
+      // handler clears it — see `markAssistantMessageFailed`.
+      pendingAssistantMessageRef.current = {
+        id: messageId,
+        chatId: resolvedChatId,
+      };
       upsertMessageInCache({
         id: messageId,
         chatId: resolvedChatId,
@@ -466,6 +561,9 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
     resetTruncationState();
     clearLastUserMessage();
+    // The reply reached a terminal status ('sent') above — no longer
+    // unreconciled, so a later failure on this connection must not touch it.
+    pendingAssistantMessageRef.current = null;
   };
 
   /**
@@ -512,6 +610,8 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
     onFallback?.(fallbackMessage.content);
     clearLastUserMessage();
+    // Reached a terminal status ('sent', flagged circuitBreakerOpen) above.
+    pendingAssistantMessageRef.current = null;
   };
 
   /** The server reported an error mid-stream. */
@@ -522,6 +622,10 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         : STRINGS.errors.streamingGeneric,
     );
     setStreamingMessage(null);
+    // An explicit error event can itself arrive after content_delta already
+    // wrote a partial reply — reconcile it the same way an interrupted
+    // connection does, rather than leaving it stuck at 'sending'.
+    markAssistantMessageFailed();
     // If the error arrived before `message_created`, the user's message was
     // never persisted — surface that on the echo. No-op after reconciliation.
     markOptimisticMessageFailed();
@@ -636,6 +740,15 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       return;
     }
 
+    // Set true only when the catch block schedules a backoff retry, so
+    // `finally` below can tell "this send is genuinely done" apart from
+    // "this send is paused mid-backoff." Without this, `isStreaming` (which
+    // gates the input) goes false the instant a retry is scheduled, letting
+    // the user submit a second message while the first is still pending —
+    // the two sends then share `lastUserMessageRef`/`abortControllerRef`,
+    // and whichever finishes second corrupts the other's echo/tempId.
+    let retryScheduled = false;
+
     try {
       resetStateForNewStream();
 
@@ -644,35 +757,65 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       // reconciles it away in favour of the server's copy; failure paths
       // flip it to `failed` instead. A reconnect retry of the same content
       // reuses the existing echo rather than minting a duplicate.
+      //
+      // The idempotency key is reused independently of the echo's tempId —
+      // by the time a *resend* of the same content happens, `tempId` may
+      // already be null (message_created reconciled it on an earlier
+      // attempt within this same logical send), but the key must still
+      // carry forward so the server recognizes this as the same send. See
+      // the field's doc comment for why the two can't share one lifecycle.
       const previous = lastUserMessageRef.current;
-      const tempId =
-        previous.tempId && previous.content === content
+      const sameLogicalSend = previous.content === content;
+      // A retry of a send that already reached `message_created` has a
+      // real, persisted message under `previous.messageId` — the UI
+      // already shows it (reconciled away from any optimistic echo when
+      // that event first fired). Resuming reuses that identity directly
+      // rather than minting a fresh tempId and briefly rendering a second,
+      // duplicate "sending" bubble beside it until this retry's own
+      // message_created (necessarily reporting that same ID) reconciles
+      // it away again.
+      const resumingPersistedMessageId =
+        sameLogicalSend && previous.messageId ? previous.messageId : null;
+      const tempId = resumingPersistedMessageId
+        ? null
+        : sameLogicalSend && previous.tempId
           ? previous.tempId
+          : `temp_${crypto.randomUUID()}`;
+      const idempotencyKey =
+        sameLogicalSend && previous.idempotencyKey
+          ? previous.idempotencyKey
           : `temp_${crypto.randomUUID()}`;
       lastUserMessageRef.current = {
         content,
         parentMessageId: parentMessageId ?? null,
-        messageId: null,
+        messageId: resumingPersistedMessageId,
         tempId,
+        idempotencyKey,
       };
       const optimisticTimestamp = new Date().toISOString();
-      upsertLiveMessage({
-        id: tempId,
-        chatId: activeChatIdRef.current || chatId || '',
-        role: 'user',
-        content,
-        status: 'sending',
-        parentMessageId: parentMessageId ?? null,
-        metadata: null,
-        createdAt: optimisticTimestamp,
-        updatedAt: optimisticTimestamp,
-      });
+      if (tempId) {
+        upsertLiveMessage({
+          id: tempId,
+          chatId: activeChatIdRef.current || chatId || '',
+          role: 'user',
+          content,
+          status: 'sending',
+          parentMessageId: parentMessageId ?? null,
+          metadata: null,
+          createdAt: optimisticTimestamp,
+          updatedAt: optimisticTimestamp,
+        });
+      }
 
-      // Create FormData or JSON payload
+      // Stable across retries *and* later resends of this same logical send
+      // (reused above, independent of the echo's tempId) — the server uses
+      // it to recognize a retried/resent POST as the same send rather than
+      // a new one. See StreamIdempotencyRecord.
       const payload = {
         content,
         chatId: chatId || undefined,
         parentMessageId,
+        idempotencyKey,
       };
 
       const csrfToken = bypassAuth
@@ -727,6 +870,12 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         setError(rateLimitError);
         onError?.(rateLimitError);
         setIsStreaming(false);
+        // This is a second, separate terminal exit for the logical send
+        // (an automatic retry can itself land here, not just the first
+        // attempt) — must not skip the same reset the other terminal exit
+        // point applies, or the next unrelated message inherits a
+        // partially-spent retry budget.
+        reconnectAttempts.current = 0;
         return;
       }
 
@@ -757,11 +906,20 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       // Process SSE stream
       let buffer = '';
       let accumulatedContent = '';
+      // `message_created` only confirms the user's message was saved — the
+      // turn itself isn't done until one of these three fires. A clean EOF
+      // (`done: true`) without any of them means the connection dropped
+      // mid-turn (proxy/server closed early), not that the turn finished; it
+      // must not be treated as success.
+      let receivedTerminalEvent = false;
 
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
+          if (!receivedTerminalEvent) {
+            throw new Error(STRINGS.errors.streamInterrupted);
+          }
           break;
         }
 
@@ -784,19 +942,54 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
 
             case 'message_complete':
               handleMessageComplete(data);
+              receivedTerminalEvent = true;
               break;
 
             case 'fallback':
               handleFallback(data);
+              receivedTerminalEvent = true;
               break;
 
             case 'error':
+              if (data.error === 'lock_lost') {
+                // Retryable, unlike other `error` events: the server lost
+                // the idempotency lock it needed to safely finish this
+                // reply (see route.ts), but the user's message is still
+                // persisted and safely resumable under its idempotencyKey
+                // — resolveIdempotentSend exists specifically to pick this
+                // back up. Throwing routes it through the same catch-block
+                // retry path as a transport failure, rather than the
+                // terminal handling every other `error` event gets below.
+                throw new Error(
+                  typeof data.message === 'string'
+                    ? data.message
+                    : STRINGS.errors.streamingGeneric,
+                );
+              }
               handleStreamError(data);
+              receivedTerminalEvent = true;
               break;
 
             default:
               break;
           }
+        }
+
+        if (receivedTerminalEvent) {
+          // The turn is done — stop reading. `handleMessageComplete` and
+          // `handleFallback` both clear `lastUserMessageRef`, which is the
+          // catch block's only signal that the message was already
+          // persisted. Continuing to read (and letting a later read()
+          // reject) would fall into the catch block with that signal gone,
+          // making a completed send look retryable and resending it.
+          // Stopping here removes that failure mode entirely rather than
+          // relying on ref state to detect it after the fact.
+          try {
+            void reader.cancel?.()?.catch?.(() => {});
+          } catch {
+            // Best-effort release; the connection is already done with.
+          }
+          break;
         }
       }
 
@@ -814,6 +1007,35 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
       setError(streamError);
       onError?.(streamError);
 
+      // Once `message_created` has fired, the server already persisted this
+      // content — `messageId` is set. Resending used to be unsafe here: a
+      // plain retry would POST the same content again with no way for the
+      // server to recognize it as the same send, creating a duplicate
+      // message (and, on a brand-new chat, a second chat) — so this used to
+      // be treated as an interrupted *response*, never retried, leaving
+      // recovery to the user manually resending identical content later.
+      // That's no longer true: `idempotencyKey` now survives this failure
+      // (see the field's doc comment), and the server's
+      // `resolveIdempotentSend` safely replays a completed outcome, resumes
+      // an abandoned in-progress attempt under the SAME persisted user
+      // message, or bounded-waits and gives up — it never re-persists the
+      // user message under a key that's already in use. A post-ack failure
+      // is therefore just as safe to retry as a pre-ack one.
+      const alreadyPersisted = Boolean(lastUserMessageRef.current.messageId);
+
+      // A partial reply (content_delta already ran) must be reconciled
+      // here, before any retry — not just on final give-up. A retry now
+      // resumes the *user* message identity, but the *assistant* reply
+      // always gets a brand-new ID each attempt (see route.ts), and
+      // `resetStateForNewStream` unconditionally clears
+      // `pendingAssistantMessageRef` for the next attempt. Skipping this
+      // would silently orphan the superseded entry at `status: 'sending'`
+      // forever — no terminal handler for its old ID will ever run again —
+      // rendering as a permanent spinner beside whatever the retry produces
+      // under its new ID. No-op if nothing was pending (the common case: no
+      // delta ever arrived).
+      markAssistantMessageFailed();
+
       // Attempt reconnection with exponential backoff
       if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
         // Keep `lastUserMessageRef` (and its `tempId`) intact: the retry
@@ -821,20 +1043,50 @@ export function useStreamingResponse(options: UseStreamingResponseOptions) {
         // echo, not mint a second one.
         const delay = calculateReconnectDelay(reconnectAttempts.current);
         reconnectAttempts.current++;
+        retryScheduled = true;
 
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectTimeoutRef.current = null;
           void sendStreamingMessage(content, parentMessageId);
         }, delay);
       } else {
-        // Out of retries — the message never reached the server. The echo
-        // flips to `failed` so the failure is visible on the message itself.
-        markOptimisticMessageFailed();
-        clearLastUserMessage();
+        if (!alreadyPersisted) {
+          // Out of retries and the message never reached the server. The
+          // echo flips to `failed` so the failure is visible on the message
+          // itself.
+          markOptimisticMessageFailed();
+        }
+        // Already-persisted case: the user's message is already the
+        // server's confirmed copy (handleMessageCreated reconciled it) —
+        // nothing to mark failed there, just let the error state surface
+        // that the assistant's reply didn't finish (already reconciled
+        // above, if a partial one was pending).
+        // Deliberately NOT clearLastUserMessage() here: content,
+        // parentMessageId, and — critically — idempotencyKey must survive
+        // this give-up. Automatic retry has stopped, but the send isn't
+        // truly over: the server may hold a persisted user message with no
+        // outcome yet (a crash, or a still-running attempt whose ack we
+        // never received). If the same content is ever resent — a future
+        // manual retry, or simply the user sending it again — reusing this
+        // key is what lets the server's resume path recognize it instead of
+        // creating a second user message under a fresh one. Only a genuine
+        // terminal event (handleMessageComplete/handleFallback) or an
+        // explicit abandon (closeConnection) clears this ref; giving up on
+        // automatic retry is not the same as the send being finished.
+        // The next `sendStreamingMessage` call overwrites this ref
+        // wholesale regardless of what's left here, so nothing leaks into
+        // an unrelated future send.
+        reconnectAttempts.current = 0;
       }
     } finally {
       abortControllerRef.current = null;
-      setIsStreaming(false);
+      // Keep the operation locked through backoff: if a retry was just
+      // scheduled, this logical send isn't done yet, so `isStreaming` (which
+      // gates the input, see the comment above `retryScheduled`) must stay
+      // true until the retry itself settles.
+      if (!retryScheduled) {
+        setIsStreaming(false);
+      }
     }
   };
 

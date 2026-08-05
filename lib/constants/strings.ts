@@ -116,6 +116,7 @@ export const STRINGS = {
     authFailed: 'Failed to sign in. Please try again.',
     streamingStartFailed: 'Failed to start streaming.',
     streamingGeneric: 'Streaming error',
+    streamInterrupted: 'The connection closed before the response finished.',
     emptyResponse: 'Empty response received from server.',
     unexpected: 'An unexpected error occurred. Please try again.',
     chatHistoryFailed: 'Failed to fetch chat history',
