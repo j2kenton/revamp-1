@@ -1,6 +1,6 @@
 # AI Chat Application - Project Walkthrough
 
-![Chat screenshot](public/screenshots/screenshot-1.jpeg)
+![Chat screenshot](public/screenshots/screenshot-1.png)
 
 ## Table of Contents
 
