@@ -9,7 +9,6 @@ import Image from 'next/image';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { STRINGS } from '@/lib/constants/strings';
 import { ConnectionStatus } from './ConnectionStatus';
-import { NewChatButton } from './NewChatButton';
 import { UserMenu } from './UserMenu';
 
 interface ChatHeaderProps {
@@ -19,15 +18,9 @@ interface ChatHeaderProps {
   } | null;
   photoUrl?: string | null;
   onLogout: () => void;
-  onNewChat: () => void;
 }
 
-export function ChatHeader({
-  user,
-  photoUrl,
-  onLogout,
-  onNewChat,
-}: ChatHeaderProps) {
+export function ChatHeader({ user, photoUrl, onLogout }: ChatHeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-gray-200 bg-[var(--background)] px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
       <div className="flex items-center gap-2">
@@ -50,7 +43,6 @@ export function ChatHeader({
         <ConnectionStatus />
       </div>
       <div className="flex items-center gap-3">
-        <NewChatButton onNewChat={onNewChat} />
         <ThemeToggle />
         <UserMenu user={user} photoUrl={photoUrl} onLogout={onLogout} />
       </div>
