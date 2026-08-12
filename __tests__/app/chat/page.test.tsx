@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
@@ -82,6 +83,20 @@ const baseStreamingState = {
   streamingMessage: null,
 };
 
+// AuthenticatedChat reads the query client (chat-list invalidation) and the
+// sidebar's useChatList runs a real useQuery, so every render needs a
+// provider — same composition as app/layout.tsx.
+const renderPage = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <ChatPage />
+    </QueryClientProvider>,
+  );
+};
+
 describe('ChatPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -100,7 +115,7 @@ describe('ChatPage', () => {
       authIdentityKey: null,
     });
 
-    render(<ChatPage />);
+    renderPage();
 
     expect(
       screen.getByRole('heading', { name: /sign in to start chatting/i }),
@@ -116,13 +131,14 @@ describe('ChatPage', () => {
       isAuthenticated: true,
     });
 
-    render(<ChatPage />);
+    renderPage();
 
     expect(screen.getByText(/Gemini 3/)).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toBeInTheDocument();
+    // One "New Chat" affordance in the header and one in the sidebar.
     expect(
-      screen.getByRole('button', { name: /start new chat/i }),
-    ).toBeInTheDocument();
+      screen.getAllByRole('button', { name: /start new chat/i }),
+    ).toHaveLength(2);
   });
 
   it('shows a loading treatment instead of an interactive sign-in surface while resolving', () => {
@@ -134,7 +150,7 @@ describe('ChatPage', () => {
       authIdentityKey: null,
     });
 
-    render(<ChatPage />);
+    renderPage();
 
     // No live Google button/iframe may mount while the auth state machine
     // hasn't resolved (rule 0) — only the inert skeleton placeholder.
@@ -159,7 +175,7 @@ describe('ChatPage', () => {
       logout: mockLogout,
     });
 
-    render(<ChatPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /open user menu/i }));
     await user.click(await screen.findByRole('button', { name: /sign out/i }));
@@ -181,7 +197,7 @@ describe('ChatPage', () => {
       logout: mockLogout,
     });
 
-    render(<ChatPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /open user menu/i }));
     await user.click(await screen.findByRole('button', { name: /sign out/i }));

@@ -125,8 +125,9 @@ describe('useFetchChatHistory', () => {
   it('exposes errors when the request fails', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,
+      status: 404,
       json: async () => ({
-        error: { message: '404 Not Found' },
+        error: { message: 'Chat not found' },
       }),
     } as Response);
 
@@ -140,5 +141,6 @@ describe('useFetchChatHistory', () => {
     });
 
     expect(result.current.error).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

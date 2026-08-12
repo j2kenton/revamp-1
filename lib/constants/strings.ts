@@ -61,7 +61,14 @@ export const STRINGS = {
       logoAlt: 'Gemini logo (mock)',
       userMenuAriaLabel: 'Open user menu',
       newChatAriaLabel: 'Start new chat',
-      newChatTooltip: 'Clear this conversation and start a new one',
+      newChatTooltip: 'Start a new conversation',
+    },
+    sidebar: {
+      heading: 'Conversations',
+      ariaLabel: 'Previous conversations',
+      loadingAriaLabel: 'Loading conversations',
+      empty: 'No conversations yet',
+      errorTitle: 'Failed to load conversations',
     },
     clear: 'Clear',
   },
@@ -120,6 +127,7 @@ export const STRINGS = {
     emptyResponse: 'Empty response received from server.',
     unexpected: 'An unexpected error occurred. Please try again.',
     chatHistoryFailed: 'Failed to fetch chat history',
+    chatListFailed: 'Failed to fetch conversations',
     googleScriptLoadFailed:
       "Couldn't load Google Sign-In. Check your connection and try again.",
     googleEmailNotVerified:

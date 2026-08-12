@@ -29,7 +29,10 @@ import ChatPage from '@/app/chat/page';
 import { IdentityCacheReset } from '@/components/auth/IdentityCacheReset';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useStreamingResponse } from '@/app/chat/hooks/useStreamingResponse';
-import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
+import {
+  chatHistoryQueryKey,
+  chatListQueryKey,
+} from '@/app/chat/utils/chatQueryKey';
 import type { MessageDTO } from '@/types/models';
 
 jest.mock('next/navigation', () => ({
@@ -125,9 +128,21 @@ describe('Cross-account chat isolation', () => {
   let queryClient: QueryClient;
   let removeQueriesSpy: jest.SpyInstance;
   let streamCleanupSpy: jest.Mock;
+  const originalFetch = global.fetch;
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // The sidebar's real `useChatList` fetches `/api/chat` on mount; give it
+    // an empty list so this suite exercises the cache-isolation guarantees
+    // without real network I/O.
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { chats: [] } }),
+    }) as unknown as typeof fetch;
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -173,6 +188,22 @@ describe('Cross-account chat isolation', () => {
         pagination: { offset: 0, limit: 50, total: 1, hasMore: false },
       },
     );
+
+    // Seed account A's conversation-list cache entry as a completed
+    // `useChatList` fetch would have, so the switch can prove the list is
+    // purged alongside the per-chat history caches.
+    queryClient.setQueryData(chatListQueryKey(accountA.authIdentityKey), {
+      chats: [
+        {
+          id: accountA.chatId,
+          userId: 'user-a',
+          title: 'Account A secret chat title',
+          archived: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    });
 
     mockUseAuth.mockReturnValue(authStateFor(accountA));
 
@@ -248,6 +279,16 @@ describe('Cross-account chat isolation', () => {
         chatHistoryQueryKey(accountA.authIdentityKey, accountA.chatId),
       ),
     ).toBeUndefined();
+
+    // The conversation-list cache shares the `['chat', identity, ...]`
+    // namespace, so the same purge must remove it — account B must never
+    // see account A's chat titles in the sidebar.
+    expect(
+      queryClient.getQueryData(chatListQueryKey(accountA.authIdentityKey)),
+    ).toBeUndefined();
+    expect(
+      screen.queryByText('Account A secret chat title'),
+    ).not.toBeInTheDocument();
 
     // (3) Account-A's stream/connection was closed — `ChatPage` remounted
     // `AuthenticatedChat` (via `key={authIdentityKey}`), which unmounted the

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { POST } from '@/app/api/chat/route';
+import { POST, GET } from '@/app/api/chat/route';
 import { requireSession } from '@/server/middleware/session';
 import { withCsrfProtection } from '@/server/middleware/csrf';
 import {
@@ -8,6 +8,7 @@ import {
   getChat,
   addMessage,
   getChatMessages,
+  getUserChats,
 } from '@/lib/redis/chat';
 import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
 
@@ -32,6 +33,7 @@ jest.mock('@/lib/redis/chat', () => ({
   getChat: jest.fn(),
   addMessage: jest.fn(),
   getChatMessages: jest.fn(),
+  getUserChats: jest.fn(),
 }));
 
 jest.mock('@/lib/redis/transactions', () => ({
@@ -128,5 +130,70 @@ describe('POST /api/chat', () => {
     expect(response.status).toBe(500);
     const payload = await response.json();
     expect(payload.error.message).toBe('Failed to process message');
+  });
+});
+
+describe('GET /api/chat', () => {
+  const buildListRequest = () =>
+    new NextRequest('http://localhost:3000/api/chat');
+
+  const chatFor = (id: string, userId: string, updatedAt: Date) => ({
+    id,
+    userId,
+    title: `Chat ${id}`,
+    archived: false,
+    createdAt: updatedAt,
+    updatedAt,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (requireSession as jest.Mock).mockResolvedValue(mockSession);
+    (getUserChats as jest.Mock).mockResolvedValue([]);
+  });
+
+  it('returns 401 when session is missing', async () => {
+    (requireSession as jest.Mock).mockRejectedValue(new Error('Unauthorized'));
+
+    const response = await GET(buildListRequest());
+    expect(response.status).toBe(401);
+    expect(getUserChats).not.toHaveBeenCalled();
+  });
+
+  it("looks up only the session user's chats", async () => {
+    const response = await GET(buildListRequest());
+
+    expect(response.status).toBe(200);
+    expect(getUserChats).toHaveBeenCalledTimes(1);
+    expect(getUserChats).toHaveBeenCalledWith(mockSession.userId);
+    const payload = await response.json();
+    expect(payload.data.chats).toEqual([]);
+  });
+
+  it('preserves ordering from getUserChats and maps chats to DTOs', async () => {
+    (getUserChats as jest.Mock).mockResolvedValue([
+      chatFor('chat-new', mockSession.userId, new Date('2026-08-10T12:00:00Z')),
+      chatFor('chat-old', mockSession.userId, new Date('2026-08-01T12:00:00Z')),
+    ]);
+
+    const response = await GET(buildListRequest());
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.data.chats.map((chat: { id: string }) => chat.id)).toEqual([
+      'chat-new',
+      'chat-old',
+    ]);
+    // DTO mapping serializes dates to ISO strings
+    expect(payload.data.chats[0].updatedAt).toBe('2026-08-10T12:00:00.000Z');
+  });
+
+  it('returns server error when the lookup throws', async () => {
+    (getUserChats as jest.Mock).mockRejectedValue(new Error('Redis down'));
+
+    const response = await GET(buildListRequest());
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload.error.message).toBe('Failed to retrieve chats');
   });
 });

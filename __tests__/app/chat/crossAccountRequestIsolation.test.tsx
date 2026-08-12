@@ -120,13 +120,32 @@ function makeStreamingResponse(chatId: string) {
 describe('Cross-account REQUEST-level isolation', () => {
   const originalFetch = global.fetch;
   let fetchMock: jest.Mock;
+  let streamResponses: Response[];
+
+  /** All calls that hit the streaming endpoint (the sidebar's real
+   * `useChatList` also fetches `GET /api/chat`, so raw call indices are not
+   * stable). */
+  const streamCalls = () =>
+    fetchMock.mock.calls.filter(([url]) => url === '/api/chat/stream');
+
+  const listCalls = () =>
+    fetchMock.mock.calls.filter(([url]) => url === '/api/chat');
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseRouter.mockReturnValue({
       push: jest.fn(),
     } as unknown as ReturnType<typeof useRouter>);
-    fetchMock = jest.fn();
+    streamResponses = [];
+    fetchMock = jest.fn((url: string) => {
+      if (url === '/api/chat') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: { chats: [] } }),
+        } as unknown as Response);
+      }
+      return Promise.resolve(streamResponses.shift());
+    });
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 
@@ -148,7 +167,7 @@ describe('Cross-account REQUEST-level isolation', () => {
         provider: 'microsoft',
       }),
     );
-    fetchMock.mockResolvedValueOnce(makeStreamingResponse('chat-a'));
+    streamResponses.push(makeStreamingResponse('chat-a'));
 
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
@@ -159,11 +178,10 @@ describe('Cross-account REQUEST-level isolation', () => {
     await user.click(screen.getByRole('button', { name: 'Send Message' }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(streamCalls()).toHaveLength(1);
     });
 
-    const [firstUrl, firstInit] = fetchMock.mock.calls[0];
-    expect(firstUrl).toBe('/api/chat/stream');
+    const [, firstInit] = streamCalls()[0];
     expect((firstInit.headers as Record<string, string>).Authorization).toBe(
       'Bearer token-a',
     );
@@ -177,7 +195,7 @@ describe('Cross-account REQUEST-level isolation', () => {
         provider: 'google',
       }),
     );
-    fetchMock.mockResolvedValueOnce(makeStreamingResponse('chat-b'));
+    streamResponses.push(makeStreamingResponse('chat-b'));
 
     rerender(
       <QueryClientProvider client={queryClient}>
@@ -191,16 +209,32 @@ describe('Cross-account REQUEST-level isolation', () => {
     await user.click(screen.getByRole('button', { name: 'Send Message' }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(streamCalls()).toHaveLength(2);
     });
 
-    const [secondUrl, secondInit] = fetchMock.mock.calls[1];
-    expect(secondUrl).toBe('/api/chat/stream');
+    const [, secondInit] = streamCalls()[1];
     expect((secondInit.headers as Record<string, string>).Authorization).toBe(
       'Bearer token-b',
     );
     const secondBody = JSON.parse(secondInit.body as string);
     expect(secondBody.chatId).toBeUndefined();
     expect(secondBody.chatId).not.toBe('chat-a');
+
+    // The sidebar's conversation-list requests are identity-scoped the same
+    // way: after the switch, every list request carries account B's bearer —
+    // account A's token must never be replayed under account B's session.
+    await waitFor(() => {
+      expect(
+        listCalls().some(
+          ([, init]) =>
+            (init.headers as Record<string, string>).Authorization ===
+            'Bearer token-b',
+        ),
+      ).toBe(true);
+    });
+    const listBearersAfterSwitch = listCalls()
+      .slice(-1)
+      .map(([, init]) => (init.headers as Record<string, string>).Authorization);
+    expect(listBearersAfterSwitch).toEqual(['Bearer token-b']);
   });
 });

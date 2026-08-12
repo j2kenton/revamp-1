@@ -40,13 +40,23 @@ export async function loginAsTestUser(page: Page): Promise<void> {
     throw new Error('Failed to initialize test authentication');
   }
 
+  // Give this test a fresh rate-limit budget: every test shares one identity
+  // on one mock Redis, and the app issues several rate-limited requests per
+  // action, so without a reset the shared per-identity windows fill up after
+  // a few tests and unrelated tests start receiving 429s.
+  try {
+    await page.request.post('/api/test-support/rate-limits');
+  } catch {
+    // Best-effort: a failed reset falls back to the shared budget.
+  }
+
   await page.goto('/chat', { waitUntil: 'domcontentloaded' });
 
-  // Wait for network to be idle before checking for selector
-  await page.waitForLoadState('networkidle', {
-    timeout: CHAT_READY_TIMEOUT_MS,
-  });
-
+  // Do NOT wait for `networkidle` here: the signed-in chat page keeps
+  // background requests in flight (React Query refetches, dev-server
+  // resources), so network idle never settles and the wait times out. The
+  // message textarea becoming visible is the real readiness signal — it only
+  // renders once auth resolution and hydration have completed.
   await page.waitForSelector(MESSAGE_INPUT_SELECTOR, {
     timeout: CHAT_READY_TIMEOUT_MS,
     state: 'visible',
