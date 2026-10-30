@@ -17,10 +17,10 @@ interface MessageAvatarProps {
 export function MessageAvatar({ role, photoUrl }: MessageAvatarProps){
   if (role === 'assistant'){
     return (
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600">
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         <Image
-          src="/gemini-style-logo.png"
-          alt="Gemini"
+          src="/ai-playroom-logo.svg"
+          alt="AI"
           width={28}
           height={28}
           className="h-7 w-7"

@@ -8,26 +8,26 @@ export const STRINGS = {
   // Landing page
   landing: {
     skipLink: 'Skip to landing content',
-    homeAriaLabel: 'Gemini 3 Flash (Preview) home',
-    productName: 'Gemini 3 Flash (Preview)',
-    eyebrow: 'Free Preview Access',
-    headline: 'Gemini 3 Flash',
+    homeAriaLabel: 'AI Playroom home',
+    productName: 'AI Playroom',
+    eyebrow: 'Now in the playroom: Gemini 4',
+    headline: 'AI Playroom',
     description:
-      'Unofficial, limited-time access to Gemini 3 Flash — always tracking the latest Flash preview, free for a limited time.',
+      'A playroom for the newest AI models. Right now the toy in the room is Gemini 4 — come in and see what it can do.',
     primaryCta: 'Sign in with Microsoft',
     featureSectionAriaLabel: 'Landing page basics',
     features: [
       {
-        title: 'Free during preview',
-        description: 'No cost, no subscription. Access Gemini 3 Flash for free while the preview is live.',
+        title: "Today's toy: Gemini 4",
+        description: 'The newest model, fresh out of the box. When the next big release drops, it joins the playroom too.',
       },
       {
-        title: 'Chat with AI',
-        description: 'Ask questions and get responses in the chat workspace.',
+        title: 'Come play',
+        description: 'Ask questions, test ideas, and see what the latest model can really do.',
       },
       {
-        title: 'Simple start',
-        description: 'Sign in, open chat, and begin a conversation.',
+        title: 'Free to play',
+        description: 'No cost, no subscription. Sign in, open the chat, and start playing.',
       },
     ],
   },
@@ -53,9 +53,9 @@ export const STRINGS = {
       skipLink: 'Skip to chat content',
     },
     header: {
-      brandLead: 'Introducing:',
-      productName: 'Gemini 3 Flash',
-      logoAlt: 'Gemini logo (mock)',
+      productName: 'AI Playroom',
+      modelBadge: 'Now playing: Gemini 4',
+      logoAlt: 'AI Playroom logo',
       userMenuAriaLabel: 'Open user menu',
     },
     clear: 'Clear',

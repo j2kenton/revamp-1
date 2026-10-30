@@ -23,13 +23,10 @@ interface ChatHeaderProps {
 export function ChatHeader({ user, photoUrl, onLogout }: ChatHeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-gray-200 bg-[var(--background)] px-6 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <div className="flex items-center gap-2">
-        <h1 className="flex items-center gap-2 pr-1 text-4xl font-bold text-gray-900 dark:text-gray-100">
-          <span className="hidden lg:inline">
-            {STRINGS.chat.header.brandLead}
-          </span>
+      <div className="flex items-center gap-3">
+        <h1 className="flex items-center gap-2 pr-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
           <Image
-            src="/gemini-style-logo.png"
+            src="/ai-playroom-logo.svg"
             alt={STRINGS.chat.header.logoAlt}
             width={40}
             height={40}
@@ -40,6 +37,9 @@ export function ChatHeader({ user, photoUrl, onLogout }: ChatHeaderProps) {
             {STRINGS.chat.header.productName}
           </span>
         </h1>
+        <span className="hidden rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 lg:inline dark:bg-amber-500/15 dark:text-amber-300">
+          {STRINGS.chat.header.modelBadge}
+        </span>
         <ConnectionStatus />
       </div>
       <div className="flex items-center gap-3">
