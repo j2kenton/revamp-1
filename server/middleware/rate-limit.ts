@@ -10,6 +10,9 @@ import { getRedisClient } from '@/lib/redis/client';
 import { redisCircuitBreaker } from '@/lib/redis/circuit-breaker';
 import { tooManyRequests, serverError } from '@/server/api-response';
 import { getSessionFromRequest } from '@/server/middleware/session';
+// SECURITY (HIGH-01): single shared implementation — only trusts
+// X-Forwarded-For from known proxy IPs to prevent spoofing.
+import { getClientIp } from './client-ip';
 import {
   chatRateLimit,
   enhancedRateLimit,
@@ -25,48 +28,6 @@ const AUTH_WINDOW_MS = ONE_MINUTE_IN_MS;
 const AUTH_MAX_REQUESTS = 10;
 const AUTH_LOCKOUT_THRESHOLD = 5;
 const AUTH_LOCKOUT_DURATION_MS = FIFTEEN_MINUTES_IN_MS;
-
-/**
- * SECURITY (HIGH-01): Get client IP with proxy validation
- * Only trusts X-Forwarded-For from known proxy IPs to prevent spoofing
- */
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  const realIp = request.headers.get('x-real-ip');
-
-  // Get the connecting IP (closest proxy) - last IP in X-Forwarded-For
-  const connectingIp =
-    realIp || (forwarded ? forwarded.split(',').pop()?.trim() : null);
-
-  // Get trusted proxy IPs from environment
-  const trustedProxiesEnv = process.env.TRUSTED_PROXY_IPS;
-  const trustedProxies = trustedProxiesEnv
-    ? trustedProxiesEnv.split(',').map((ip) => ip.trim())
-    : [];
-
-  let clientIp: string;
-
-  if (
-    trustedProxies.length > 0 &&
-    connectingIp &&
-    trustedProxies.includes(connectingIp)
-  ) {
-    // Request came through trusted proxy, use first X-Forwarded-For value (original client)
-    clientIp = forwarded?.split(',')[0]?.trim() || 'unknown';
-  } else if (
-    trustedProxies.length === 0 &&
-    process.env.NODE_ENV === 'production'
-  ) {
-    // In production without explicit trusted proxies, trust Vercel's X-Forwarded-For
-    // This is a reasonable default for Vercel deployments
-    clientIp = forwarded?.split(',')[0]?.trim() || connectingIp || 'unknown';
-  } else {
-    // Not from trusted proxy or in development, use connecting IP
-    clientIp = connectingIp || 'unknown';
-  }
-
-  return clientIp;
-}
 
 /**
  * SECURITY (MED-01): Get all rate limit identifiers to track both user and IP
@@ -267,7 +228,7 @@ export function requireRateLimit(
 /**
  * Rate limit for chat endpoints
  * SECURITY (HIGH-02): Consolidated rate limiting - single limiter instead of duplicate
- * SECURITY (HIGH-03): Uses global LLM rate limit to protect against cost abuse
+ * SECURITY (HIGH-03): Uses the per-identity LLM rate limit to protect against cost abuse
  */
 export function withChatRateLimit(
   handler: (request: NextRequest, context?: unknown) => Promise<Response>,
@@ -285,11 +246,11 @@ export function withChatRateLimit(
       logWarn('Failed to read session for chat rate limit', { error });
     }
 
-    // SECURITY (HIGH-03): Check global LLM rate limit first (shared across all LLM endpoints)
-    const { allowed: globalAllowed, error: globalError } =
-      await checkGlobalLLMRateLimit(request, userId);
-    if (!globalAllowed && globalError) {
-      return globalError;
+    // SECURITY (HIGH-03): Check the per-identity LLM limit first (one bucket shared across all LLM endpoints)
+    const { allowed: costAllowed, error: costError } =
+      await checkLLMCostLimits(request, userId);
+    if (!costAllowed && costError) {
+      return costError;
     }
 
     // Then check chat-specific rate limit
@@ -304,17 +265,27 @@ export function withChatRateLimit(
 }
 
 /**
- * SECURITY (HIGH-03): Global LLM rate limit shared across all LLM-calling endpoints
- * Prevents abuse by hitting multiple endpoints (/api/chat and /api/chat/stream)
+ * Fixed key for the deployment-wide LLM budget. Deliberately carries no
+ * identifier — every caller shares this one bucket.
  */
-async function checkGlobalLLMRateLimit(
+const AGGREGATE_LLM_BUCKET = 'all';
+
+/**
+ * SECURITY (HIGH-03): Two LLM cost controls, checked in order.
+ *
+ * 1. Per-identity, shared across every LLM endpoint — stops one account or IP
+ *    from burning budget, and stops endpoint-hopping for a fresh allowance.
+ * 2. Deployment-wide aggregate — the backstop for an attacker who rotates
+ *    both identity and IP, which defeats any per-identity limit.
+ */
+async function checkLLMCostLimits(
   request: NextRequest,
   userId: string | null,
 ): Promise<{ allowed: boolean; error?: Response }> {
   // SECURITY (MED-03): Check Redis circuit breaker first
   if (isRedisCircuitBreakerOpen()) {
     logError(
-      'Global LLM rate limit unavailable - Redis circuit breaker open',
+      'LLM cost limits unavailable - Redis circuit breaker open',
       null,
       {
         endpoint: request.nextUrl.pathname,
@@ -335,11 +306,11 @@ async function checkGlobalLLMRateLimit(
     const result = await checkRateLimit(
       redis,
       identifier,
-      RATE_LIMITS.LLM_GLOBAL,
+      RATE_LIMITS.LLM_PER_IDENTITY,
     );
 
     if (!result.allowed) {
-      logWarn('Global LLM rate limit exceeded', {
+      logWarn('Per-identity LLM rate limit exceeded', {
         identifier,
         limit: result.limit,
         resetAt: result.resetAt,
@@ -354,7 +325,37 @@ async function checkGlobalLLMRateLimit(
         allowed: false,
         error: tooManyRequests(
           `Too many AI requests. Please try again in ${retryAfter} seconds.`,
-          { retryAfter, limit: result.limit, type: 'llm_global' },
+          { retryAfter, limit: result.limit, type: 'llm_per_identity' },
+        ),
+      };
+    }
+
+    // SECURITY (HIGH-03): Deployment-wide ceiling. Checked after the
+    // per-identity limit because it is the coarser backstop — an attacker
+    // rotating identity and IP slips past the check above, but every one of
+    // those requests still lands in this single shared bucket.
+    const aggregate = await checkRateLimit(
+      redis,
+      AGGREGATE_LLM_BUCKET,
+      RATE_LIMITS.LLM_AGGREGATE,
+    );
+
+    if (!aggregate.allowed) {
+      logError('Deployment-wide LLM spend ceiling reached', null, {
+        limit: aggregate.limit,
+        resetAt: aggregate.resetAt,
+        endpoint: request.nextUrl.pathname,
+      });
+
+      const retryAfter = Math.ceil(
+        (aggregate.resetAt.getTime() - Date.now()) / MILLISECONDS_PER_SECOND,
+      );
+
+      return {
+        allowed: false,
+        error: tooManyRequests(
+          'The service is at capacity right now. Please try again shortly.',
+          { retryAfter, limit: aggregate.limit, type: 'llm_aggregate' },
         ),
       };
     }
@@ -362,7 +363,7 @@ async function checkGlobalLLMRateLimit(
     return { allowed: true };
   } catch (error) {
     // SECURITY: Fail CLOSED for LLM rate limiting
-    logError('Global LLM rate limit check failed - failing closed', error, {
+    logError('LLM cost limit check failed - failing closed', error, {
       endpoint: request.nextUrl.pathname,
     });
     return {

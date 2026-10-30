@@ -10,6 +10,7 @@ import { logError, logWarn } from '@/utils/logger';
 import { createSession, getSession } from '@/lib/redis/session';
 import type { SessionModel } from '@/types/models';
 import { HTTP_STATUS_UNAUTHORIZED } from '@/lib/constants/http-status';
+import { getSessionClientIp } from '@/server/middleware/client-ip';
 
 const JWT_PARTS_COUNT = 3;
 const JWT_PAYLOAD_INDEX = 1;
@@ -100,6 +101,33 @@ if (TENANT_ID === 'common') {
     'Please set NEXT_PUBLIC_AZURE_AD_TENANT_ID to your specific tenant ID. ' +
     'See: https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-convert-app-to-be-multi-tenant'
   );
+}
+
+const MSAL_ISSUER_PATTERN = /^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0$/;
+
+/**
+ * Predicate for whether a bearer token's (unverified) `iss` claim looks
+ * like an Entra ID v2 issuer this app should attempt to validate as MSAL.
+ * Honors the same tenancy policy as `validateMsalToken`: a configured
+ * tenant pins to exactly that tenant; `common` mode accepts any single-tenant
+ * issuer shape (preserving today's any-Entra-tenant acceptance).
+ */
+export function isMsalIssuer(issuer: unknown): boolean {
+  if (typeof issuer !== 'string') {
+    return false;
+  }
+
+  const match = MSAL_ISSUER_PATTERN.exec(issuer);
+  if (!match) {
+    return false;
+  }
+
+  const tenantSegment = match[1];
+  if (TENANT_ID === 'common') {
+    return tenantSegment.length > 0;
+  }
+
+  return tenantSegment === TENANT_ID;
 }
 
 // Cache for JWKS sets by tenant ID to improve performance
@@ -265,7 +293,7 @@ export async function authenticateWithMsal(
     // Create new session
     const session = await createSession(payload.oid, {
       userAgent: request.headers.get('user-agent') || undefined,
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+      ipAddress: getSessionClientIp(request),
       email: payload.preferred_username,
       name: payload.name,
     });

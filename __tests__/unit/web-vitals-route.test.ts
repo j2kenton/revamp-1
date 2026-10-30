@@ -353,7 +353,11 @@ describe('POST /api/analytics/web-vitals', () => {
       expect(data.success).toBe(true);
     });
 
-    it('uses IP address from x-forwarded-for header', async () => {
+    // SECURITY (HIGH-01): the rate-limit key must come from the connecting
+    // peer, not the caller-claimed head of X-Forwarded-For. Keying on the
+    // claimed value would let a client mint a fresh bucket per request simply
+    // by varying the header.
+    it('keys the rate limit on the connecting peer, not the spoofable first X-Forwarded-For entry', async () => {
       const metric = {
         id: 'v1-ip',
         name: 'LCP',
@@ -369,6 +373,11 @@ describe('POST /api/analytics/web-vitals', () => {
       await POST(request);
 
       expect(rateLimiter.checkRateLimit).toHaveBeenCalledWith(
+        mockRedis,
+        'webvitals:10.0.0.1',
+        expect.any(Object)
+      );
+      expect(rateLimiter.checkRateLimit).not.toHaveBeenCalledWith(
         mockRedis,
         'webvitals:192.168.1.1',
         expect.any(Object)

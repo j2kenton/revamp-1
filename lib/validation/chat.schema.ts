@@ -9,6 +9,7 @@ const MIN_MESSAGE_LENGTH = 1;
 const MAX_MESSAGE_LENGTH = 4000;
 const MIN_TITLE_LENGTH = 1;
 const MAX_TITLE_LENGTH = 200;
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 const MIN_OFFSET = 0;
 const DEFAULT_OFFSET = 0;
 const MIN_LIMIT = 1;
@@ -26,7 +27,9 @@ export const chatMessageSchema = z.object({
     .trim(),
   chatId: z.string().optional(),
   parentMessageId: z.string().optional(),
-  idempotencyKey: z.string().optional(),
+  // Flows directly into a Redis key (see StreamIdempotencyRecord) — bounded
+  // defensively since it's client-controlled.
+  idempotencyKey: z.string().max(MAX_IDEMPOTENCY_KEY_LENGTH).optional(),
 });
 
 export type ChatMessageInput = z.infer<typeof chatMessageSchema>;

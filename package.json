@@ -21,6 +21,9 @@
     "test:all": "npm run test:unit && npm run test:e2e",
     "test:ci": "npm run test:unit:coverage && npm run test:e2e",
     "type-check": "tsc --noEmit",
+    "check-types": "npm run type-check",
+    "release": "npm run type-check && npm run lint && npm run test:all && npm run build",
+    "ensemble:release": "npm run release",
     "validate": "pnpm type-check && pnpm lint",
     "validate-and-test": "pnpm run validate && pnpm run test:all",
     "check": "powershell -NoProfile -Command \"pnpm run validate-and-test 2>&1 | Tee-Object -Variable output; $output | Set-Clipboard; Write-Host '`n[validate:copy] Output copied to clipboard'\"",
@@ -44,7 +47,7 @@
     "ioredis-mock": "^4.7.0",
     "jose": "^6.1.2",
     "lodash": "^4.17.21",
-    "next": "16.0.10",
+    "next": "16.4.1",
     "next-auth": "^4.24.13",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -84,7 +87,7 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5",
+    "typescript": "^5.9.3",
     "undici": "^7.16.0"
   }
 }

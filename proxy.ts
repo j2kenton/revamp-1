@@ -25,18 +25,20 @@ const LEGACY_LOGIN_ROUTE = '/login';
 const CSP_DIRECTIVES = [
   // Default: only allow same-origin
   "default-src 'self'",
-  // Scripts: self and inline (needed for Next.js)
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  // Styles: self and inline (needed for styling)
-  "style-src 'self' 'unsafe-inline'",
+  // Scripts: self, inline (needed for Next.js), and Google Identity Services
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com/gsi/client",
+  // Styles: self, inline (needed for styling), and Google Identity Services button styles
+  "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
   // Images: self and data URIs
   "img-src 'self' data: blob: https:",
   // Fonts: self
   "font-src 'self' data:",
-  // Connect: self and any APIs
+  // Connect: self and any APIs (covers https://accounts.google.com/gsi/ for GIS)
   "connect-src 'self' https:",
   // Frame ancestors: prevent clickjacking
   "frame-ancestors 'none'",
+  // Frame: allow the Google Identity Services One Tap / prompt iframe
+  "frame-src https://accounts.google.com/gsi/",
   // Form actions: same-origin only
   "form-action 'self'",
   // Base URI: same-origin only
@@ -152,7 +154,7 @@ export const authProtectedProxy = withAuth(
 /**
  * Default export: decides which proxy to use based on the route
  */
-export default function mainProxy(request: NextRequest) {
+export default function mainProxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   if (isLegacyLoginRoute(pathname)) {
@@ -161,11 +163,16 @@ export default function mainProxy(request: NextRequest) {
 
   // For protected routes, use auth-protected proxy
   if (isProtectedRoute(pathname)) {
-    // Note: withAuth returns a middleware function that needs the request
+    // Note: withAuth returns a middleware function that needs the request.
+    // `isProtectedRoute` is unconditionally false today (vestigial path, not
+    // wired to any route), so this is never reached at runtime; the cast
+    // reflects that every route this proxy actually serves returns a
+    // `NextResponse`, matching `withAuth`'s broader (Response | null |
+    // undefined | void | Promise<...>) signature only on paper.
     return authProtectedProxy(
       request as Parameters<typeof authProtectedProxy>[0],
       {} as never,
-    );
+    ) as NextResponse;
   }
 
   // For all other routes, just add security headers

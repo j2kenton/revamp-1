@@ -27,9 +27,20 @@ jest.mock('@/lib/redis/chat', () => ({
     id: 'chat-123',
     userId: 'test-user-id',
   }),
-  getChat: jest.fn().mockResolvedValue(null),
-  addMessage: jest.fn().mockResolvedValue(undefined),
-  getChatMessages: jest.fn().mockResolvedValue([]),
+  getChatLookup: jest.fn().mockResolvedValue({ status: 'not_found' }),
+  // Must be `true`: the route now does `if (!persisted) throw`, so a
+  // falsy resolve here makes every request in this file fail persistence
+  // and 400 before the stream is ever built — silently hollowing out
+  // every test below into "did this return some non-403 status," which
+  // passes whether or not origin validation is actually doing anything.
+  addMessage: jest.fn().mockResolvedValue(true),
+  getRecentChatMessagesLookup: jest
+    .fn()
+    .mockResolvedValue({ status: 'found', messages: [] }),
+  // No test in this file sends an idempotencyKey, so this never actually
+  // gates renewal timing here — kept at the real value anyway so that if
+  // that ever changes, the route doesn't silently compute a NaN interval.
+  STREAM_IDEMPOTENCY_LOCK_TTL_SECONDS: 15,
 }));
 jest.mock('@/lib/llm/service', () => ({
   callLLMStreamWithRetry: jest
@@ -297,7 +308,7 @@ describe('LOW-04: Cryptographically Secure Message IDs', () => {
       await POST(request);
 
       // Should have generated at least 2 UUIDs (user message + AI message)
-      expect(generatedIds.length).toBeGreaterThanOrEqual(1);
+      expect(generatedIds.length).toBeGreaterThanOrEqual(2);
 
       // All IDs should be unique
       const uniqueIds = new Set(generatedIds);
@@ -351,9 +362,13 @@ describe('Combined Security: Origin + CSRF + Rate Limiting', () => {
 
     const response = await POST(request);
 
-    // A successful response (streaming starts) indicates all middleware passed
-    // The response should be either a streaming response or an error
-    expect(response).toBeDefined();
-    expect(response.status).toBeDefined();
+    // `toBeDefined()` here would pass unconditionally — a Response and its
+    // `.status` are never anything else. With `addMessage` now resolving
+    // `true` (see the mock above), a request that clears every middleware
+    // layer actually reaches a real streaming response; assert that
+    // specifically; a middleware regression would show up as some other
+    // status instead.
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/event-stream');
   });
 });

@@ -5,18 +5,27 @@
 
 'use client';
 
-import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth/useAuth';
-import { dedupeMessages } from '@/app/chat/utils/messageReconciler';
+import { dedupeMessages } from '@/app/chat/utils/dedupeMessages';
+import { chatHistoryQueryKey } from '@/app/chat/utils/chatQueryKey';
 import type { MessageDTO, ChatDTO } from '@/types/models';
 import { STRINGS } from '@/lib/constants/strings';
 import { FIVE_MINUTES_IN_MS, TEN_MINUTES_IN_MS } from '@/lib/constants/common';
 
 const STALE_TIME_MS = FIVE_MINUTES_IN_MS;
 const GC_TIME_MS = TEN_MINUTES_IN_MS;
-const NOT_FOUND_STATUS_TEXT = '404';
 const MAX_RETRY_ATTEMPTS = 2;
+
+class ChatHistoryRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ChatHistoryRequestError';
+    this.status = status;
+  }
+}
 
 interface ChatHistoryResponse {
   chat: ChatDTO;
@@ -44,7 +53,10 @@ async function fetchChatHistory(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || STRINGS.errors.chatHistoryFailed);
+    throw new ChatHistoryRequestError(
+      error.error?.message || STRINGS.errors.chatHistoryFailed,
+      response.status,
+    );
   }
 
   const data = await response.json();
@@ -52,27 +64,24 @@ async function fetchChatHistory(
 }
 
 export function useFetchChatHistory(chatId?: string) {
-  const { accessToken } = useAuth();
+  const { accessToken, authIdentityKey } = useAuth();
 
   const query = useQuery({
-    queryKey: ['chat', chatId ?? ''],
+    queryKey: chatHistoryQueryKey(authIdentityKey, chatId),
     queryFn: () => fetchChatHistory(chatId as string, accessToken),
     enabled: Boolean(chatId && accessToken),
     staleTime: STALE_TIME_MS,
     gcTime: GC_TIME_MS,
     refetchOnWindowFocus: true,
     retry: (failureCount, error) => {
-      if (error.message.includes(NOT_FOUND_STATUS_TEXT)) {
+      if (error instanceof ChatHistoryRequestError && error.status === 404) {
         return false; // Don't retry if chat not found
       }
       return failureCount < MAX_RETRY_ATTEMPTS;
     },
   });
 
-  const normalizedMessages = useMemo<MessageDTO[]>(
-    () => dedupeMessages(query.data?.messages || []),
-    [query.data?.messages],
-  );
+  const normalizedMessages = dedupeMessages(query.data?.messages || []);
 
   return {
     chat: query.data?.chat,

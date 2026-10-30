@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server';
 import { logInfo, logError } from '@/utils/logger';
 import { getRedisClient } from '@/lib/redis/client';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { getClientIp } from '@/server/middleware/client-ip';
 
 const MAX_ATTRIBUTION_SIZE_BYTES = 10 * 1024; // 10KB in bytes
 const RATE_LIMIT_MAX_REQUESTS = 10;
@@ -110,11 +111,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Rate limiting: Prevent clients from flooding logs
-    // Use IP address as identifier (10 requests per minute)
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0] ||
-      request.headers.get('x-real-ip') ||
-      UNKNOWN_FALLBACK_VALUE;
+    // SECURITY (HIGH-01): resolve the IP through the shared, proxy-validated
+    // resolver. Taking the first X-Forwarded-For entry directly would let a
+    // caller mint a fresh rate-limit bucket per request by rotating the header.
+    const ip = getClientIp(request);
 
     try {
       const redis = getRedisClient();

@@ -42,6 +42,9 @@ declare namespace NodeJS {
     NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI?: string;
     NEXT_PUBLIC_AZURE_AD_CHAT_SCOPE?: string;
 
+    // Google Identity Services (Sign in with Google)
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID?: string;
+
     // Node Environment
     NODE_ENV: 'development' | 'production' | 'test';
 

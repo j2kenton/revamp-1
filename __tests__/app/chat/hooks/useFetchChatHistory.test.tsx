@@ -22,6 +22,7 @@ afterAll(() => {
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 const baseAuthState = {
+  status: 'authenticated' as const,
   accessToken: 'test-token',
   user: {
     id: 'user-1',
@@ -29,11 +30,16 @@ const baseAuthState = {
     name: 'Test User',
   },
   isAuthenticated: true,
+  provider: 'microsoft' as const,
+  authIdentityKey: 'microsoft:user-1',
   login: jest.fn(),
   logout: jest.fn(),
   acquireToken: jest.fn(),
+  acquireGraphToken: jest.fn(),
   isLoading: false,
   error: null,
+  needsReauth: false,
+  clearError: jest.fn(),
 };
 
 const createWrapper = () => {
@@ -119,8 +125,9 @@ describe('useFetchChatHistory', () => {
   it('exposes errors when the request fails', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,
+      status: 404,
       json: async () => ({
-        error: { message: '404 Not Found' },
+        error: { message: 'Chat not found' },
       }),
     } as Response);
 
@@ -134,5 +141,6 @@ describe('useFetchChatHistory', () => {
     });
 
     expect(result.current.error).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

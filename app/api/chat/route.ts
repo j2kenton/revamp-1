@@ -1,6 +1,7 @@
 /**
  * Chat API Endpoint
  * POST /api/chat - Send a message and get AI response
+ * GET /api/chat - List the authenticated user's chats
  */
 
 import { NextRequest } from 'next/server';
@@ -21,12 +22,13 @@ import {
   getChat,
   addMessage,
   getChatMessages,
+  getUserChats,
 } from '@/lib/redis/chat';
 import { withTransaction, txSet } from '@/lib/redis/transactions';
 import { callLLMWithRetry, truncateMessagesToFit } from '@/lib/llm/service';
 import { logError, logInfo, logWarn } from '@/utils/logger';
 import type { MessageModel } from '@/types/models';
-import { messageToDTO } from '@/types/models';
+import { messageToDTO, chatToDTO } from '@/types/models';
 // SECURITY (LOW-04): Removed RANDOM_STRING constants, using crypto.randomUUID instead
 
 const IDEMPOTENCY_KEY_TTL_SECONDS = 24 * 60 * 60;
@@ -386,3 +388,32 @@ async function handleChatPost(request: NextRequest): Promise<Response> {
 }
 
 export const POST = withRequestDedup(handleChatPost);
+
+async function handleChatListGet(request: NextRequest): Promise<Response> {
+  try {
+    // Require authenticated session — ownership scoping is implicit: the
+    // list is read from the `user:chats:<userId>` SET for this session's
+    // userId only.
+    const session = await requireSession(request);
+
+    const chats = await getUserChats(session.userId);
+
+    return success(
+      { chats: chats.map(chatToDTO) },
+      { message: 'Chats retrieved successfully' },
+    );
+  } catch (error) {
+    logError('Chat list retrieval error', error);
+
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return unauthorized();
+    }
+
+    return serverError('Failed to retrieve chats');
+  }
+}
+
+// Read-only, so no CSRF or request-dedup — matching GET /api/chat/[chatId].
+// Deliberately no Cache-Control header: the list must reflect a just-created
+// chat immediately after invalidation.
+export const GET = withChatRateLimit(handleChatListGet);

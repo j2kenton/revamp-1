@@ -11,8 +11,12 @@ import { getSession, refreshSession } from '@/lib/redis/session';
 import { isRedisUnavailableError } from '@/lib/redis/errors';
 import {
   getMsalTokenFromRequest,
+  isMsalIssuer,
   validateMsalToken,
 } from '@/server/middleware/msal-auth';
+import { isGoogleIssuer, validateGoogleToken } from '@/server/middleware/google-auth';
+import { decodeUnverifiedJwtPayload } from '@/server/middleware/jwt-utils';
+import { getSessionClientIp } from '@/server/middleware/client-ip';
 import type { SessionModel } from '@/types/models';
 import { AuthError } from '@/utils/error-handler';
 import { logWarn } from '@/utils/logger';
@@ -34,16 +38,6 @@ export const JWT_FALLBACK_PREFIX = 'jwt-fallback';
 const BYPASS_SESSION_ID = `${JWT_FALLBACK_PREFIX}:bypass-user`;
 const BYPASS_CSRF_TOKEN = 'bypass-csrf-token';
 
-function getClientIp(request: NextRequest): string | undefined {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim();
-  }
-
-  const realIp = request.headers.get('x-real-ip');
-  return realIp ?? undefined;
-}
-
 function createBypassSession(request: NextRequest): SessionModel {
   const now = new Date();
   return {
@@ -52,7 +46,7 @@ function createBypassSession(request: NextRequest): SessionModel {
     csrfToken: BYPASS_CSRF_TOKEN,
     data: {
       userAgent: request.headers.get('user-agent') ?? undefined,
-      ipAddress: getClientIp(request),
+      ipAddress: getSessionClientIp(request),
       email: 'test-user@example.com',
       name: 'Test User',
       lastActivityAt: now,
@@ -79,6 +73,50 @@ async function getSessionFromJwtFallback(
     return null;
   }
 
+  // Peek the (unverified) issuer to decide which provider-specific
+  // validator to run. Neither validator runs for a token matching neither
+  // shape — it is rejected outright.
+  const unverifiedPayload = decodeUnverifiedJwtPayload(token);
+  const unverifiedIssuer = unverifiedPayload?.iss;
+
+  if (isGoogleIssuer(unverifiedIssuer)) {
+    const googlePayload = await validateGoogleToken(token);
+    if (!googlePayload) {
+      return null;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(googlePayload.exp * MILLISECONDS_PER_SECOND);
+    const csrfToken = createHash('sha256').update(token).digest('hex');
+    const userId = `google:${googlePayload.sub}`;
+
+    logWarn('Using JWT payload for session fallback', {
+      userId,
+      reason,
+    });
+
+    return {
+      id: `${JWT_FALLBACK_PREFIX}:${userId}`,
+      userId,
+      csrfToken,
+      data: {
+        userAgent: request.headers.get('user-agent') ?? undefined,
+        ipAddress: getSessionClientIp(request),
+        email: googlePayload.email,
+        name: googlePayload.name || googlePayload.email.split('@')[0],
+        lastActivityAt: now,
+        source: 'jwt-fallback',
+      },
+      expiresAt,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  if (!isMsalIssuer(unverifiedIssuer)) {
+    return null;
+  }
+
   const payload = await validateMsalToken(token);
   if (!payload) {
     return null;
@@ -99,7 +137,7 @@ async function getSessionFromJwtFallback(
     csrfToken,
     data: {
       userAgent: request.headers.get('user-agent') ?? undefined,
-      ipAddress: getClientIp(request),
+      ipAddress: getSessionClientIp(request),
       email: payload.preferred_username,
       name: payload.name,
       lastActivityAt: now,

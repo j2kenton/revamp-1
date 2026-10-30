@@ -325,57 +325,54 @@ export function LoadingSpinner({ size = 'md', label = 'Loading...' }: LoadingSpi
 }
 ```
 
-## Integration with TanStack Query
+## Integration with the streaming send path
 
-Use the hooks from `lib/tanstack-query/hooks.ts`:
+Chat sends go through `useStreamingResponse` (`app/chat/hooks/useStreamingResponse.ts`),
+which exposes `isStreaming`, `error`, and `rateLimitSeconds` for feedback. The
+live implementation splits this across `ChatInput` (markup) and
+`useChatInputState` (state); the sketch below collapses them to show the
+feedback surfaces in one place:
 
 ```typescript
 'use client';
 
-import { useSendMessage } from '@/lib/tanstack-query/hooks';
-import { MessageStatus } from '@/components/MessageStatus';
-import { CharacterCounter } from '@/components/CharacterCounter';
-import { ToastNotification } from '@/components/ToastNotification';
+import { useStreamingResponse } from '@/app/chat/hooks/useStreamingResponse';
+import { CharacterCounter } from '@/app/chat/components/CharacterCounter';
 
 export function ChatInput({ chatId }: { chatId: string }) {
   const [content, setContent] = useState('');
-  const sendMessage = useSendMessage(chatId);
-  
+  const { sendStreamingMessage, isStreaming, error, rateLimitSeconds } =
+    useStreamingResponse({ chatId });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    try {
-      await sendMessage.mutateAsync(content);
-      setContent('');
-    } catch (error) {
-      // Error is handled by mutation
-    }
+    await sendStreamingMessage(content);
+    setContent('');
   };
-  
+
   return (
     <form onSubmit={handleSubmit}>
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         maxLength={2000}
-        disabled={sendMessage.isPending}
+        disabled={isStreaming || rateLimitSeconds !== null}
       />
-      
+
       <CharacterCounter
-        value={content}
-        maxLength={2000}
+        debouncedLength={content.length}
+        isNearLimit={false}
+        isOverLimit={false}
       />
-      
+
       <button
         type="submit"
-        disabled={sendMessage.isPending || content.trim().length === 0}
+        disabled={isStreaming || content.trim().length === 0}
       >
-        {sendMessage.isPending ? 'Sending...' : 'Send'}
+        {isStreaming ? 'Sending...' : 'Send'}
       </button>
-      
-      {sendMessage.isError && (
-        <InlineError error={sendMessage.error?.message} />
-      )}
+
+      {error ? <InlineError error={error.message} /> : null}
     </form>
   );
 }

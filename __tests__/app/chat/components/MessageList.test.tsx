@@ -9,6 +9,16 @@ jest.mock('@/app/chat/hooks/useFetchChatHistory', () => ({
   useFetchChatHistory: jest.fn(),
 }));
 
+// MessageList reads the signed-in user's photo via `useProfilePhoto`, which
+// is a thin `useAuth()` consumer requiring an `<AuthProvider>` ancestor in
+// the real app. This suite only exercises message rendering, not identity or
+// photo behavior (see `__tests__/lib/auth/useProfilePhoto.test.ts` for that),
+// so the hook is mocked directly rather than standing up the full provider
+// tree here.
+jest.mock('@/lib/auth/useProfilePhoto', () => ({
+  useProfilePhoto: jest.fn(() => ({ photoUrl: null })),
+}));
+
 jest.mock('@tanstack/react-virtual', () => {
   return {
     useVirtualizer: jest.fn((config: { count: number }) => {
@@ -108,6 +118,31 @@ describe('MessageList', () => {
 
     expect(screen.getByText('Hello')).toBeInTheDocument();
     expect(screen.getByText('Hi there!')).toBeInTheDocument();
+  });
+
+  it('renders the optimistic echo before a chatId exists', () => {
+    // On a brand-new conversation the server hasn't assigned a chatId yet,
+    // so the history query is disabled — the echo in liveMessages must win
+    // over the "no chat" onboarding state.
+    render(
+      <MessageList
+        liveMessages={[
+          buildMessage({
+            id: 'temp_abc',
+            chatId: '',
+            content: 'First message, optimistically',
+            status: 'sending',
+          }),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText('First message, optimistically'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: STRINGS.chat.emptyState.title }),
+    ).not.toBeInTheDocument();
   });
 
   it('appends live messages when provided', () => {

@@ -8,6 +8,26 @@ import {
   WritableStream,
 } from 'node:stream/web';
 import { BroadcastChannel } from 'node:worker_threads';
+import { webcrypto } from 'node:crypto';
+
+// jsdom does not implement window.crypto.subtle (SubtleCrypto). MSAL's
+// PublicClientApplication constructor calls validateCryptoAvailable() at
+// module-load time and throws `crypto_nonexistent` without it, which
+// crashes every test that imports lib/auth/MsalProvider.tsx (directly or
+// transitively). Node's webcrypto implementation provides both
+// getRandomValues and subtle, so use it whenever the environment-provided
+// crypto is missing or incomplete.
+if (
+  typeof globalThis.crypto === 'undefined' ||
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  !(globalThis.crypto as any).subtle
+) {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: webcrypto,
+    writable: true,
+    configurable: true,
+  });
+}
 
 if (typeof globalThis.TextEncoder === 'undefined') {
   globalThis.TextEncoder = TextEncoder;

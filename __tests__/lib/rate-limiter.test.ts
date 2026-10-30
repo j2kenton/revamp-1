@@ -257,12 +257,12 @@ describe('Rate Limiter', () => {
   });
 
   describe('RATE_LIMITS configuration', () => {
-    it('should have LLM_GLOBAL rate limit defined (HIGH-03)', () => {
-      expect(RATE_LIMITS.LLM_GLOBAL).toBeDefined();
-      expect(RATE_LIMITS.LLM_GLOBAL.maxRequests).toBe(15);
-      expect(RATE_LIMITS.LLM_GLOBAL.windowSeconds).toBe(60);
-      expect(RATE_LIMITS.LLM_GLOBAL.keyPrefix).toBe(
-        'ratelimit:zset:llm-global',
+    it('should have LLM_PER_IDENTITY rate limit defined (HIGH-03)', () => {
+      expect(RATE_LIMITS.LLM_PER_IDENTITY).toBeDefined();
+      expect(RATE_LIMITS.LLM_PER_IDENTITY.maxRequests).toBe(15);
+      expect(RATE_LIMITS.LLM_PER_IDENTITY.windowSeconds).toBe(60);
+      expect(RATE_LIMITS.LLM_PER_IDENTITY.keyPrefix).toBe(
+        'ratelimit:zset:llm-per-identity',
       );
     });
 
@@ -270,7 +270,7 @@ describe('Rate Limiter', () => {
       expect(RATE_LIMITS.CHAT_MESSAGE).toBeDefined();
       expect(RATE_LIMITS.API_DEFAULT).toBeDefined();
       expect(RATE_LIMITS.AUTH).toBeDefined();
-      expect(RATE_LIMITS.LLM_GLOBAL).toBeDefined();
+      expect(RATE_LIMITS.LLM_PER_IDENTITY).toBeDefined();
     });
 
     it('should have appropriate limits for different endpoints', () => {
